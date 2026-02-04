@@ -30,7 +30,15 @@ export default function Ledger({ ledger, onCheck, format }: any) {
               <td className="text-right text-rose-500 font-bold">{tx.type === 'out' ? '-' + fmt(tx.amt) : ''}</td>
               <td className="text-right text-emerald-600 font-bold">{tx.type === 'inc' ? '+' + fmt(tx.amt) : ''}</td>
               <td className="text-right">
-                <input id={`inp-${tx.id}`} type="number" step="0.01" className={`w-24 p-1 border-b text-right font-bold ${tx.done ? 'correct' : ''}`} defaultValue={tx.done ? tx.bal.toFixed(2) : ''} disabled={tx.done} />
+                <input
+                  key={`inp-${tx.id}-${tx.bal}-${tx.done}`}
+                  id={`inp-${tx.id}`}
+                  type="number"
+                  step="0.01"
+                  className={`w-24 p-1 border-b text-right font-bold ${tx.done ? 'correct' : ''}`}
+                  defaultValue={tx.done ? tx.bal.toFixed(2) : ''}
+                  disabled={tx.done}
+                />
               </td>
               <td className="text-right">
                 <button onClick={() => {
