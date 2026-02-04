@@ -3,7 +3,7 @@ import React from 'react'
 export default function Ledger({ ledger, onCheck, format }: any) {
   const fmt = format || ((n: number) => n.toFixed(2))
   return (
-    <div>
+    <div className="glass p-6">
       <div className="mb-4 flex justify-between items-center">
         <h3 className="font-bold">Ledger</h3>
         <button onClick={() => {

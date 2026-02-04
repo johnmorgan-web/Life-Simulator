@@ -22,7 +22,7 @@ const initialState: State = {
 	activeEdu: null,
 	eduProgress: { 'HS Diploma': 0, 'Trade Cert': 0, 'Degree': 0 },
 	ledger: [],
-	name: 'The Traveler',
+	name: 'John Morgan',
 	tenure: 0,
 	logs: [],
 	careerHistory: [],
