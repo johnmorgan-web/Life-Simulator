@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prosperity Engine: Full System Build</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: #f1f5f9; font-family: 'DM Sans', sans-serif; overflow: hidden; height: 100vh; }
+        .glass { background: white; border-radius: 1.2rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .tab-active { background: #f8fafc !important; border-left: 4px solid #ef4444 !important; color: #ef4444 !important; font-weight: 700; }
+        .correct { background-color: #f0fdf4 !important; border-color: #22c55e !important; color: #15803d !important; }
+        .card-active { border: 2px solid #3b82f6 !important; background: #eff6ff !important; }
+        .card-locked { opacity: 0.5; filter: grayscale(1); cursor: not-allowed; }
+        .progress-fill { transition: width 0.4s ease; height: 100%; background: #3b82f6; border-radius: 99px; }
+        .req-tag { font-size: 8px; font-weight: 800; padding: 2px 5px; border-radius: 4px; text-transform: uppercase; }
+    </style>
+</head>
+<body class="h-full">
+
+    <div id="app" class="h-full flex flex-col">
+        <header class="p-4 bg-white border-b border-slate-200">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div class="flex gap-8">
+                    <div><span class="text-[10px] text-slate-400 font-bold uppercase block">Checking</span><p id="hud-check" class="text-xl font-bold text-slate-800">$0.00</p></div>
+                    <div><span class="text-[10px] text-slate-400 font-bold uppercase block">Savings</span><p id="hud-save" class="text-xl font-bold text-blue-600">$0.00</p></div>
+                    <div><span class="text-[10px] text-slate-400 font-bold uppercase block">Debt</span><p id="hud-debt" class="text-xl font-bold text-rose-600">$0.00</p></div>
+                    <div><span class="text-[10px] text-slate-400 font-bold uppercase block">Credit</span><p id="hud-credit" class="text-xl font-bold text-indigo-600">600</p></div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right"><span id="hud-city" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold uppercase"></span><p id="hud-date" class="text-sm font-bold text-slate-500"></p></div>
+                    <button id="verify-btn" onclick="openSettlement()" disabled class="bg-slate-100 text-slate-400 px-6 py-3 rounded-xl text-xs font-bold uppercase transition-all">Verify Journal</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-hidden p-6 max-w-7xl mx-auto w-full grid grid-cols-12 gap-6">
+            <nav class="col-span-2 space-y-2">
+                <button onclick="switchTab('ledger')" id="nav-ledger" class="w-full text-left px-4 py-3 glass tab-active">📓 Journal</button>
+                <button onclick="switchTab('careers')" id="nav-careers" class="w-full text-left px-4 py-3 glass text-slate-500">💼 Careers</button>
+                <button onclick="switchTab('academy')" id="nav-academy" class="w-full text-left px-4 py-3 glass text-slate-500">🏛️ Academy</button>
+                <button onclick="switchTab('transit')" id="nav-transit" class="w-full text-left px-4 py-3 glass text-slate-500">🚗 Transit</button>
+                <button onclick="switchTab('relocate')" id="nav-relocate" class="w-full text-left px-4 py-3 glass text-slate-500">✈️ Relocate</button>
+            </nav>
+
+            <div class="col-span-10 overflow-y-auto pb-20">
+                <section id="view-ledger" class="tab-view glass p-6"></section>
+                <section id="view-careers" class="tab-view hidden grid grid-cols-3 gap-4"></section>
+                <section id="view-academy" class="tab-view hidden grid grid-cols-2 gap-4"></section>
+                <section id="view-transit" class="tab-view hidden grid grid-cols-3 gap-4"></section>
+                <section id="view-relocate" class="tab-view hidden grid grid-cols-2 gap-4"></section>
+            </div>
+        </main>
+    </div>
+
+    <div id="settlement-modal" class="fixed inset-0 bg-slate-900/90 hidden flex items-center justify-center p-6 z-[100] backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-2">Reconciliation</h2>
+            <div id="status-log" class="mb-6 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200"></div>
+            <div class="space-y-4 mb-8">
+                <div><label class="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings</label><input type="number" id="pay-save" class="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00"></div>
+                <div><label class="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt</label><input type="number" id="pay-debt" class="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00"></div>
+            </div>
+            <button onclick="processMonth()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">Begin Next Month</button>
+        </div>
+    </div>
+
+    <script>
+        const format = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fix = (n) => Math.round(n * 100) / 100;
+
+        const cityData = [
+            { name: "San Francisco", p: 1.6, r: 2.3, icon: "🌉" },
+            { name: "Seattle", p: 1.4, r: 1.8, icon: "🌲" },
+            { name: "Miami", p: 1.2, r: 1.5, icon: "🌴" },
+            { name: "Chicago", p: 1.1, r: 1.2, icon: "🏙️" },
+            { name: "Detroit", p: 0.95, r: 0.85, icon: "🏭" },
+            { name: "Lubbock", p: 0.8, r: 0.7, icon: "🌵" }
+        ];
+
+	const allLifeEvents = [
+            { id: 'all_1', title: "Tax Refund", amt: 350, type: "in", icon: "💸", desc: "Government check arrived.", trigger: "none" },
+            { id: 'all_2', title: "Phone Fix", amt: 120, type: "out", icon: "📱", desc: "Screen cracked.", trigger: "none" },
+            { id: 'car_1', title: "Flat Tire", amt: 180, type: "out", icon: "🔧", desc: "Nail in the road.", trigger: "car" },
+            { id: 'acad_1', title: "Book Costs", amt: 200, type: "out", icon: "📚", desc: "Course supplies.", trigger: "academy" },
+            { id: 'stress_1', title: "Burnout Recovery", amt: 300, type: "out", icon: "🏥", desc: "Rest needed.", trigger: "burnout" },
+            { id: 'work_1', title: "Workplace Sprain", amt: 250, type: "out", icon: "🩹", desc: "Injury on the clock.", trigger: "hazard" }
+        ];
+
+	function triggerEvent() {
+            let possible = lifeEvents.filter(e => !state.eventHistory.includes(e.id));
+            if (state.check < 300) possible = possible.filter(e => e.type === 'in');
+            const ev = possible[Math.floor(Math.random() * possible.length)] || lifeEvents[0];
+            state.eventHistory.push(ev.id);
+            if (state.eventHistory.length > 3) state.eventHistory.shift();
+            state.currentEvent = ev;
+            document.getElementById('event-icon').innerText = ev.icon;
+            document.getElementById('event-title').innerText = ev.title;
+            document.getElementById('event-desc').innerText = `Monthly Event Triggered.`;
+            document.getElementById('event-overlay').classList.remove('hidden');
+        }
+
+	function closeEvent() {
+            document.getElementById('event-overlay').classList.add('hidden');
+            initMonth();
+        }
+
+        let state = {
+            check: 1200.00, save: 0, debt: 0, credit: 600, month: 2, year: 2026,
+            city: cityData[3], credentials: [],
+            job: { title: "Odd Jobs", base: 600, tReq: 1, odds: 1 },
+            transit: { name: "Walk/Bike", cost: 15, level: 1 },
+            activeEdu: null,
+            eduProgress: { "HS Diploma": 0, "Trade Cert": 0, "Degree": 0 },
+            pendingJob: null, pendingTransit: null,
+            ledger: []
+        };
+
+	function startNarrative() {
+            state.name = document.getElementById('user-name').value || "The Traveler";
+            document.getElementById('res-name').innerText = state.name;
+            document.getElementById('intro-screen').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            init();
+        }
+
+	function initMonth() {
+            state.realBal = state.check;
+            state.transactions = [];
+            addTx(1, "Balance Carryover", 0, 0, true);
+            if(state.currentEvent.type === "out") addTx(1, state.currentEvent.title, state.currentEvent.amt, 0);
+            else addTx(1, state.currentEvent.title, 0, state.currentEvent.amt);
+            
+            if(state.pendingWithdraw > 0) { addTx(1, "Savings Credit", 0, state.pendingWithdraw); state.pendingWithdraw = 0; }
+            
+            const cD = cities[state.city];
+            addTx(1, `Rent: ${state.housing.name}`, parseFloat((state.housing.baseRent * cD.r).toFixed(2)), 0);
+            addTx(3, `Transit: ${state.transit.name}`, state.transit.cost, 0);
+            addTx(7, `Wellness: ${state.wellness.name}`, state.wellness.cost, 0);
+            
+            // Level Up Scaling: Increased expenses based on time played
+            if (state.totalMonths > 6) addTx(12, "Cloud Subscriptions", 15.99, 0);
+            if (state.totalMonths > 12) addTx(18, "Professional Fees", 45.00, 0);
+            if (state.totalMonths > 24) addTx(25, "Life Insurance", 85.00, 0);
+
+            let pay = state.job.base;
+            if(state.tenure >= 12) pay *= 1.1;
+            const biWeeklyNet = parseFloat((pay * cD.p * 0.78 / 2).toFixed(2));
+            
+            addTx(10, `Bi-Weekly Paycheck`, 0, biWeeklyNet);
+            addTx(24, `Bi-Weekly Paycheck`, 0, biWeeklyNet);
+            
+            updateUI();
+            switchTab('ledger');
+        }
+      const jobBoard = [
+            // ENTRY LEVEL (NO EDU)
+            { title: "Odd Jobs", base: 600, req: null, tReq: 1, odds: 1, cat: "Entry" },
+            { title: "Fast Food Worker", base: 1100, req: null, tReq: 1, odds: 0.9, cat: "Entry" },
+            { title: "Retail Associate", base: 1200, req: null, tReq: 1, odds: 0.85, cat: "Entry" },
+            { title: "Dishwasher", base: 1050, req: null, tReq: 1, odds: 0.95, cat: "Entry" },
+            { title: "Day Laborer", base: 1300, req: null, tReq: 1, odds: 0.8, cat: "Entry" },
+            { title: "Warehouse Crew", base: 1500, req: "HS Diploma", tReq: 2, odds: 0.8, cat: "Entry" },
+            { title: "Gig Delivery", base: 1250, req: null, tReq: 3, odds: 0.95, cat: "Entry" },
+            { title: "Security Guard", base: 1400, req: "HS Diploma", tReq: 1, odds: 0.75, cat: "Entry" },
+            { title: "Janitor", base: 1350, req: null, tReq: 1, odds: 0.9, cat: "Entry" },
+            { title: "Mail Sorter", base: 1550, req: "HS Diploma", tReq: 2, odds: 0.7, cat: "Entry" },
+
+            // MILITARY (REQUIRES HS)
+            { title: "Army Private", base: 1900, req: "HS Diploma", tReq: 1, odds: 0.95, cat: "Military" },
+            { title: "Navy Seaman", base: 1950, req: "HS Diploma", tReq: 1, odds: 0.9, cat: "Military" },
+            { title: "Air Force Airman", base: 2000, req: "HS Diploma", tReq: 1, odds: 0.85, cat: "Military" },
+            { title: "Marine Corporal", base: 2100, req: "HS Diploma", tReq: 1, odds: 0.8, cat: "Military" },
+            { title: "Coast Guard Tech", base: 2050, req: "HS Diploma", tReq: 1, odds: 0.8, cat: "Military" },
+
+            // SKILLED TRADES (TRADE CERT)
+            { title: "Electrician", base: 2900, req: "Trade Cert", tReq: 3, odds: 0.7, cat: "Skilled" },
+            { title: "HVAC Tech", base: 2750, req: "Trade Cert", tReq: 3, odds: 0.75, cat: "Skilled" },
+            { title: "Plumber", base: 3100, req: "Trade Cert", tReq: 3, odds: 0.65, cat: "Skilled" },
+            { title: "Welder", base: 3300, req: "Trade Cert", tReq: 2, odds: 0.6, cat: "Skilled" },
+            { title: "Dental Hygienist", base: 3500, req: "Trade Cert", tReq: 2, odds: 0.55, cat: "Skilled" },
+            { title: "Auto Mechanic", base: 2600, req: "Trade Cert", tReq: 2, odds: 0.8, cat: "Skilled" },
+            { title: "Truck Driver", base: 3800, req: "Trade Cert", tReq: 3, odds: 0.85, cat: "Skilled" },
+            { title: "Phlebotomist", base: 2400, req: "Trade Cert", tReq: 2, odds: 0.7, cat: "Skilled" },
+            { title: "Paralegal", base: 2800, req: "Trade Cert", tReq: 2, odds: 0.6, cat: "Skilled" },
+            { title: "Cosmetologist", base: 2200, req: "Trade Cert", tReq: 1, odds: 0.8, cat: "Skilled" },
+
+            // PROFESSIONAL (DEGREE)
+            { title: "Software Dev", base: 6500, req: "Degree", tReq: 1, odds: 0.45, cat: "Pro" },
+            { title: "Data Analyst", base: 5800, req: "Degree", tReq: 1, odds: 0.5, cat: "Pro" },
+            { title: "Registered Nurse", base: 6000, req: "Degree", tReq: 3, odds: 0.65, cat: "Pro" },
+            { title: "Accountant", base: 5400, req: "Degree", tReq: 2, odds: 0.55, cat: "Pro" },
+            { title: "Civil Engineer", base: 6200, req: "Degree", tReq: 3, odds: 0.4, cat: "Pro" },
+            { title: "Graphic Designer", base: 4500, req: "Degree", tReq: 1, odds: 0.6, cat: "Pro" },
+            { title: "HR Specialist", base: 4900, req: "Degree", tReq: 2, odds: 0.55, cat: "Pro" },
+            { title: "Marketing Coord.", base: 4700, req: "Degree", tReq: 2, odds: 0.5, cat: "Pro" },
+            { title: "Lab Researcher", base: 5100, req: "Degree", tReq: 2, odds: 0.4, cat: "Pro" },
+            { title: "Social Worker", base: 4200, req: "Degree", tReq: 2, odds: 0.7, cat: "Pro" },
+            // Additional jobs to reach 50...
+            { title: "Apprentice Mason", base: 1800, req: null, tReq: 3, odds: 0.8, cat: "Skilled" },
+            { title: "CNC Operator", base: 2400, req: "Trade Cert", tReq: 2, odds: 0.7, cat: "Skilled" },
+            { title: "IT Support", base: 3200, req: "Trade Cert", tReq: 1, odds: 0.6, cat: "Pro" },
+            { title: "Office Admin", base: 2100, req: "HS Diploma", tReq: 2, odds: 0.8, cat: "Entry" },
+            { title: "Bank Teller", base: 1900, req: "HS Diploma", tReq: 1, odds: 0.7, cat: "Entry" },
+            { title: "Landscape Lead", base: 2200, req: "Trade Cert", tReq: 3, odds: 0.9, cat: "Skilled" },
+            { title: "Pharmacy Tech", base: 2000, req: "Trade Cert", tReq: 2, odds: 0.75, cat: "Skilled" },
+            { title: "Event Planner", base: 3400, req: "Degree", tReq: 2, odds: 0.45, cat: "Pro" },
+            { title: "Supply Chain Manager", base: 5600, req: "Degree", tReq: 3, odds: 0.4, cat: "Pro" },
+            { title: "Real Estate Agent", base: 3000, req: "Trade Cert", tReq: 3, odds: 0.5, cat: "Skilled" },
+            { title: "Web Designer", base: 4200, req: "Trade Cert", tReq: 1, odds: 0.55, cat: "Pro" },
+            { title: "Vet Assistant", base: 1850, req: "HS Diploma", tReq: 2, odds: 0.7, cat: "Entry" },
+            { title: "Chef de Partie", base: 3100, req: "Trade Cert", tReq: 1, odds: 0.5, cat: "Skilled" },
+            { title: "Sales Rep", base: 4000, req: "HS Diploma", tReq: 3, odds: 0.4, cat: "Entry" },
+            { title: "Publicist", base: 4800, req: "Degree", tReq: 2, odds: 0.35, cat: "Pro" }
+        ];
+
+        function updateHUD() {
+            document.getElementById('hud-check').innerText = `$${format(state.check)}`;
+            document.getElementById('hud-save').innerText = `$${format(state.save)}`;
+            document.getElementById('hud-debt').innerText = `$${format(state.debt)}`;
+            document.getElementById('hud-credit').innerText = state.credit;
+            document.getElementById('hud-city').innerText = state.city.name;
+            document.getElementById('hud-date').innerText = new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+
+
+        function buildLedger() {
+            let bal = state.check;
+            state.ledger = [{ id: 0, desc: "Previous Balance", amt: 0, type: "none", bal: bal, done: true }];
+            
+            let rent = fix(450 * state.city.r);
+            bal = fix(bal - rent);
+            state.ledger.push({ id: 1, desc: "Housing/Rent Payment", amt: rent, type: "out", bal: bal, done: false });
+
+            bal = fix(bal - state.transit.cost);
+            state.ledger.push({ id: 2, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: "out", bal: bal, done: false });
+
+            if (state.activeEdu) {
+                const edu = { "HS Diploma": 200, "Trade Cert": 800, "Degree": 1200 };
+                let cost = edu[state.activeEdu];
+                bal = fix(bal - cost);
+                state.ledger.push({ id: 5, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: "out", bal: bal, done: false });
+            }
+
+            let netPay = fix(state.job.base * state.city.p * 0.80);
+            bal = fix(bal + netPay);
+            state.ledger.push({ id: 3, desc: `Net Salary: ${state.job.title}`, amt: netPay, type: "inc", bal: bal, done: false });
+
+            renderLedger();
+        }
+
+        function renderLedger() {
+            let html = `<table class="w-full text-left"><thead class="text-[10px] text-slate-400 uppercase font-bold"><th>Date</th><th class="py-4">Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Running Balance</th><th></th></tr></thead><tbody class="divide-y divide-slate-100">`;
+            state.ledger.forEach(tx => {
+                html += `<tr><td class="py-4 text-xs font-bold text-slate-700">${tx.desc}</td><td class="text-right text-rose-500 font-bold">${tx.type==='out'?'-'+format(tx.amt):''}</td><td class="text-right text-emerald-600 font-bold">${tx.type==='inc'?'+'+format(tx.amt):''}</td><td class="text-right"><input type="number" id="inp-${tx.id}" step="0.01" class="w-24 p-1 border-b text-right font-bold ${tx.done?'correct':''}" value="${tx.done?tx.bal.toFixed(2):''}" ${tx.done?'disabled':''}></td><td class="text-right"><button onclick="checkRow(${tx.id})" class="ml-2 text-[10px] font-bold text-blue-500">CHECK</button></td></tr>`;
+            });
+            document.getElementById('view-ledger').innerHTML = html + `</tbody></table>`;
+        }
+
+	function openGrowthPortal() {
+            let rate = 0.008;
+            let tier = "Poor";
+            if(state.credit >= 740) { rate = 0.002; tier = "Excellent"; }
+            else if(state.credit >= 670) { rate = 0.004; tier = "Good"; }
+            else if(state.credit >= 580) { rate = 0.006; tier = "Fair"; }
+
+            const interest = parseFloat((state.debt * rate).toFixed(2));
+            document.getElementById('g-debt').innerText = `$${toCurrency(state.debt)}`;
+            document.getElementById('g-int').innerText = `+$${toCurrency(interest)}`;
+            document.getElementById('g-tier').innerText = `${tier} (${(rate*100).toFixed(1)}%)`;
+            document.getElementById('growth-modal').classList.remove('hidden');
+        }
+
+	function openGrowthPortal() {
+            const interest = parseFloat((state.debt * 0.008).toFixed(2));
+            document.getElementById('g-debt').innerText = `$${toCurrency(state.debt)}`;
+            document.getElementById('g-int').innerText = `+$${toCurrency(interest)}`;
+            
+            const reflections = [
+                "The days are long, but the dream keeps you going.",
+                "You survived another month on the edge. Is it enough?",
+                "The city is expensive, but your spirit is free.",
+                "You saw a nice car today. One day, that'll be yours."
+            ];
+            document.getElementById('narrative-reflection').innerText = reflections[Math.floor(Math.random()*reflections.length)];
+            document.getElementById('growth-modal').classList.remove('hidden');
+        }
+
+        function checkRow(id) {
+            const val = parseFloat(document.getElementById(`inp-${id}`).value);
+            const tx = state.ledger.find(t => t.id === id);
+            if (Math.abs(val - tx.bal) < 0.01) {
+                tx.done = true; state.check = val; updateHUD(); renderLedger();
+                if (state.ledger.every(t => t.done)) {
+                    document.getElementById('verify-btn').disabled = false;
+                    document.getElementById('verify-btn').className = "bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase";
+                }
+            }
+        }
+
+
+
+        function switchTab(t) {
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+            document.getElementById('view-' + t).classList.remove('hidden');
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('tab-active'));
+            document.getElementById('nav-' + t).classList.add('tab-active');
+            if (t === 'careers') renderCareers();
+            if (t === 'academy') renderAcademy();
+            if (t === 'transit') renderTransit();
+            if (t === 'relocate') renderRelocate();
+        }
+
+        function renderCareers() {
+            document.getElementById('view-careers').innerHTML = jobBoard.map(j => {
+                const edMet = !j.req || state.credentials.includes(j.req);
+                const trMet = state.transit.level >= j.tReq;
+                return `<div class="glass p-5 ${!edMet || !trMet ? 'card-locked' : ''}">
+                    <h4 class="font-bold text-sm">${j.title}</h4>
+                    <p class="text-emerald-600 font-bold">$${format(j.base * state.city.p * 0.8)}/mo</p>
+                    <div class="mt-2 flex gap-1">
+                        <span class="req-tag ${edMet?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${j.req || 'No Edu'}</span>
+                        <span class="req-tag ${trMet?'bg-blue-100 text-blue-700':'bg-rose-100 text-rose-700'}">Transit L${j.tReq}</span>
+                    </div>
+                    <button onclick="if(${edMet&&trMet}){state.pendingJob=${JSON.stringify(j)}; switchTab('careers');}" class="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold">APPLY</button>
+                </div>`;
+            }).join('');
+        }
+
+        function renderAcademy() {
+            const courses = [{n: "HS Diploma", m: 1, c: 200}, {n: "Trade Cert", m: 3, c: 800}, {n: "Degree", m: 12, c: 1200}];
+            document.getElementById('view-academy').innerHTML = courses.map(e => {
+                const has = state.credentials.includes(e.n);
+                const progress = (state.eduProgress[e.n] / e.m) * 100;
+                return `<div class="glass p-6">
+                    <h4 class="font-bold">${e.n}</h4>
+                    <p class="text-xs text-slate-500 mb-4">$${e.c}/mo x ${e.m} months</p>
+                    <div class="w-full bg-slate-100 h-2 rounded-full mb-4 overflow-hidden"><div class="progress-fill" style="width: ${progress}%"></div></div>
+                    ${has ? '<p class="text-emerald-600 font-bold text-xs">GRADUATED</p>' : `<button onclick="state.activeEdu='${e.n}'; renderAcademy();" class="w-full py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase">Enroll</button>`}
+                </div>`;
+            }).join('');
+        }
+
+        function renderTransit() {
+            const opts = [{n: "Walk/Bike", c: 15, l: 1}, {n: "Bus Pass", c: 95, l: 2}, {n: "Used Car", c: 380, l: 3}];
+            document.getElementById('view-transit').innerHTML = opts.map(o => `<div class="glass p-6 ${state.transit.name===o.n?'card-active':''}">
+                <h4 class="font-bold">${o.n}</h4><p class="text-sm">$${o.c}/mo</p>
+                <button onclick="state.pendingTransit=${JSON.stringify(o)}; switchTab('transit');" class="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold">SELECT</button>
+            </div>`).join('');
+        }
+
+        function renderRelocate() {
+            document.getElementById('view-relocate').innerHTML = cityData.map(c => `<div class="glass p-5 ${state.city.name===c.name?'card-active':''}">
+                <h4 class="font-bold">${c.icon} ${c.name}</h4><p class="text-[10px] uppercase font-bold text-slate-400">Rent: ${c.r}x | Pay: ${c.p}x</p>
+                <button onclick="state.city=cityData.find(x=>x.name==='${c.name}'); state.debt+=1500; updateHUD(); switchTab('relocate');" class="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold uppercase">Move ($1,500)</button>
+            </div>`).join('');
+        }
+
+	function startRelocation(newCity) {
+            if(state.check < 2500) { alert("You don't have enough liquid cash to fund a move."); return; }
+            state.check -= 2500;
+            state.city = newCity;
+            alert(`Relocation funding secured. You have moved to ${newCity}. You'll need to find a new job and lease here immediately.`);
+            state.job = { title: 'Odd Jobs', basePay: 400.00, tenure: 0 };
+            initMonth();
+        }
+
+	function renderResume() {
+            document.getElementById('view-resume').innerHTML = `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold">${state.name}</h2>
+                    <div class="grid grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Experience</h3>
+                            <p class="font-bold text-slate-800">${state.job.title} (${state.tenure}mo)</p>
+                            <p class="text-[10px] text-slate-500 uppercase font-bold mt-4 mb-1">System Log</p>
+                            <div class="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto text-[10px] font-mono">
+                                ${state.logs.map(l => `<div class="mb-1 border-b border-slate-100 pb-1">[${l.date}] ${l.msg}</div>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Credentials</h3>
+                            ${state.credentials.length ? state.credentials.map(c => `<p class="text-sm font-bold">📜 ${c}</p>`).join('') : '<p class="text-sm italic text-slate-400">No Degree</p>'}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function openSettlement() {
+            let log = "Journal verified.";
+            if (state.activeEdu) {
+                state.eduProgress[state.activeEdu]++;
+                let target = state.activeEdu === "HS Diploma" ? 1 : state.activeEdu === "Trade Cert" ? 3 : 12;
+                if (state.eduProgress[state.activeEdu] >= target) {
+                    state.credentials.push(state.activeEdu);
+                    log = `🎓 GRADUATED: Earned ${state.activeEdu}!`;
+                    state.activeEdu = null;
+                } else { log = `📚 Continued ${state.activeEdu} study.`; }
+            }
+            if (state.pendingJob) {
+                if (Math.random() < state.pendingJob.odds) { state.job = state.pendingJob; log += `<br>✅ HIRED: ${state.job.title}`; }
+                else { log += `<br>❌ REJECTED: ${state.pendingJob.title}`; }
+                state.pendingJob = null;
+            }
+            if (state.pendingTransit) { state.transit = state.pendingTransit; log += `<br>🚗 Transit updated.`; state.pendingTransit = null; }
+            document.getElementById('status-log').innerHTML = log;
+            document.getElementById('settlement-modal').classList.remove('hidden');
+        }
+
+        function processMonth() {
+            const s = parseFloat(document.getElementById('pay-save').value) || 0;
+            const d = parseFloat(document.getElementById('pay-debt').value) || 0;
+            state.check = fix(state.check - (s + d));
+            state.save += s; state.debt -= d;
+            state.month++; if(state.month > 12) { state.month = 1; state.year++; }
+            document.getElementById('settlement-modal').classList.add('hidden');
+            document.getElementById('verify-btn').disabled = true;
+            document.getElementById('verify-btn').className = "bg-slate-100 text-slate-400 px-6 py-3 rounded-xl text-xs font-bold uppercase cursor-not-allowed";
+            buildLedger();
+        }
+
+	function processMonthEnd() {
+            const extra = parseFloat(document.getElementById('g-extra').value) || 0;
+            state.check -= extra; state.debt = parseFloat((state.debt - extra + (state.debt * 0.008)).toFixed(2));
+            state.tenure++;
+            state.month++; if(state.month > 12) { state.month = 1; state.year++; }
+            document.getElementById('growth-modal').classList.add('hidden');
+            triggerEvent();
+        }
+
+        window.onload = () => { updateHUD(); buildLedger(); };
+    </script>
+</body>
+</html>
+
