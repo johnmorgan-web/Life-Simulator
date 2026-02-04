@@ -60,11 +60,25 @@
         <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
             <h2 class="text-2xl font-bold mb-2">Reconciliation</h2>
             <div id="status-log" class="mb-6 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200"></div>
+            <div id="application-results" class="mb-6"></div>
             <div class="space-y-4 mb-8">
                 <div><label class="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings</label><input type="number" id="pay-save" class="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00"></div>
                 <div><label class="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt</label><input type="number" id="pay-debt" class="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00"></div>
             </div>
             <button onclick="processMonth()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">Begin Next Month</button>
+        </div>
+    </div>
+
+    <div id="application-modal" class="fixed inset-0 bg-slate-900/90 hidden flex items-center justify-center p-6 z-[100] backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-2">✅ Application Received</h2>
+            <p class="text-slate-600 mb-4">Your application for <strong id="app-job-title"></strong> has been submitted.</p>
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <p class="text-sm font-bold text-slate-700 mb-2">Application Timeline:</p>
+                <p class="text-xs text-slate-600">You will hear back within <strong>1-3 months</strong> with a decision on acceptance or rejection.</p>
+            </div>
+            <div id="app-criteria" class="bg-slate-50 rounded-xl p-4 mb-6 text-xs space-y-1"></div>
+            <button onclick="closeApplicationModal()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold uppercase">Continue</button>
         </div>
     </div>
 
@@ -130,7 +144,10 @@
             jobStartMonth: 2,
             jobStartYear: 2026,
             // credential history tracking
-            credentialHistory: []
+            credentialHistory: [],
+            // applications tracking
+            applications: [],
+            eventHistory: []
         };
 
 	function startNarrative() {
@@ -311,6 +328,87 @@
 
 
 
+        function scoreApplication(job) {
+            // Score the candidate's fit for the job (0-100)
+            let score = 50; // base score
+            
+            // Education requirement (±20 points)
+            if (job.req) {
+                if (state.credentials.includes(job.req)) {
+                    score += 20;
+                } else {
+                    score -= 15;
+                }
+            } else {
+                score += 10; // bonus for no requirement
+            }
+            
+            // Credit score evaluation (±10 points)
+            if (state.credit >= 740) score += 10;
+            else if (state.credit >= 670) score += 5;
+            else if (state.credit < 580) score -= 10;
+            
+            // Job history / tenure (±15 points)
+            if (state.tenure >= 12) score += 15; // stable in current role
+            else if (state.tenure >= 6) score += 10;
+            else if (state.tenure >= 3) score += 5;
+            
+            // Career history length (±10 points)
+            if (state.careerHistory.length > 3) score += 10; // experienced
+            else if (state.careerHistory.length > 0) score += 5;
+            
+            // Certification/credential bonus (±10 points)
+            if (state.credentials.length > 0) score += 10;
+            
+            // Clamp to 0-100 range and add some randomness
+            score = Math.max(0, Math.min(100, score));
+            score += (Math.random() * 20 - 10); // ±10 randomness
+            return Math.round(score);
+        }
+
+        function applyForJob(base, title, req, tReq, odds, cat) {
+            const job = { base, title, req, tReq, odds, cat };
+            const score = scoreApplication(job);
+            const appliedMonth = state.month;
+            const appliedYear = state.year;
+            const decisionMonth = appliedMonth + 1 + Math.floor(Math.random() * 3); // 1-3 months
+            let dMonth = decisionMonth;
+            let dYear = appliedYear;
+            if (dMonth > 12) {
+                dYear += Math.floor(dMonth / 12);
+                dMonth = dMonth % 12 || 12;
+            }
+            
+            state.applications.push({
+                id: `app_${Date.now()}`,
+                job: job,
+                appliedMonth: appliedMonth,
+                appliedYear: appliedYear,
+                decisionMonth: dMonth,
+                decisionYear: dYear,
+                score: score,
+                status: 'pending' // pending, accepted, rejected
+            });
+            
+            // Show application modal with criteria
+            document.getElementById('app-job-title').innerText = job.title;
+            const criteria = [];
+            criteria.push(`Education: ${job.req ? (state.credentials.includes(job.req) ? '✓ Met' : '✗ Not Met') : '✓ None Required'}`);
+            criteria.push(`Credit Score: ${state.credit} (${state.credit >= 740 ? 'Excellent' : state.credit >= 670 ? 'Good' : state.credit >= 580 ? 'Fair' : 'Poor'})`);
+            criteria.push(`Current Tenure: ${state.tenure} months`);
+            criteria.push(`Career History: ${state.careerHistory.length} prior roles`);
+            criteria.push(`Certifications: ${state.credentials.length > 0 ? state.credentials.join(', ') : 'None'}`);
+            document.getElementById('app-criteria').innerHTML = criteria.map(c => `<div>${c}</div>`).join('');
+            document.getElementById('application-modal').classList.remove('hidden');
+            
+            state.logs.push({ date: `${appliedMonth}/${appliedYear}`, msg: `Applied for ${job.title}` });
+        }
+
+        function closeApplicationModal() {
+            document.getElementById('application-modal').classList.add('hidden');
+            switchTab('careers');
+        }
+
         function switchTab(t) {
             document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
             document.getElementById('view-' + t).classList.remove('hidden');
@@ -322,11 +420,12 @@
             if (t === 'relocate') renderRelocate();
             if (t === 'resume') renderResume();
         }
-
         function renderCareers() {
             document.getElementById('view-careers').innerHTML = jobBoard.map(j => {
                 const edMet = !j.req || state.credentials.includes(j.req);
                 const trMet = state.transit.level >= j.tReq;
+                const hasApplied = state.applications.some(a => a.job.title === j.title && a.status === 'pending');
+                
                 return `<div class="glass p-5 ${!edMet || !trMet ? 'card-locked' : ''}">
                     <h4 class="font-bold text-sm">${j.title}</h4>
                     <p class="text-emerald-600 font-bold">$${format(j.base * state.city.p * 0.8)}/mo</p>
@@ -334,7 +433,7 @@
                         <span class="req-tag ${edMet?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${j.req || 'No Edu'}</span>
                         <span class="req-tag ${trMet?'bg-blue-100 text-blue-700':'bg-rose-100 text-rose-700'}">Transit L${j.tReq}</span>
                     </div>
-                    <button onclick="if(${edMet&&trMet}){state.pendingJob=${JSON.stringify(j)}; switchTab('careers');}" class="mt-4 w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold">APPLY</button>
+                    <button onclick="applyForJob('${j.base}', '${j.title}', '${j.req}', '${j.tReq}', '${j.odds}', '${j.cat}')" ${!edMet||!trMet ? 'disabled' : ''} class="mt-4 w-full py-2 ${hasApplied ? 'bg-amber-500 text-white cursor-not-allowed' : 'bg-slate-900 text-white'} rounded-lg text-xs font-bold">${hasApplied ? 'APPLIED' : 'APPLY'}</button>
                 </div>`;
             }).join('');
         }
@@ -455,6 +554,41 @@
                 state.pendingJob = null;
             }
             if (state.pendingTransit) { state.transit = state.pendingTransit; log += `<br>🚗 Transit updated.`; state.pendingTransit = null; }
+            
+            // Check for application outcomes
+            let appResults = '';
+            state.applications.forEach(app => {
+                if (app.status === 'pending' && app.decisionMonth === state.month && app.decisionYear === state.year) {
+                    // Determine outcome based on score
+                    let accepted = false;
+                    if (app.score >= 75) {
+                        accepted = Math.random() < 0.95; // high score → 95% chance
+                    } else if (app.score >= 60) {
+                        accepted = Math.random() < 0.65; // medium score → 65% chance
+                    } else if (app.score >= 50) {
+                        accepted = Math.random() < 0.40; // low score → 40% chance
+                    } else {
+                        accepted = Math.random() < 0.15; // very low score → 15% chance
+                    }
+                    
+                    if (accepted) {
+                        app.status = 'accepted';
+                        appResults += `<div class="text-green-600 font-bold mb-2">✅ HIRED: ${app.job.title}</div>`;
+                        state.logs.push({ date: `${state.month}/${state.year}`, msg: `Hired for ${app.job.title}` });
+                    } else {
+                        app.status = 'rejected';
+                        appResults += `<div class="text-rose-600 font-bold mb-2">❌ REJECTED: ${app.job.title}</div>`;
+                        state.logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title}` });
+                    }
+                }
+            });
+            
+            if (appResults) {
+                document.getElementById('application-results').innerHTML = `<div class="bg-slate-50 p-4 rounded-xl border border-slate-200">${appResults}</div>`;
+            } else {
+                document.getElementById('application-results').innerHTML = '';
+            }
+            
             document.getElementById('status-log').innerHTML = log;
             document.getElementById('settlement-modal').classList.remove('hidden');
         }
