@@ -52,7 +52,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
       {state.showSettlement && (
         <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
             <h2 className="text-2xl font-bold mb-2">Reconciliation</h2>
             <div className="mb-6 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200">Journal verified.</div>
             {state.applicationResults && state.applicationResults.length ? (

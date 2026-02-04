@@ -2,15 +2,19 @@ import React from 'react'
 
 export default function Ledger({ ledger, onCheck, format }: any) {
   const fmt = format || ((n: number) => n.toFixed(2))
+  // show the Auto Check button only during development
+  const showAutoCheck = import.meta.env.DEV || (import.meta.env.VITE_SHOW_AUTO_CHECK === 'true')
   return (
     <div className="glass p-6">
       <div className="mb-4 flex justify-between items-center">
         <h3 className="font-bold">Ledger</h3>
-        <button onClick={() => {
-          ledger.forEach((tx: any) => {
-            if (!tx.done) onCheck(tx.id, tx.bal)
-          })
-        }} className="py-2 px-3 bg-slate-900 text-white rounded">Auto Check</button>
+        {showAutoCheck && (
+          <button onClick={() => {
+            ledger.forEach((tx: any) => {
+              if (!tx.done) onCheck(tx.id, tx.bal)
+            })
+          }} className="py-2 px-3 bg-slate-900 text-white rounded">Auto Check</button>
+        )}
       </div>
 
       <table className="w-full text-left">
