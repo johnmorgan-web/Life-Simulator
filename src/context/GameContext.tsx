@@ -62,6 +62,9 @@ function reducer(state: State, action: any) {
 			const credentials = [...state.credentials]
 			const credentialHistory = [...state.credentialHistory]
 			const logs = [...state.logs]
+			const careerHistory = [...state.careerHistory]
+			let job = state.job
+			let tenure = state.tenure
 			if (state.activeEdu) {
 				eduProgress[state.activeEdu] = (eduProgress[state.activeEdu] || 0) + 1
 				const course = academyCourses.find(c => c.n === state.activeEdu)
@@ -83,12 +86,34 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit changed to ${state.pendingTransit.n}` })
 			}
 
+			// If a job was accepted previously, apply it now at the start of the new month.
+			if (state.pendingJob) {
+				// record prior job with full dates and months (no extra month added)
+				const prev = state.job
+				careerHistory.push({
+					title: prev.title,
+					startMonth: state.jobStartMonth,
+					startYear: state.jobStartYear,
+					endMonth: nextMonth,
+					endYear: nextYear,
+					months: state.tenure
+				})
+				// switch to the new job
+				job = state.pendingJob
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
+				// reset tenure and set new job start
+				tenure = 0
+			} else {
+				// no job change, increment tenure
+				tenure = state.tenure + 1
+			}
+
 			return {
 				...state,
 				check,
 				save: state.save + paySave,
 				debt: fix(state.debt - payDebt),
-				tenure: state.tenure + 1,
+				tenure,
 				showSettlement: false,
 				month: nextMonth,
 				year: nextYear,
@@ -98,7 +123,12 @@ function reducer(state: State, action: any) {
 				credentialHistory,
 				transit,
 				pendingTransit: null,
-				logs
+				logs,
+				careerHistory,
+				job,
+				pendingJob: null,
+				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
+				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear
 			}
 		}
 		case 'TOGGLE_SETTLEMENT':
@@ -198,20 +228,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 			dispatch({ type: 'SET_STATE', payload: { applications: apps } })
 			return
 		}
-		// record prior job with full dates and months
-		const careerHistory = [...state.careerHistory]
-		const prev = state.job
-		careerHistory.push({
-			title: prev.title,
-			startMonth: state.jobStartMonth,
-			startYear: state.jobStartYear,
-			endMonth: state.month,
-			endYear: state.year,
-			months: state.tenure
-		})
-		const newJob = chosen.job
-		// set new job and reset tenure / job start
-		dispatch({ type: 'SET_STATE', payload: { job: newJob, applications: apps, careerHistory, jobStartMonth: state.month, jobStartYear: state.year, tenure: 0 } })
+		// mark the chosen application and set as pendingJob to apply at next month progression
+		dispatch({ type: 'SET_STATE', payload: { applications: apps, pendingJob: chosen.job } })
 	}
 
 	function openSettlement() {
