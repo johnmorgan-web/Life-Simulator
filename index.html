@@ -42,6 +42,7 @@
                 <button onclick="switchTab('academy')" id="nav-academy" class="w-full text-left px-4 py-3 glass text-slate-500">🏛️ Academy</button>
                 <button onclick="switchTab('transit')" id="nav-transit" class="w-full text-left px-4 py-3 glass text-slate-500">🚗 Transit</button>
                 <button onclick="switchTab('relocate')" id="nav-relocate" class="w-full text-left px-4 py-3 glass text-slate-500">✈️ Relocate</button>
+                <button onclick="switchTab('resume')" id="nav-resume" class="w-full text-left px-4 py-3 glass text-slate-500">📄 Resume</button>
             </nav>
 
             <div class="col-span-10 overflow-y-auto pb-20">
@@ -50,6 +51,7 @@
                 <section id="view-academy" class="tab-view hidden grid grid-cols-2 gap-4"></section>
                 <section id="view-transit" class="tab-view hidden grid grid-cols-3 gap-4"></section>
                 <section id="view-relocate" class="tab-view hidden grid grid-cols-2 gap-4"></section>
+                <section id="view-resume" class="tab-view hidden glass p-6"></section>
             </div>
         </main>
     </div>
@@ -88,6 +90,9 @@
             { id: 'work_1', title: "Workplace Sprain", amt: 250, type: "out", icon: "🩹", desc: "Injury on the clock.", trigger: "hazard" }
         ];
 
+        // runtime alias expected by event code
+        const lifeEvents = allLifeEvents;
+
 	function triggerEvent() {
             let possible = lifeEvents.filter(e => !state.eventHistory.includes(e.id));
             if (state.check < 300) possible = possible.filter(e => e.type === 'in');
@@ -114,7 +119,18 @@
             activeEdu: null,
             eduProgress: { "HS Diploma": 0, "Trade Cert": 0, "Degree": 0 },
             pendingJob: null, pendingTransit: null,
-            ledger: []
+            ledger: [],
+            // defaults to avoid runtime errors when rendering views
+            name: "The Traveler",
+            tenure: 0,
+            logs: [],
+            totalMonths: 0,
+            // job/career history tracking
+            careerHistory: [],
+            jobStartMonth: 2,
+            jobStartYear: 2026,
+            // credential history tracking
+            credentialHistory: []
         };
 
 	function startNarrative() {
@@ -270,12 +286,6 @@
             document.getElementById('g-int').innerText = `+$${toCurrency(interest)}`;
             document.getElementById('g-tier').innerText = `${tier} (${(rate*100).toFixed(1)}%)`;
             document.getElementById('growth-modal').classList.remove('hidden');
-        }
-
-	function openGrowthPortal() {
-            const interest = parseFloat((state.debt * 0.008).toFixed(2));
-            document.getElementById('g-debt').innerText = `$${toCurrency(state.debt)}`;
-            document.getElementById('g-int').innerText = `+$${toCurrency(interest)}`;
             
             const reflections = [
                 "The days are long, but the dream keeps you going.",
@@ -310,6 +320,7 @@
             if (t === 'academy') renderAcademy();
             if (t === 'transit') renderTransit();
             if (t === 'relocate') renderRelocate();
+            if (t === 'resume') renderResume();
         }
 
         function renderCareers() {
@@ -357,6 +368,31 @@
             </div>`).join('');
         }
 
+        function renderResume() {
+            document.getElementById('view-resume').innerHTML = `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold">${state.name}</h2>
+                    <div class="grid grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Experience</h3>
+                            <p class="font-bold text-slate-800">${state.job.title} (${state.tenure} mo)</p>
+                            <div class="mt-4">
+                                <h4 class="text-xs text-slate-400 uppercase font-bold mb-2">Career History</h4>
+                                ${state.careerHistory.length ? state.careerHistory.map(h => `<div class="mb-2 text-sm">• ${h.title} — ${h.months} mo (${h.startMonth}/${h.startYear} → ${h.endMonth}/${h.endYear})</div>`).join('') : '<p class="text-sm italic text-slate-400">No prior roles</p>'}
+                            </div>
+                            <p class="text-[10px] text-slate-500 uppercase font-bold mt-4 mb-1">System Log</p>
+                            <div class="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto text-[10px] font-mono">
+                                ${state.logs.map(l => `<div class="mb-1 border-b border-slate-100 pb-1">[${l.date}] ${l.msg}</div>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Credentials</h3>
+                            ${state.credentialHistory.length ? state.credentialHistory.map(c => `<p class="text-sm font-bold">📜 ${c.name} — ${c.months} mo (${c.month}/${c.year})</p>`).join('') : (state.credentials.length ? state.credentials.map(c => `<p class="text-sm font-bold">📜 ${c}</p>`).join('') : '<p class="text-sm italic text-slate-400">No Degree</p>')}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
 	function startRelocation(newCity) {
             if(state.check < 2500) { alert("You don't have enough liquid cash to fund a move."); return; }
             state.check -= 2500;
@@ -366,14 +402,18 @@
             initMonth();
         }
 
-	function renderResume() {
+        function renderResume() {
             document.getElementById('view-resume').innerHTML = `
                 <div class="space-y-6">
                     <h2 class="text-3xl font-bold">${state.name}</h2>
                     <div class="grid grid-cols-2 gap-8">
                         <div>
                             <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Experience</h3>
-                            <p class="font-bold text-slate-800">${state.job.title} (${state.tenure}mo)</p>
+                            <p class="font-bold text-slate-800">${state.job.title} (${state.tenure} mo)</p>
+                            <div class="mt-4">
+                                <h4 class="text-xs text-slate-400 uppercase font-bold mb-2">Career History</h4>
+                                ${state.careerHistory.length ? state.careerHistory.map(h => `<div class="mb-2 text-sm">• ${h.title} — ${h.months} mo (${h.startMonth}/${h.startYear} → ${h.endMonth}/${h.endYear})</div>`).join('') : '<p class="text-sm italic text-slate-400">No prior roles</p>'}
+                            </div>
                             <p class="text-[10px] text-slate-500 uppercase font-bold mt-4 mb-1">System Log</p>
                             <div class="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto text-[10px] font-mono">
                                 ${state.logs.map(l => `<div class="mb-1 border-b border-slate-100 pb-1">[${l.date}] ${l.msg}</div>`).join('')}
@@ -381,7 +421,7 @@
                         </div>
                         <div>
                             <h3 class="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Credentials</h3>
-                            ${state.credentials.length ? state.credentials.map(c => `<p class="text-sm font-bold">📜 ${c}</p>`).join('') : '<p class="text-sm italic text-slate-400">No Degree</p>'}
+                            ${state.credentialHistory.length ? state.credentialHistory.map(c => `<p class="text-sm font-bold">📜 ${c.name} — ${c.months} mo (${c.month}/${c.year})</p>`).join('') : (state.credentials.length ? state.credentials.map(c => `<p class="text-sm font-bold">📜 ${c}</p>`).join('') : '<p class="text-sm italic text-slate-400">No Degree</p>')}
                         </div>
                     </div>
                 </div>`;
@@ -393,14 +433,25 @@
                 state.eduProgress[state.activeEdu]++;
                 let target = state.activeEdu === "HS Diploma" ? 1 : state.activeEdu === "Trade Cert" ? 3 : 12;
                 if (state.eduProgress[state.activeEdu] >= target) {
+                    // record credential history and logs
+                    const monthsStudied = state.eduProgress[state.activeEdu];
                     state.credentials.push(state.activeEdu);
+                    state.credentialHistory.push({ name: state.activeEdu, month: state.month, year: state.year, months: monthsStudied });
+                    state.logs.push({ date: `${state.month}/${state.year}`, msg: `Graduated: ${state.activeEdu} (${monthsStudied} mo)` });
                     log = `🎓 GRADUATED: Earned ${state.activeEdu}!`;
                     state.activeEdu = null;
-                } else { log = `📚 Continued ${state.activeEdu} study.`; }
+                } else { state.logs.push({ date: `${state.month}/${state.year}`, msg: `Continued study: ${state.activeEdu}` }); log = `📚 Continued ${state.activeEdu} study.`; }
             }
             if (state.pendingJob) {
-                if (Math.random() < state.pendingJob.odds) { state.job = state.pendingJob; log += `<br>✅ HIRED: ${state.job.title}`; }
-                else { log += `<br>❌ REJECTED: ${state.pendingJob.title}`; }
+                // record previous job into career history before changing
+                if (Math.random() < state.pendingJob.odds) {
+                    state.careerHistory.push({ title: state.job.title, startMonth: state.jobStartMonth, startYear: state.jobStartYear, endMonth: state.month, endYear: state.year, months: state.tenure });
+                    state.logs.push({ date: `${state.month}/${state.year}`, msg: `Left ${state.job.title} after ${state.tenure} mo` });
+                    state.job = state.pendingJob;
+                    state.jobStartMonth = state.month; state.jobStartYear = state.year; state.tenure = 0;
+                    log += `<br>✅ HIRED: ${state.job.title}`;
+                    state.logs.push({ date: `${state.month}/${state.year}`, msg: `Hired: ${state.job.title}` });
+                } else { log += `<br>❌ REJECTED: ${state.pendingJob.title}`; state.logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected: ${state.pendingJob.title}` }); }
                 state.pendingJob = null;
             }
             if (state.pendingTransit) { state.transit = state.pendingTransit; log += `<br>🚗 Transit updated.`; state.pendingTransit = null; }
@@ -413,6 +464,9 @@
             const d = parseFloat(document.getElementById('pay-debt').value) || 0;
             state.check = fix(state.check - (s + d));
             state.save += s; state.debt -= d;
+            // advance time and tenure
+            state.tenure++;
+            state.totalMonths++;
             state.month++; if(state.month > 12) { state.month = 1; state.year++; }
             document.getElementById('settlement-modal').classList.add('hidden');
             document.getElementById('verify-btn').disabled = true;
@@ -423,7 +477,9 @@
 	function processMonthEnd() {
             const extra = parseFloat(document.getElementById('g-extra').value) || 0;
             state.check -= extra; state.debt = parseFloat((state.debt - extra + (state.debt * 0.008)).toFixed(2));
+            // advance time and tenure
             state.tenure++;
+            state.totalMonths++;
             state.month++; if(state.month > 12) { state.month = 1; state.year++; }
             document.getElementById('growth-modal').classList.add('hidden');
             triggerEvent();
