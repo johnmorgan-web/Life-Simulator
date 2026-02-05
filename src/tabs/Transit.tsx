@@ -1,13 +1,13 @@
 import React from 'react'
 import { useGame } from '../context/GameContext'
+import { TransitOption } from 'src/types/models'
 
 export default function Transit() {
-  const { state, dispatch } = useGame()
-  const opts = [{ n: 'Walk/Bike', c: 15, l: 1 }, { n: 'Bus Pass', c: 95, l: 2 }, { n: 'Used Car', c: 380, l: 3 }]
+  const { state, dispatch, transitOptions } = useGame()
 
   return (
     <div className="grid grid-cols-3 gap-4">
-      {opts.map(o => (
+      {transitOptions.map((o: TransitOption) => (
         <div key={o.n} className={`glass p-6 ${state.transit.name === o.n ? 'card-active' : ''} ${state.pendingTransit?.n === o.n ? 'card-pending' : ''}`}>
           <h4 className="font-bold">{o.n}</h4>
           <p className="text-sm">${o.c}/mo</p>
