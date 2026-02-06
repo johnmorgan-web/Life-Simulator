@@ -7,26 +7,78 @@ Quick start:
 1. npm install
 2. npm run dev
 
-This scaffold uses Vite + React and splits the UI into components in `src/components`.
+# React + TypeScript + Vite
 
-Build & deploy
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-- Development (local):
-	1. npm install
-	2. npm run dev
+Currently, two official plugins are available:
 
-- Build (production):
-	1. npm run build
-	2. The production output will be in `dist/`.
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-- Deploy to GitHub Pages (automatic):
-	- This repo contains a GitHub Actions workflow that builds and deploys `dist/` to the `gh-pages` branch when changes are pushed to `main`.
-	- The workflow sets `VITE_PUBLIC_PATH` to `/johnmorgan-web/Life-Simulator/` by default; change that in `.github/workflows/gh-pages.yml` if your repo path differs.
+## React Compiler
 
-Notes
-- The "Auto Check" button in the `Ledger` tab is only visible when running locally (Vite dev server). It's controlled by `import.meta.env.DEV` and the `VITE_SHOW_AUTO_CHECK` env var.
-- To force-enable the Auto Check button in a non-dev build, set `VITE_SHOW_AUTO_CHECK=true` in your production environment before building.
+The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
 
-Next steps:
-- Continue porting game logic into React hooks and context
-- Add tests and additional TypeScript types if desired
+Note: This will impact Vite dev & build performances.
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```

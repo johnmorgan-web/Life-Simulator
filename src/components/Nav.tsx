@@ -1,4 +1,3 @@
-import React from 'react'
 
 export default function Nav({ tab, setTab }: any) {
   const tabs = [

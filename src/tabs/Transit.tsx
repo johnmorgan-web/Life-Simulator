@@ -1,6 +1,5 @@
-import React from 'react'
 import { useGame } from '../context/GameContext'
-import { TransitOption } from 'src/types/models'
+import type { TransitOption } from '../types/models.types'
 
 export default function Transit() {
   const { state, dispatch, transitOptions } = useGame()

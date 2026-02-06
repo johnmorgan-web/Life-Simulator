@@ -1,4 +1,4 @@
-import { LifeEvent } from '../types/models'
+import type { LifeEvent } from "../types/models.types"
 
 const lifeEvents: LifeEvent[] = [
   { id: 'all_1', title: 'Tax Refund', amt: 350, type: 'in', icon: '💸', desc: 'Government check arrived.', trigger: 'none' },

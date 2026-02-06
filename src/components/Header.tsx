@@ -1,5 +1,3 @@
-import React from 'react'
-import { useGame } from '../context/GameContext'
 
 export default function Header({ state, onVerify, verifyEnabled }: any) {
   return (

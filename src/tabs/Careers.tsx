@@ -1,6 +1,5 @@
-import React from 'react'
 import { useGame } from '../context/GameContext'
-import { Job } from '../types/models'
+import type { Job } from '../types/models.types'
 
 export default function Careers() {
   const { state, applyForJob, jobBoard } = useGame()

@@ -1,4 +1,4 @@
-import { City } from '../types/models'
+import type { City } from "../types/models.types"
 
 const cityData: City[] = [
   { name: 'San Francisco', p: 1.6, r: 2.3, icon: '🌉' },

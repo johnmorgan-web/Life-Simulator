@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Header from './components/Header'
 import Nav from './components/Nav'
 import { GameProvider, useGame } from './context/GameContext'
@@ -22,7 +22,7 @@ function TabContent({ tab }: { tab: string }) {
   return <div className="p-6">Unknown tab</div>
 }
 
-export default function App() {
+export function App() {
   const [tab, setTab] = useState('ledger')
 
   return (
@@ -99,3 +99,6 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     </>
   )
 }
+
+
+export default App

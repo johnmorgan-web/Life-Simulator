@@ -1,4 +1,3 @@
-import React from 'react'
 import { useGame } from '../context/GameContext'
 
 export default function Academy() {

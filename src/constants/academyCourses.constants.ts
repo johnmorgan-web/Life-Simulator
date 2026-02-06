@@ -1,4 +1,4 @@
-import { AcademyCourse } from '../types/models'
+import type { AcademyCourse } from "../types/models.types"
 
 const academyCourses: AcademyCourse[] = [{ n: 'HS Diploma', m: 1, c: 200 }, { n: 'Trade Cert', m: 3, c: 800 }, { n: 'Degree', m: 12, c: 1200 }]
 

@@ -1,4 +1,4 @@
-import { Job } from '../types/models'
+import type { Job } from "../types/models.types"
 
 const jobBoard: Job[] = [
   { title: 'Odd Jobs', base: 600, req: null, tReq: 1, odds: 1, cat: 'Entry' },

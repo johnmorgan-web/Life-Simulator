@@ -1,11 +1,11 @@
 // During migration we re-export the existing JS implementation to avoid duplication.
-import React, { createContext, useContext, useEffect, useReducer, ReactNode } from 'react'
-import cityData from '../data/cityData'
-import jobBoard from '../data/jobBoard'
-import lifeEvents from '../data/lifeEvents'
-import transitOptions from '../data/transitOptions'
-import academyCourses from '../data/academyCourses'
-import { Job, Application } from '../types/models'
+import React, { createContext, useContext, useEffect, useReducer } from 'react'
+import cityData from '../constants/cityData.constants'
+import jobBoard from '../constants/jobBoard.constants'
+import lifeEvents from '../constants/lifeEvents.constants'
+import transitOptions from '../constants/transitOptions.constants'
+import academyCourses from '../constants/academyCourses.constants'
+import type { Job, Application } from '../types/models.types'
 
 type State = any
 
@@ -144,7 +144,7 @@ function reducer(state: State, action: any) {
 	}
 }
 
-export function GameProvider({ children }: { children: ReactNode }) {
+export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
 
 	useEffect(() => {

@@ -1,4 +1,3 @@
-import React from 'react'
 
 export default function Ledger({ ledger, onCheck, format }: any) {
   const fmt = format || ((n: number) => n.toFixed(2))
