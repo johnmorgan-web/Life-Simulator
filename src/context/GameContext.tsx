@@ -280,6 +280,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			dYear += Math.floor(dMonth / 12)
 			dMonth = dMonth % 12 || 12
 		}
+
+		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
+		const variability = job.base * 0.05;
+		const adjustedBase = job.base + (Math.random() * variability * 2 - variability);
+		job.base = adjustedBase;
 		const app: Application = {
 			id: `app_${Date.now()}`,
 			job,
