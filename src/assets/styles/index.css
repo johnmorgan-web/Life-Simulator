@@ -73,3 +73,11 @@ body {
 html {
 	scrollbar-gutter: stable both-edges;
 }
+
+button {
+	cursor: pointer;
+}
+
+button:disabled {
+	cursor: default;
+}

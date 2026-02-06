@@ -88,11 +88,30 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 <input type="number" id="pay-debt" className="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00" />
               </div>
             </div>
-            <button onClick={() => {
-              const s = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
-              const d = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
-              processMonth(s, d)
-            }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">Begin Next Month</button>
+            <button
+              onClick={() => {
+                const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
+                const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
+
+                if (savings == 0 && debtPayment == 0) {
+                  // Let user proceed without paying (if they have negative checking balance)
+                  processMonth();
+                } else if (state.check < savings + debtPayment) {
+                  // Check if they can afford the payments they're trying to make
+                  const inputs = document.querySelectorAll('#pay-save, #pay-debt') as NodeListOf<HTMLInputElement>;
+                  inputs.forEach(input => {
+                    input.classList.add('border-rose-600', 'bg-rose-50');
+                    setTimeout(() => {
+                      input.classList.remove('border-rose-600', 'bg-rose-50');
+                    }, 2000);
+                  });
+                } else {
+                  // Process the month with the specified payments
+                  processMonth(savings, debtPayment)
+                }
+              }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">
+              Begin Next Month
+            </button>
           </div>
         </div>
       )}

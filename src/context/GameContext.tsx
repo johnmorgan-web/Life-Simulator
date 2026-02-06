@@ -152,8 +152,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
-	function buildLedger() {
-		let bal = state.check
+	function buildLedger(paySave = 0, payDebt = 0) {
+		let bal = state.check - paySave - payDebt;
 		const ledger: any[] = []
 		ledger.push({ id: 0, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
 		const rent = fix(450 * state.city.r)
@@ -183,7 +183,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function processMonth(paySave = 0, payDebt = 0) {
 		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt } })
-		buildLedger()
+		buildLedger(paySave, payDebt);
 	}
 
 	function evaluateApplications() {
