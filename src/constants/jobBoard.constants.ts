@@ -1,7 +1,7 @@
 import type { Job } from "../types/models.types"
 
 const jobBoard: Job[] = [
-  { title: 'Odd Jobs', base: 600, req: null, tReq: 1, odds: 1, cat: 'Entry' },
+  { title: 'Odd Jobs', base: 800, req: null, tReq: 1, odds: 1, cat: 'Entry' },
   { title: 'Fast Food Worker', base: 1100, req: null, tReq: 1, odds: 0.9, cat: 'Entry' },
   { title: 'Retail Associate', base: 1200, req: null, tReq: 1, odds: 0.85, cat: 'Entry' },
   { title: 'Dishwasher', base: 1050, req: null, tReq: 1, odds: 0.95, cat: 'Entry' },

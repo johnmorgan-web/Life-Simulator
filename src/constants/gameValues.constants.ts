@@ -1,7 +1,7 @@
 import type { GameValues } from "../types/GameValues.types";
 
 const gameValues: GameValues = {
-  rentBase: 450,
+  rentBase: 750,
   hsDiplomaCost: 200,
   tradeCertCost: 800,
   degreeCost: 1200,

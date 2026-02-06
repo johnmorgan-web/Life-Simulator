@@ -1,10 +1,12 @@
 import { useGame } from '../context/GameContext'
+import type { City } from '../types/models.types'
+
 
 export default function Relocate() {
   const { state, dispatch, cityData } = useGame()
   return (
     <div className="grid grid-cols-3 gap-4">
-      {cityData.map((c: any) => (
+      {(cityData as City[]).sort((a, b) => a.name.localeCompare(b.name)).map((c: any) => (
         <div key={c.name} className={`glass p-6 ${state.city.name === c.name ? 'card-active' : ''}`}>
           <h4 className="font-bold">{c.icon} {c.name}</h4>
           <p className="text-[13px] uppercase font-bold text-slate-400">Rent: {c.r}x | Pay: {c.p}x</p>

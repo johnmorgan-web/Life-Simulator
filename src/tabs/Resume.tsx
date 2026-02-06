@@ -26,7 +26,7 @@ export default function Resume() {
             <p className="text-[10px] text-slate-500 uppercase font-bold mt-4 mb-1">System Log</p>
             <div className="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto text-[10px] font-mono">
               {state.logs && state.logs.length ? (
-                state.logs.map((l: any, i: number) => (
+                (state.logs as any[]).reverse().map((l: any, i: number) => (
                   <div key={i} className="mb-1 border-b border-slate-100 pb-1">[{l.date}] {l.msg}</div>
                 ))
               ) : (
