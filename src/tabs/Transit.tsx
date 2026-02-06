@@ -10,6 +10,7 @@ export default function Transit() {
         <div key={o.n} className={`glass p-6 ${state.transit.name === o.n ? 'card-active' : ''} ${state.pendingTransit?.n === o.n ? 'card-pending' : ''}`}>
           <h4 className="font-bold">{o.n}</h4>
           <p className="text-sm">${o.c}/mo</p>
+          {o.subText && <p className="text-xs text-slate-400">{o.subText}</p>}
           {state.transit.name === o.n ? (
             <button disabled className="mt-4 w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold">CURRENT</button>
           ) : state.pendingTransit?.n === o.n ? (

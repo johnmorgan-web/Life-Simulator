@@ -7,7 +7,7 @@ export default function Relocate() {
       {cityData.map((c: any) => (
         <div key={c.name} className={`glass p-6 ${state.city.name === c.name ? 'card-active' : ''}`}>
           <h4 className="font-bold">{c.icon} {c.name}</h4>
-          <p className="text-[10px] uppercase font-bold text-slate-400">Rent: {c.r}x | Pay: {c.p}x</p>
+          <p className="text-[13px] uppercase font-bold text-slate-400">Rent: {c.r}x | Pay: {c.p}x</p>
           {state.city.name === c.name ? (
             <button onClick={() => {
               // unmark pending city if currently selected

@@ -36,7 +36,7 @@ const jobBoard: Job[] = [
   { title: 'Marketing Coord.', base: 4700, req: 'Degree', tReq: 2, odds: 0.5, cat: 'Pro' },
   { title: 'Lab Researcher', base: 5100, req: 'Degree', tReq: 2, odds: 0.4, cat: 'Pro' },
   { title: 'Social Worker', base: 4200, req: 'Degree', tReq: 2, odds: 0.7, cat: 'Pro' },
-  { title: 'Apprentice Mason', base: 1800, req: null, tReq: 3, odds: 0.8, cat: 'Skilled' },
+  { title: 'Apprentice Mason', base: 1800, req: 'HS Diploma', tReq: 3, odds: 0.8, cat: 'Skilled' },
   { title: 'CNC Operator', base: 2400, req: 'Trade Cert', tReq: 2, odds: 0.7, cat: 'Skilled' },
   { title: 'IT Support', base: 3200, req: 'Trade Cert', tReq: 1, odds: 0.6, cat: 'Pro' },
   { title: 'Office Admin', base: 2100, req: 'HS Diploma', tReq: 2, odds: 0.8, cat: 'Entry' },
