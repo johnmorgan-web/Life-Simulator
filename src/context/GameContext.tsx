@@ -164,23 +164,37 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}, [])
 
 	function buildLedger(paySave = 0, payDebt = 0) {
-		let bal = state.check - paySave - payDebt;
 		const ledger: any[] = []
+
+		// Start with previous balance after payments
+		let bal = state.check - paySave - payDebt;
 		ledger.push({ id: 0, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
+		
+		// Rent/Housing cost
 		const rent = fix(450 * state.city.r)
 		bal = fix(bal - rent)
 		ledger.push({ id: 1, desc: 'Housing/Rent Payment', amt: rent, type: 'out', bal, done: false })
+		
+		// Transit cost
 		bal = fix(bal - state.transit.cost)
 		ledger.push({ id: 2, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
+		
+		// Education cost if currently studying
 		if (state.activeEdu) {
 			const eduCosts: any = { 'HS Diploma': 200, 'Trade Cert': 800, 'Degree': 1200 }
 			const cost = eduCosts[state.activeEdu]
 			bal = fix(bal - cost)
 			ledger.push({ id: 5, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
 		}
-		const netPay = fix(state.job.base * state.city.p * 0.8)
+
+		// Salary
+		/// Get job from pendingJob if exists
+		const job = state.pendingJob || state.job;
+		
+		const netPay = fix(job.base * state.city.p * 0.8)
 		bal = fix(bal + netPay)
-		ledger.push({ id: 3, desc: `Net Salary: ${state.job.title}`, amt: netPay, type: 'inc', bal, done: false })
+
+		ledger.push({ id: 3, desc: `Net Salary: ${job.title}`, amt: netPay, type: 'inc', bal, done: false })
 		dispatch({ type: 'INIT_LEDGER', payload: ledger })
 	}
 
