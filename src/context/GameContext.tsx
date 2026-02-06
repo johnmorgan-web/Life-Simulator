@@ -31,6 +31,7 @@ const initialState: State = {
 	applications: [],
 	pendingJob: null,
 	pendingTransit: null,
+	pendingCity: null,
 	eventHistory: [],
 	jobStartMonth: 2,
 	jobStartYear: 2026,
@@ -86,6 +87,13 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit changed to ${state.pendingTransit.n}` })
 			}
 
+			// If a city relocation was requested previously, apply it now at the start of the new month.
+			let city = state.city
+			if (state.pendingCity) {
+				city = state.pendingCity
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name}` })
+			}
+
 			// If a job was accepted previously, apply it now at the start of the new month.
 			if (state.pendingJob) {
 				// record prior job with full dates and months (no extra month added)
@@ -101,8 +109,8 @@ function reducer(state: State, action: any) {
 				// switch to the new job
 				job = state.pendingJob
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
-				// reset tenure and set new job start
-				tenure = 0
+				// reset tenure and start times and set new job start
+				tenure = 0;
 			} else {
 				// no job change, increment tenure
 				tenure = state.tenure + 1
@@ -112,7 +120,8 @@ function reducer(state: State, action: any) {
 				...state,
 				check,
 				save: state.save + paySave,
-				debt: fix(state.debt - payDebt),
+				// Apply relocation cost if moving this month
+				debt: fix(state.debt - payDebt + (state.pendingCity ? 1500 : 0)),
 				tenure,
 				showSettlement: false,
 				month: nextMonth,
@@ -123,6 +132,8 @@ function reducer(state: State, action: any) {
 				credentialHistory,
 				transit,
 				pendingTransit: null,
+				city,
+				pendingCity: null,
 				logs,
 				careerHistory,
 				job,
@@ -183,7 +194,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function processMonth(paySave = 0, payDebt = 0) {
 		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt } })
-		buildLedger(paySave, payDebt);
+		// Rebuild ledger after state has updated from the reducer
+		setTimeout(() => buildLedger(paySave, payDebt), 0)
 	}
 
 	function evaluateApplications() {
