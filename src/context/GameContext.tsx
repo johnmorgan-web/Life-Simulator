@@ -5,6 +5,7 @@ import jobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
 import academyCourses from '../constants/academyCourses.constants'
+import gameValues from '../constants/gameValues.constants'
 import type { Job, Application } from '../types/models.types'
 
 type State = any
@@ -171,7 +172,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		ledger.push({ id: 0, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
 		
 		// Rent/Housing cost
-		const rent = fix(450 * state.city.r)
+		const rent = fix(gameValues.rentBase * state.city.r)
 		bal = fix(bal - rent)
 		ledger.push({ id: 1, desc: 'Housing/Rent Payment', amt: rent, type: 'out', bal, done: false })
 		
@@ -181,7 +182,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		
 		// Education cost if currently studying
 		if (state.activeEdu) {
-			const eduCosts: any = { 'HS Diploma': 200, 'Trade Cert': 800, 'Degree': 1200 }
+			const eduCosts: any = { 'HS Diploma': gameValues.hsDiplomaCost, 'Trade Cert': gameValues.tradeCertCost, 'Degree': gameValues.degreeCost }
 			const cost = eduCosts[state.activeEdu]
 			bal = fix(bal - cost)
 			ledger.push({ id: 5, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
