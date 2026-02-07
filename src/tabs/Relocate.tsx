@@ -12,7 +12,18 @@ export default function Relocate() {
   const dragging = useRef(false)
   const lastX = useRef(0)
 
+  const [selectedTransit, setSelectedTransit] = useState<'public' | 'personal' | 'luxury'>('public')
+
   const cities = (cityData as City[])
+  
+  const hasVehicle = state.garage && state.garage.length > 0
+  const primaryVehicle = state.ownsVehicle || (hasVehicle ? state.garage[0] : null)
+  // Define relocation transit options with costs
+  const relocationTransitOptions = [
+    { id: 'public', label: 'Public Transit', costPerKm: 0.15, requiresVehicle: false, note: 'Moving truck rental + public transit' },
+    { id: 'personal', label: 'Personal Vehicle', costPerKm: 0.35, requiresVehicle: true, note: 'Drive your own vehicle + moving truck' },
+    { id: 'luxury', label: 'Limousine Service', costPerKm: 0.75, requiresVehicle: false, note: 'Full-service limousine relocation' }
+  ]
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -41,8 +52,8 @@ export default function Relocate() {
 
         // draw country boundaries (polygons) with enhanced visibility
         ctx.lineWidth = 1.5
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0)'
-        ctx.fillStyle = 'rgba(6, 181, 212, 0.09)'
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+        ctx.fillStyle = 'rgba(6,182,212,0.12)'
         countryBoundaries.forEach(cb => {
           ctx.beginPath()
           let firstPoint = true
@@ -69,8 +80,8 @@ export default function Relocate() {
         })
 
         // draw latitude and longitude grid (graticule) with enhanced visibility
-        ctx.strokeStyle = 'rgba(2, 2, 2, 0)'
-        ctx.lineWidth = 2.0
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+        ctx.lineWidth = 1.0
         // longitude lines (more frequent)
         for (let lon = -180; lon < 180; lon += 10) {
           ctx.beginPath()
@@ -121,7 +132,7 @@ export default function Relocate() {
           const x = size/2 + x3 * radius
           const y = size/2 - y3 * radius
           ctx.beginPath()
-          ctx.fillStyle = 'rgba(255,255,255,0.08)'
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
           ctx.arc(x, y, 3, 0, Math.PI*2)
           ctx.fill()
           ctx.fillStyle = 'rgba(230,238,246,0.9)'
@@ -145,7 +156,7 @@ export default function Relocate() {
           const y = size/2 - y3 * radius
           ctx.beginPath()
           ctx.fillStyle = selected?.name === c.name ? 'rgba(124,58,237,0.95)' : 'rgba(6,182,212,0.95)'
-          ctx.arc(x, y, 6, 0, Math.PI*2)
+          ctx.arc(x, y, 3, 0, Math.PI*2)
           ctx.fill()
           ctx.fillStyle = 'rgba(230,238,246,0.95)'
           ctx.font = '10px DM Sans'
@@ -218,13 +229,27 @@ export default function Relocate() {
 
   const planMove = () => {
     if (!selected) return
+        // Check if selected transit requires vehicle and player doesn't own one
+        const transitOption = relocationTransitOptions.find(t => t.id === selectedTransit)
+        if (transitOption?.requiresVehicle && !hasVehicle) {
+          alert(`You need a personal vehicle to use ${transitOption.label} for relocation!`)
+          return
+        }
+
     const monthsAhead = 12
     let schedMonth = state.month + monthsAhead
     let schedYear = state.year
     while (schedMonth > 12) { schedMonth -= 12; schedYear += 1 }
-    const costInfo = calculateRelocationCost(state.city, selected, state.hasVehicle, state.vehicleValue)
+    const costInfo = calculateRelocationCost(state.city, selected, primaryVehicle)
+
+    // Calculate total relocation cost based on transit method and distance
+    const transitOption2 = relocationTransitOptions.find(t => t.id === selectedTransit)
+    const transitBaseCost = 500 // base cost for relocation logistics
+    const transitDistanceCost = Math.round((costInfo.distance * (transitOption2?.costPerKm || 0.15)) * 100) / 100
+    const totalRelocationCost = Math.round((transitBaseCost + transitDistanceCost) * 100) / 100
+
     // set pendingCity with scheduling and costs
-    dispatch({ type: 'SET_STATE', payload: { pendingCity: { ...selected, scheduledMonth: schedMonth, scheduledYear: schedYear, relocationCost: costInfo.relocationCost, transportCost: costInfo.transportCost, distanceKm: costInfo.distance }, pendingJob: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 } } })
+    dispatch({ type: 'SET_STATE', payload: { pendingCity: { ...selected, scheduledMonth: schedMonth, scheduledYear: schedYear, relocationCost: totalRelocationCost, transportCost: costInfo.transportCost, distanceKm: costInfo.distance }, pendingJob: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 } } })
   }
 
   return (
@@ -245,9 +270,45 @@ export default function Relocate() {
             </div>
             <div className="mb-3 text-sm">
               <div>Plan relocation date: <strong>{state.month}/{state.year} → in 12 months</strong></div>
-              <div>Distance: <strong>{calculateRelocationCost(state.city, selected, state.hasVehicle, state.vehicleValue).distance.toFixed(1)} km</strong></div>
-              <div>Estimated move cost: <strong>${calculateRelocationCost(state.city, selected, state.hasVehicle, state.vehicleValue).relocationCost.toFixed(2)}</strong></div>
-              <div>Vehicle transport: <strong>${calculateRelocationCost(state.city, selected, state.hasVehicle, state.vehicleValue).transportCost.toFixed(2)}</strong></div>
+              <div>Distance: <strong>{calculateRelocationCost(state.city, selected, primaryVehicle).distance.toFixed(1)} km</strong></div>
+              <div className="mt-3 font-semibold">Transit Method:</div>
+              <div className="space-y-2 my-2">
+                {relocationTransitOptions.map(option => {
+                  const costInfo = calculateRelocationCost(state.city, selected, primaryVehicle)
+                  const transitCost = Math.round((500 + costInfo.distance * option.costPerKm) * 100) / 100
+                  const canSelect = !option.requiresVehicle || hasVehicle
+                  return (
+                    <label key={option.id} className={`block p-2 rounded cursor-pointer ${selectedTransit === option.id ? 'bg-violet-600 bg-opacity-30' : 'bg-slate-800'} ${!canSelect ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      <input 
+                        type="radio" 
+                        name="transit" 
+                        value={option.id} 
+                        checked={selectedTransit === option.id}
+                        onChange={(e) => setSelectedTransit(e.target.value as any)}
+                        disabled={!canSelect}
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-semibold">{option.label}</span>
+                      <span className="ml-2 text-xs text-slate-400">+ ${transitCost}</span>
+                      {!canSelect && <span className="ml-2 text-xs text-red-400">(Requires vehicle)</span>}
+                      <div className="text-xs text-slate-400 mt-1">{option.note}</div>
+                    </label>
+                  )
+                })}
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <div>Estimated move cost: <strong>${(() => {
+                  const costInfo = calculateRelocationCost(state.city, selected, primaryVehicle)
+                  const transitOption = relocationTransitOptions.find(t => t.id === selectedTransit)
+                  return Math.round((500 + costInfo.distance * (transitOption?.costPerKm || 0.15)) * 100) / 100
+                })().toFixed(2)}</strong></div>
+              </div>
+              {hasVehicle && (
+                <div>Vehicle transport: <strong>${calculateRelocationCost(state.city, selected, primaryVehicle).transportCost.toFixed(2)}</strong></div>
+              )}
+              {!hasVehicle && (
+                <div className="text-xs text-slate-400 mt-1">No vehicle to transport</div>
+              )}
             </div>
             <button onClick={planMove} className="w-full py-2 bg-slate-900 text-white rounded font-bold">Plan Move (12 months)</button>
           </>

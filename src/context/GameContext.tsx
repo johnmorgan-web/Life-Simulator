@@ -6,6 +6,7 @@ import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
 import academyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
+import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import type { Job, Application } from '../types/models.types'
 
 type State = any
@@ -27,7 +28,7 @@ const initialState: State = {
 	year: 2026,
 	city: cityData[3],
 	job: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 },
-	transit: { name: 'Walk/Bike', cost: 15, level: 1 },
+	transit: { name: 'L1 - Walk/Bike', cost: 15, level: 1 },
 	activeEdu: null,
 	eduProgress: initializeEduProgress(),
 	ledger: [],
@@ -66,15 +67,13 @@ const initialState: State = {
 	lastNegotiationMonth: null as number | null,
 	lastNegotiationYear: null as number | null,
 	lastAutoBumpMonth: 2,
-	lastAutoBumpYear: 2026
-	,
+	lastAutoBumpYear: 2026,
 	// Authentication / save
-	currentUser: null as string | null
-	,
-	// Vehicle state
-	hasVehicle: false,
-	vehicleValue: 0
-	,
+	currentUser: null as string | null,
+	// Vehicle state - comprehensive ownership and financing tracking
+	ownsVehicle: null as any, // primary vehicle (for UI/backcompat)
+	garage: [] as any[], // array of vehicles owned/leased
+	vehicleHistory: [] as any[], // Array of previously owned vehicles
 	// Housing & inventory
 	house: { model: null, level: 0, value: 0 },
 	inventory: [] as any[]
@@ -162,18 +161,89 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 // Relocation cost calculation based on distance and vehicle transport
-function calculateRelocationCost(current: any, target: any, hasVehicle: boolean, _vehicleValue: number) {
+function calculateRelocationCost(current: any, target: any, ownedVehicle: any) {
 	if (!current || !target || !('lat' in current) || !('lat' in target)) return { distance: 0, relocationCost: 1500, transportCost: 0, sellVehicle: false }
 	const distance = haversineDistance(current.lat, current.lon, target.lat, target.lon)
 	// base moving cost per km and fixed overhead
 	const basePerKm = 0.8 // $0.8 per km
 	const overhead = 800
 	const relocationCost = Math.round((distance * basePerKm + overhead) * 100) / 100
-	// vehicle transport cost if user has vehicle
-	const transportCost = hasVehicle ? Math.round((distance * 0.25) * 100) / 100 : 0
+	
+	// vehicle transport cost based on vehicle being owned
+	let transportCost = 0
+	if (ownedVehicle && ownedVehicle.vehicleId) {
+		const vehicle = vehicleDatabase.vehicles.find(v => v.id === ownedVehicle.vehicleId)
+		if (vehicle) {
+			transportCost = Math.round((distance * vehicle.costPerKm) * 100) / 100
+		}
+	}
+	
 	// if target is far and user doesn't have appropriate transit, suggest selling vehicle (simple heuristic)
 	const sellVehicle = false // default false; UI may propose
 	return { distance, relocationCost, transportCost, sellVehicle }
+}
+
+// Calculate vehicle depreciation based on age and condition
+function calculateVehicleValue(vehicle: any, currentMonth: number, currentYear: number) {
+	if (!vehicle) return 0
+	const vehicleData = vehicleDatabase.vehicles.find(v => v.id === vehicle.vehicleId)
+	if (!vehicleData) return vehicle.purchasePrice
+	
+	const ageMonths = (currentYear - vehicle.purchaseYear) * 12 + (currentMonth - vehicle.purchaseMonth)
+	const ageYears = ageMonths / 12
+	
+	const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes]
+	let currentValue = vehicle.purchasePrice
+	
+	// Apply depreciation for each year
+	if (ageYears > 0) {
+		const depreciationRate = vehicle.purchasedNew ? classData.depreciation.new : classData.depreciation.used
+		currentValue = vehicle.purchasePrice * Math.pow(1 - depreciationRate, ageYears)
+	}
+	
+	return Math.round(currentValue * 100) / 100
+}
+
+// Calculate monthly car payment based on purchase price, APR, and term
+function calculateMonthlyPayment(principal: number, aprRate: number, months: number): number {
+	if (months <= 0 || principal <= 0) return 0
+	const monthlyRate = aprRate / 12
+	if (monthlyRate === 0) return principal / months
+	const payment = principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1)
+	return Math.round(payment * 100) / 100
+}
+
+// Calculate gas cost per month based on vehicle efficiency
+function calculateMonthlyGasCost(vehicle: any, milesPerMonth: number = 1000) {
+	if (!vehicle) return 0
+	const vehicleData = vehicleDatabase.vehicles.find(v => v.id === vehicle.vehicleId)
+	if (!vehicleData) return 0
+	
+	const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes]
+	const gasPricePerGallon = 3.50 // Can be made dynamic
+	const gallonsNeeded = milesPerMonth / classData.gasMileage
+	return Math.round(gallonsNeeded * gasPricePerGallon * 100) / 100
+}
+
+// Calculate maintenance cost per month based on vehicle age and class
+function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, currentYear: number) {
+	if (!vehicle) return 0
+	const vehicleData = vehicleDatabase.vehicles.find(v => v.id === vehicle.vehicleId)
+	if (!vehicleData) return 0
+	
+	const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes]
+	const ageMonths = (currentYear - vehicle.purchaseYear) * 12 + (currentMonth - vehicle.purchaseMonth)
+	const ageYears = ageMonths / 12
+	
+	// Base maintenance: $50-150 per month depending on class
+	let baseMaintenance = 50 * classData.baseMaintenanceFactor
+	
+	// Increase with age: +20% per year after 3 years
+	if (ageYears > 3) {
+		baseMaintenance *= (1 + (ageYears - 3) * 0.2)
+	}
+	
+	return Math.round(baseMaintenance * 100) / 100
 }
 
 // Save and load helpers (localStorage)
@@ -292,7 +362,60 @@ function reducer(state: State, action: any) {
 			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
-			const check = fix(state.check - (paySave + payDebt))
+
+			// Calculate vehicle costs before checking calculation
+			let vehicleCosts = 0
+			let ownsVehicle = state.ownsVehicle
+			let vehicleSaleProceeds = 0
+			const logs = [...state.logs]
+			const garage = state.garage || []
+			let updatedGarage = garage.map((g: any) => ({ ...g }))
+
+			// Iterate over all vehicles in garage to compute costs and update status
+			for (let i = 0; i < updatedGarage.length; i++) {
+				const g = updatedGarage[i]
+				const vehicleData = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
+				if (!vehicleData) continue
+
+				// Monthly payment
+				if (g.monthsRemaining > 0) {
+					vehicleCosts += g.monthlyPayment
+				}
+				// Gas and maintenance
+				vehicleCosts += calculateMonthlyGasCost(g)
+				vehicleCosts += calculateMonthlyMaintenanceCost(g, state.month, state.year)
+
+				// Decrement months remaining if financing
+				if (g.monthsRemaining > 0) {
+					updatedGarage[i] = { ...updatedGarage[i], monthsRemaining: g.monthsRemaining - 1 }
+					if (g.monthsRemaining - 1 === 0) {
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🚗 Vehicle loan paid off! ${g.vehicleName}` })
+					}
+				}
+
+				// Handle for sale logic
+				if (g.for_sale && g.monthsOnMarket !== undefined) {
+					const monthsOnMarket = (g.monthsOnMarket || 0) + 1
+					updatedGarage[i] = { ...updatedGarage[i], monthsOnMarket }
+					const saleChance = Math.min(monthsOnMarket / 6, 0.8)
+					if (Math.random() < saleChance) {
+						const proceeds = g.listPrice || 0
+						vehicleSaleProceeds += proceeds
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `💰 Vehicle sold after ${monthsOnMarket} months: +$${proceeds.toLocaleString()}` })
+						// remove from garage
+						updatedGarage[i] = null as any
+					}
+				}
+			}
+			// Filter out removed vehicles
+			updatedGarage = updatedGarage.filter((x: any) => x)
+
+			// If primary vehicle was removed, update ownsVehicle
+			if (ownsVehicle && !updatedGarage.find((g: any) => g.id === ownsVehicle.id)) {
+				ownsVehicle = updatedGarage.length > 0 ? updatedGarage[0] : null
+			}
+
+			const check = fix(state.check - (paySave + payDebt + vehicleCosts))
 
 			let resultingCheck = check
 
@@ -300,7 +423,6 @@ function reducer(state: State, action: any) {
 			let activeEdu = state.activeEdu
 			const credentials = [...state.credentials]
 			const credentialHistory = [...state.credentialHistory]
-			const logs = [...state.logs]
 			const careerHistory = [...state.careerHistory]
 			let job = state.job
 			let tenure = state.tenure
@@ -385,18 +507,13 @@ function reducer(state: State, action: any) {
 			}
 
 			// Apply relocation if scheduled for this upcoming month
-			let newHasVehicle = state.hasVehicle
-			let newVehicleValue = state.vehicleValue
+			let pendingJobToApply = null as any
 			if (applyRelocation && state.pendingCity) {
 				city = { name: state.pendingCity.name, p: state.pendingCity.p, r: state.pendingCity.r, icon: state.pendingCity.icon, lat: state.pendingCity.lat, lon: state.pendingCity.lon }
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name} (distance: ${state.pendingCity.distanceKm || 'N/A'} km)` })
-				// If the relocation plan included selling the vehicle, apply sale
-				if (state.pendingCity.sellVehicle && state.hasVehicle) {
-					const saleProceeds = Math.round(state.vehicleValue * 0.8)
-					resultingCheck = fix(resultingCheck + saleProceeds)
-					newHasVehicle = false
-					newVehicleValue = 0
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Sold vehicle during relocation: +$${saleProceeds}` })
+				// When relocation happens, set pending job to Odd Jobs for next cycle
+				if (!state.pendingJob) {
+					pendingJobToApply = { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 }
 				}
 			}
 
@@ -440,10 +557,10 @@ function reducer(state: State, action: any) {
 
 
 			// Apply monthly interest to savings (HYSA)
-			let newSave = fix(saveBefore)
-			if (saveBefore > 0) {
-				const monthlySaveInterest = fix(saveBefore * (gameValues.hysaAPR / 12))
-				newSave = fix(saveBefore + monthlySaveInterest)
+			let newSave = fix(saveBefore + vehicleSaleProceeds)
+			if (newSave > 0) {
+				const monthlySaveInterest = fix(newSave * (gameValues.hysaAPR / 12))
+				newSave = fix(newSave + monthlySaveInterest)
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Savings interest earned (${(gameValues.hysaAPR * 100).toFixed(2)}% APY): $${monthlySaveInterest.toFixed(2)}` })
 			}
 
@@ -468,6 +585,11 @@ function reducer(state: State, action: any) {
 			// Note: Car loan payoff would be tracked if we had a car loan field - adding for future use
 			// if (carLoanBefore > 0 && carLoanAfter <= 0) celebration = 'car-paid-off'
 
+			// Check job requirement: if job requires higher transit level than current, warn player
+			if (job.tReq > transit.level) {
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ WARNING: Your job requires transit level ${job.tReq} but you only have level ${transit.level}. You may lose your job!` })
+			}
+
 			return {
 				...state,
 				check: resultingCheck,
@@ -487,12 +609,12 @@ function reducer(state: State, action: any) {
 				pendingTransit: null,
 				city,
 				pendingCity: applyRelocation ? null : state.pendingCity,
-				hasVehicle: newHasVehicle,
-				vehicleValue: newVehicleValue,
+				ownsVehicle,
+				garage: updatedGarage,
 				logs,
 				careerHistory,
 				job: updatedJob,
-				pendingJob: null,
+				pendingJob: pendingJobToApply,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
 				lastAutoBumpMonth: newLastAutoBumpMonth,
@@ -595,10 +717,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			bal = fix(bal - state.transit.cost)
 			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
 			
-			// Gas cost (if not using Walk/Bike)
-				if (state.transit.level > 1) {
-					const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
-					const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
+			// Gas cost (if not using L1 Walk/Bike and no vehicle owned - vehicle costs handled separately)
+			if (state.transit.level > 1 && !(state.garage && state.garage.length > 0)) {
+				const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
+				const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
 				const gasAndMaint = fix(gas + carMaint)
 				bal = fix(bal - gasAndMaint)
 				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
@@ -634,6 +756,35 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			const cost = course ? course.c : 1000
 			bal = fix(bal - cost)
 			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
+		}
+		
+		// VEHICLE COSTS - Monthly payment, gas, maintenance
+		if (state.garage && state.garage.length > 0) {
+			state.garage.forEach((g: any) => {
+				const vehicle = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
+				if (!vehicle) return
+
+				// Loan payment
+				if (g.monthsRemaining > 0) {
+					const payment = g.monthlyPayment
+					bal = fix(bal - payment)
+					ledger.push({ id: id++, desc: `Vehicle Loan Payment: ${g.vehicleName}`, amt: payment, type: 'out', bal, done: false })
+				}
+
+				// Monthly gas for this vehicle
+				const gasCost = calculateMonthlyGasCost(g)
+				if (gasCost > 0) {
+					bal = fix(bal - gasCost)
+					ledger.push({ id: id++, desc: `Gas: ${g.vehicleName}`, amt: gasCost, type: 'out', bal, done: false })
+				}
+
+				// Monthly maintenance for this vehicle
+				const maintCost = calculateMonthlyMaintenanceCost(g, state.month, state.year)
+				if (maintCost > 0) {
+					bal = fix(bal - maintCost)
+					ledger.push({ id: id++, desc: `Maintenance: ${g.vehicleName}`, amt: maintCost, type: 'out', bal, done: false })
+				}
+			})
 		}
 		
 		// LUXURY SERVICES
@@ -879,7 +1030,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, login, logout }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
 			{children}
 		</GameContext.Provider>
 	)
