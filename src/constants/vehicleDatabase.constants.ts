@@ -29,6 +29,15 @@ const vehicleDatabase = {
         new: 0.20,
         used: 0.12
       }
+     },
+    unrealistic: {
+      name: 'Unrealistic',
+      baseMaintenanceFactor: 2.0,
+      gasMileage: 10,
+      depreciation: {
+        new: 0.25,
+        used: 0.15
+      }
     }
   },
   vehicles: [
@@ -244,7 +253,218 @@ const vehicleDatabase = {
       icon: '🏎️',
       baseValue: 82000,
       costPerKm: 0.52
-    }
+    },
+    {
+      id: 'audi-q5-2024',
+      name: 'Audi Q5',
+      class: 'luxury',
+      body: 'SUV',
+      newPrice: 72000,
+      usedPrice: 48000,
+      leasePrice: 759,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 72000,
+      costPerKm: 0.48
+    },
+    {
+      id: 'lexus-rx-2024',
+      name: 'Lexus RX',
+      class: 'luxury',
+      body: 'SUV',
+      newPrice: 70000,
+      usedPrice: 46000,
+      leasePrice: 739,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 70000,
+      costPerKm: 0.46
+    },
+
+    // LUXURY CLASS
+    {
+      id: '2025-hennessey-venom-F5',
+      name: 'Hennessey Venom F5',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 1200000,
+      usedPrice: 800000,
+      leasePrice: 699,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 1200000,
+      costPerKm: 0.65
+    },
+    {
+      id: '2025-bugatti-chiron-super-sport',
+      name: 'Bugatti Chiron Super Sport',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 3000000,
+      usedPrice: 2000000,
+      leasePrice: 1299,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 3000000,
+      costPerKm: 1.25
+    },
+    {
+      id: '2025-koenigsegg-jesko-absolut',
+      name: 'Koenigsegg Jesko Absolut',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 2500000,
+      usedPrice: 1800000,
+      leasePrice: 1199,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 2500000,
+      costPerKm: 1.15
+    },
+    {
+      id: '2025-ssc-tuatara',
+      name: 'SSC Tuatara',  
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 1800000,
+      usedPrice: 1200000,
+      leasePrice: 999,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 1800000,
+      costPerKm: 1.1
+    },
+    {
+      id: '2025-aston-martin-valhalla',
+      name: 'Aston Martin Valhalla',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 2200000,
+      usedPrice: 1500000,
+      leasePrice: 1399,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 2200000,
+      costPerKm: 1.18
+    },
+    {
+      id: '2025-lamborghini-sian-fkp-37',
+      name: 'Lamborghini Sian FKP 37',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 2800000,
+      usedPrice: 1900000,
+      leasePrice: 1499,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 2800000,
+      costPerKm: 1.35
+    },
+    {
+      id: '2025-ferrari-sf90-stradale',
+      name: 'Ferrari SF90 Stradale',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 650000,
+      usedPrice: 450000,
+      leasePrice: 799,
+      year: 2024,
+      icon: '🏎️',
+      baseValue: 650000,
+      costPerKm: 1.1
+    },
+    {
+      id: '2025-porsche-918-spyder',
+      name: 'Porsche 918 Spyder',
+      class: 'unrealistic',
+      body: 'Sedan',
+      newPrice: 850000,
+      usedPrice: 600000,
+      leasePrice: 899,
+      year: 2024,
+      icon: '🏎️' ,
+      baseValue: 850000,
+      costPerKm: 1.2
+    },
+    {
+      id: '2026-hennessey-velociraptor-6x6',
+      name: 'Hennessey Velociraptor 6x6',
+      class: 'unrealistic',
+      body: 'SUV',
+      newPrice: 425000 ,
+      usedPrice: 375000,
+      leasePrice: 899,
+      year: 2025,
+      icon: '🏎️' ,
+      baseValue: 425000,
+      costPerKm: 2.3
+    },
+    {
+      id: '2026-mercedes-maybach-gls-600',
+      name: 'Mercedes-Maybach GLS 600',
+      class: 'luxury',
+      body: 'SUV',
+      newPrice: 180000,
+      usedPrice: 120000,
+      leasePrice: 1299,
+      year: 2026,
+      icon: '🏎️',
+      baseValue: 180000,
+      costPerKm: 0.55
+    },
+    {
+      id: '2026-rolls-royce-cullinan',
+      name: 'Rolls-Royce Cullinan',
+      class: 'luxury',
+      body: 'SUV',
+      newPrice: 300000,
+      usedPrice: 200000,
+      leasePrice: 1599,
+      year: 2026,
+      icon: '🏎️',
+      baseValue: 300000,
+      costPerKm: 0.65
+    },
+    {
+      id: 'Robinson R44 Raven II',
+      name: 'Robinson R44 Raven II',
+      class: 'unrealistic',
+      body: 'Helicopter',
+      newPrice: 120000,
+      usedPrice: 80000,
+      leasePrice: 1299,
+      year: 2024,
+      icon: '🚁' ,
+      baseValue: 120000,
+      costPerKm: 6.7
+    },
+    {
+      id: 'Bell 505 Jet Ranger X',
+      name: 'Bell 505 Jet Ranger X',
+      class: 'unrealistic',
+      body: 'Helicopter',
+      newPrice: 2500000,
+      usedPrice: 1800000,
+      leasePrice: 25998,
+      year: 2024,
+      icon: '🚁' ,
+      baseValue: 2500000,
+      costPerKm: 8.5
+    },
+    {
+      id: 'Airbus H225 Super Puma',
+      name: 'Airbus H225 Super Puma',
+      class: 'unrealistic',
+      body: 'Helicopter',
+      newPrice: 28000000,
+      usedPrice: 15000000,
+      leasePrice: 28998,
+      year: 2024,
+      icon: '🚁' ,
+      baseValue: 28000000,
+      costPerKm: 17.5
+    },
+
   ],
   conditions: {
     new: {
