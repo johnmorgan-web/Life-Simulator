@@ -72,8 +72,8 @@ function mulberry32(a: number) {
 	}
 }
 
-// Deterministic seasonal + noise multiplier based on year/month/category
-function variableMultiplier(year: number, month: number, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment') {
+// Deterministic seasonal + noise multiplier based on year/month/category/cityName
+function variableMultiplier(year: number, month: number, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
 	const seasonal: Record<string, number[]> = {
 		utilities: [0.02, 0.03, 0.02, 0.00, -0.01, -0.02, 0.03, 0.03, 0.01, 0.00, 0.01, 0.04],
 		food: [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.00, 0.01, 0.00, 0.00, 0.03, 0.04],
@@ -85,10 +85,12 @@ function variableMultiplier(year: number, month: number, category: 'utilities' |
 	const m = Math.max(1, Math.min(12, Math.floor(month)))
 	const season = (seasonal[category] && seasonal[category][m - 1]) || 0
 
-	// Build a seed from year, month, and category to ensure reproducibility
+	// Build a seed from year, month, category, and city name to ensure reproducibility across playthroughs
 	let catHash = 0
 	for (let i = 0; i < category.length; i++) catHash = (catHash * 31 + category.charCodeAt(i)) >>> 0
-	const seed = (year * 100 + m) ^ catHash
+	let cityHash = 0
+	for (let i = 0; i < cityName.length; i++) cityHash = (cityHash * 31 + cityName.charCodeAt(i)) >>> 0
+	const seed = (year * 100 + m) ^ catHash ^ cityHash
 	const rnd = mulberry32(seed)()
 	// deterministic noise in [-0.02, 0.02]
 	const noise = rnd * 0.04 - 0.02
@@ -100,8 +102,8 @@ function variableMultiplier(year: number, month: number, category: 'utilities' |
 	return 1 + adjust
 }
 
-function variableCost(base: number, month: number, year: number, cityMultiplier = 1, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment') {
-	const mult = variableMultiplier(year, month, category)
+function variableCost(base: number, month: number, year: number, cityMultiplier = 1, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
+	const mult = variableMultiplier(year, month, category, cityName)
 	return fix(base * cityMultiplier * mult)
 }
 
@@ -318,8 +320,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			
 			// Gas cost (if not using Walk/Bike)
 				if (state.transit.level > 1) {
-					const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas')
-					const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car')
+					const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
+					const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
 				const gasAndMaint = fix(gas + carMaint)
 				bal = fix(bal - gasAndMaint)
 				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
@@ -329,7 +331,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 		
 		// UTILITIES & PHONE (utilities vary seasonally)
-		const utilities = variableCost(gameValues.utilitiesCostBase, state.month, state.year, state.city.p, 'utilities')
+		const utilities = variableCost(gameValues.utilitiesCostBase, state.month, state.year, state.city.p, 'utilities', state.city.name)
 		const phoneInternet = gameValues.phoneInternetBase
 		const totalUtilities = fix(utilities + phoneInternet)
 		bal = fix(bal - totalUtilities)
@@ -337,14 +339,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		
 		// FOOD - If personal chef hired, no food costs (chef provides meals)
 		if (!state.luxuryServices.chef) {
-			const foodCost = variableCost(gameValues.foodCostBase * 0.8, state.month, state.year, state.city.p, 'food')
+			const foodCost = variableCost(gameValues.foodCostBase * 0.8, state.month, state.year, state.city.p, 'food', state.city.name)
 			bal = fix(bal - foodCost)
 			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
 		}
 		
 		// ENTERTAINMENT
 		if (state.entertainmentSpending > 0) {
-			const entertainmentCost = variableCost(state.entertainmentSpending, state.month, state.year, 1, 'entertainment')
+			const entertainmentCost = variableCost(state.entertainmentSpending, state.month, state.year, 1, 'entertainment', state.city.name)
 			bal = fix(bal - entertainmentCost)
 			ledger.push({ id: id++, desc: 'Entertainment & Subscriptions', amt: entertainmentCost, type: 'out', bal, done: false })
 		}
@@ -362,7 +364,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const luxuryServicesList: string[] = []
 		
 		if (state.luxuryServices.chef) {
-			const chefCost = variableCost(gameValues.foodCostBase * 15, state.month, state.year, state.city.p, 'food') // Personal chef scales with food costs
+			const chefCost = variableCost(gameValues.foodCostBase * 15, state.month, state.year, state.city.p, 'food', state.city.name) // Personal chef scales with food costs
 			luxuryCosts += chefCost
 			luxuryServicesList.push(`Chef: $${chefCost}`)
 		}
