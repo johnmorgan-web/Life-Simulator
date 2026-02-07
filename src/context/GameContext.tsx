@@ -40,7 +40,7 @@ const initialState: State = {
 	applications: [],
 	pendingJob: null,
 	pendingTransit: null,
-	pendingCity: null,
+	pendingCity: null, // may contain scheduled relocation info: { name, lat, lon, scheduledMonth, scheduledYear, relocationCost, transportCost, sellVehicle }
 	eventHistory: [],
 	jobStartMonth: 2,
 	jobStartYear: 2026,
@@ -70,6 +70,14 @@ const initialState: State = {
 	,
 	// Authentication / save
 	currentUser: null as string | null
+	,
+	// Vehicle state
+	hasVehicle: false,
+	vehicleValue: 0
+	,
+	// Housing & inventory
+	house: { model: null, level: 0, value: 0 },
+	inventory: [] as any[]
 }
 
 const GameContext = createContext<any>(null)
@@ -140,6 +148,32 @@ function mulberry32(a: number) {
 		t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 	}
+}
+
+// Haversine distance (km)
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+	const toRad = (v: number) => (v * Math.PI) / 180
+	const R = 6371 // km
+	const dLat = toRad(lat2 - lat1)
+	const dLon = toRad(lon2 - lon1)
+	const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2)
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+	return R * c
+}
+
+// Relocation cost calculation based on distance and vehicle transport
+function calculateRelocationCost(current: any, target: any, hasVehicle: boolean, _vehicleValue: number) {
+	if (!current || !target || !('lat' in current) || !('lat' in target)) return { distance: 0, relocationCost: 1500, transportCost: 0, sellVehicle: false }
+	const distance = haversineDistance(current.lat, current.lon, target.lat, target.lon)
+	// base moving cost per km and fixed overhead
+	const basePerKm = 0.8 // $0.8 per km
+	const overhead = 800
+	const relocationCost = Math.round((distance * basePerKm + overhead) * 100) / 100
+	// vehicle transport cost if user has vehicle
+	const transportCost = hasVehicle ? Math.round((distance * 0.25) * 100) / 100 : 0
+	// if target is far and user doesn't have appropriate transit, suggest selling vehicle (simple heuristic)
+	const sellVehicle = false // default false; UI may propose
+	return { distance, relocationCost, transportCost, sellVehicle }
 }
 
 // Save and load helpers (localStorage)
@@ -300,16 +334,21 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit changed to ${state.pendingTransit.n}` })
 			}
 
-			// If a city relocation was requested previously, apply it now at the start of the new month.
+			// If a city relocation was planned previously, apply it only when scheduledMonth/year is reached.
 			let city = state.city
-			if (state.pendingCity) {
-				city = state.pendingCity
-				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name}` })
-			}
-
-			// Track debt/car payoff before applying new debt
+			let applyRelocation = false
+			let relocationCostToApply = 0
+			let transportCostToApply = 0
 			let debtBefore = state.debt
-			let newDebt = fix(state.debt - payDebt + (state.pendingCity ? 1500 : 0))
+			// Determine if pendingCity's scheduled date matches the upcoming month
+			if (state.pendingCity && state.pendingCity.scheduledMonth && state.pendingCity.scheduledYear) {
+				if (state.pendingCity.scheduledMonth === nextMonth && state.pendingCity.scheduledYear === nextYear) {
+					applyRelocation = true
+					relocationCostToApply = state.pendingCity.relocationCost || 1500
+					transportCostToApply = state.pendingCity.transportCost || 0
+				}
+			}
+			let newDebt = fix(state.debt - payDebt + (applyRelocation ? relocationCostToApply + transportCostToApply : 0))
 
 			// If the player's immediate payments push checking negative, convert shortfall into an auto-loan
 			if (resultingCheck < 0) {
@@ -343,6 +382,22 @@ function reducer(state: State, action: any) {
 			} else {
 				// no job change, increment tenure
 				tenure = state.tenure + 1
+			}
+
+			// Apply relocation if scheduled for this upcoming month
+			let newHasVehicle = state.hasVehicle
+			let newVehicleValue = state.vehicleValue
+			if (applyRelocation && state.pendingCity) {
+				city = { name: state.pendingCity.name, p: state.pendingCity.p, r: state.pendingCity.r, icon: state.pendingCity.icon, lat: state.pendingCity.lat, lon: state.pendingCity.lon }
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name} (distance: ${state.pendingCity.distanceKm || 'N/A'} km)` })
+				// If the relocation plan included selling the vehicle, apply sale
+				if (state.pendingCity.sellVehicle && state.hasVehicle) {
+					const saleProceeds = Math.round(state.vehicleValue * 0.8)
+					resultingCheck = fix(resultingCheck + saleProceeds)
+					newHasVehicle = false
+					newVehicleValue = 0
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Sold vehicle during relocation: +$${saleProceeds}` })
+				}
 			}
 
 			// Check for debt payoff
@@ -431,7 +486,9 @@ function reducer(state: State, action: any) {
 				transit,
 				pendingTransit: null,
 				city,
-				pendingCity: null,
+				pendingCity: applyRelocation ? null : state.pendingCity,
+				hasVehicle: newHasVehicle,
+				vehicleValue: newVehicleValue,
 				logs,
 				careerHistory,
 				job: updatedJob,
@@ -822,7 +879,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, saveGame, loadGame, listSaves, login, logout }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, login, logout }}>
 			{children}
 		</GameContext.Provider>
 	)

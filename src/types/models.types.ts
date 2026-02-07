@@ -1,4 +1,4 @@
-export type City = { name: string; p: number; r: number; icon: string }
+export type City = { name: string; p: number; r: number; icon: string; lat?: number; lon?: number; country?: string }
 export type Job = { title: string; base: number; req?: string | null; certReq?: string | null; tReq: number; odds?: number; cat?: string }
 export type LifeEvent = { id: string; title: string; amt: number; type: 'in' | 'out'; icon: string; desc: string; trigger: string }
 export type TransitOption = { n: string; c: number; l: number; subText?: string }
