@@ -19,14 +19,75 @@ const EDU_LEVEL: Record<string, number> = {
   'Medical School': 3
 }
 
+// Calculate job compatibility score for current job (0-100 scale)
+function calculateJobCompatibilityScore(job: Job, credentials: string[], transitLevel: number): number {
+  let score = 50 // Base score
+  
+  // Education requirement (±20 points)
+  if (job.req && credentials.includes(job.req)) {
+    score += 20
+  } else if (job.req) {
+    score -= 15
+  }
+  
+  // Certificate requirement (±15 points)
+  if (job.certReq) {
+    if (credentials.includes(job.certReq)) {
+      score += 15
+    } else {
+      score -= 10
+    }
+  }
+  
+  // Transit requirement (±15 points)
+  if (transitLevel >= job.tReq) {
+    score += 15
+  } else {
+    score -= 10
+  }
+  
+  return Math.max(0, Math.min(100, score))
+}
+
 type SortKey = 'best-match' | 'certificates' | 'transit' | 'highest-pay' | 'lowest-pay' | 'alpha' | 'highest-edu' | 'lowest-edu'
 type CareerView = 'recommended' | 'all'
 
 export default function Careers() {
-  const { state, applyForJob, jobBoard } = useGame()
+  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
   const [view, setView] = useState<CareerView>('all')
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null)
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false)
+  const [negotiationModifier, setNegotiationModifier] = useState(0)
+
+  // Check if user can negotiate pay (6 month cooldown)
+  const canNegotiatePay = useMemo(() => {
+    if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return true
+    const monthsSinceLastNegotiation = (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
+    return monthsSinceLastNegotiation >= 6
+  }, [state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year])
+
+  // Get months until next negotiation eligible
+  const monthsUntilNegotiationEligible = useMemo(() => {
+    if (canNegotiatePay) return 0
+    if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return 0
+    const monthsSince = (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
+    return 6 - monthsSince
+  }, [canNegotiatePay, state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year])
+
+  // Handle negotiation button click
+  const handleNegotiatePay = () => {
+    const compatibilityScore = calculateJobCompatibilityScore(state.job, state.credentials, state.transit.level)
+    const result = calculatePayNegotiationModifier(state.credit, state.tenure, compatibilityScore)
+    setNegotiationModifier(result.modifier)
+    setShowNegotiationModal(true)
+  }
+
+  // Confirm negotiation
+  const handleConfirmNegotiation = () => {
+    dispatch({ type: 'NEGOTIATE_PAY', payload: { negotiationModifier } })
+    setShowNegotiationModal(false)
+  }
 
   // scoring for recommendation: favors certificate match, transportation match, education match, and pay bump
   const scoreJob = (j: Job): ScoreBreakdown => {
@@ -104,6 +165,38 @@ export default function Careers() {
 
   return (
     <div>
+      {/* Current Job Section */}
+      <div className="glass p-6 mb-6 border-l-4 border-emerald-600">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-bold text-lg text-slate-900 mb-1">Current Position</h3>
+            <p className="text-2xl font-bold text-emerald-600 mb-2">{state.job.title}</p>
+            <div className="text-sm text-slate-600 space-y-1">
+              <p>📊 Base Salary: <span className="font-bold">${state.job.base.toFixed(0)}/mo</span></p>
+              <p>💰 Net Monthly: <span className="font-bold">${Math.round(state.job.base * state.city.p * 0.8)}/mo</span></p>
+              <p>⏱️ Tenure: <span className="font-bold">{state.tenure} months</span></p>
+            </div>
+          </div>
+          {canNegotiatePay ? (
+            <button
+              onClick={handleNegotiatePay}
+              className="py-3 px-6 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors"
+            >
+              💼 Negotiate Pay
+            </button>
+          ) : (
+            <div className="text-right">
+              <button disabled className="py-3 px-6 bg-slate-300 text-slate-500 rounded-lg font-bold cursor-not-allowed">
+                Negotiate Cooldown
+              </button>
+              <p className="text-xs text-slate-500 mt-2">
+                Available in {monthsUntilNegotiationEligible} month{monthsUntilNegotiationEligible !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* View Toggle */}
       <div className="mb-6 flex gap-3 border-b border-slate-300">
         <button
@@ -340,6 +433,58 @@ export default function Careers() {
             })}
           </div>
         </>
+      )}
+
+      {/* Negotiation Modal */}
+      {showNegotiationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="glass p-8 rounded-lg max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Pay Negotiation</h2>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-slate-50 p-4 rounded">
+                <p className="text-xs text-slate-500 font-bold uppercase mb-1">Current Base Salary</p>
+                <p className="text-3xl font-bold text-slate-900">${state.job.base.toFixed(0)}/mo</p>
+              </div>
+              
+              <div className="bg-slate-50 p-4 rounded">
+                <p className="text-xs text-slate-500 font-bold uppercase mb-1">Proposed Increase</p>
+                <p className="text-3xl font-bold text-emerald-600">+{negotiationModifier.toFixed(1)}%</p>
+              </div>
+              
+              <div className="bg-emerald-50 border-l-4 border-emerald-600 p-4 rounded">
+                <p className="text-xs text-slate-500 font-bold uppercase mb-1">New Base Salary</p>
+                <p className="text-3xl font-bold text-emerald-700">
+                  ${(state.job.base * (1 + negotiationModifier / 100)).toFixed(0)}/mo
+                </p>
+              </div>
+
+              <div className="bg-slate-100 p-4 rounded text-sm">
+                <p className="font-bold text-slate-900 mb-2">Negotiation Breakdown:</p>
+                <ul className="space-y-1 text-slate-700">
+                  <li>📊 Credit Score: +{(negotiationModifier * 0.4).toFixed(1)}%</li>
+                  <li>⏱️ Tenure ({state.tenure}mo): +{(negotiationModifier * 0.32).toFixed(1)}%</li>
+                  <li>✅ Job Fit: +{(negotiationModifier * 0.28).toFixed(1)}%</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowNegotiationModal(false)}
+                className="flex-1 py-2 px-4 bg-slate-200 text-slate-900 rounded font-bold hover:bg-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmNegotiation}
+                className="flex-1 py-2 px-4 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition-colors"
+              >
+                Accept Offer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

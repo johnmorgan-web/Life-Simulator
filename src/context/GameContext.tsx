@@ -61,7 +61,12 @@ const initialState: State = {
 	paymentStreak: 0, // Consecutive on-time payments
 	calculationStreak: 0, // Consecutive correct balance checks
 	lastPaymentOnTime: true,
-	skippedPaymentThisMonth: false
+	skippedPaymentThisMonth: false,
+	// Pay negotiation tracking
+	lastNegotiationMonth: null as number | null,
+	lastNegotiationYear: null as number | null,
+	lastAutoBumpMonth: 2,
+	lastAutoBumpYear: 2026
 }
 
 const GameContext = createContext<any>(null)
@@ -97,6 +102,32 @@ function calculateCreditBonus(creditScore: number): number {
 	if (creditScore < 300) return 0
 	if (creditScore >= 800) return 0.15
 	return ((creditScore - 300) / 550) * 0.15
+}
+
+// Pay negotiation modifier based on credit score, tenure, and job compatibility
+// Returns object with modifier amount and breakdown
+function calculatePayNegotiationModifier(
+	creditScore: number,
+	tenure: number,
+	jobCompatibilityScore: number // 0-100 scale
+): { modifier: number; creditContribution: number; tenureContribution: number; compatibilityContribution: number } {
+	// Credit contribution: 0-10% based on credit score
+	const creditContribution = Math.min(10, (creditScore - 300) / 55) // scales from 0 to 10%
+	
+	// Tenure contribution: 0-8% based on months in position, capped at 36 months
+	const tenureContribution = Math.min(8, (tenure / 36) * 8)
+	
+	// Job compatibility contribution: 0-7% based on how well matched you are (0-100)
+	const compatibilityContribution = (jobCompatibilityScore / 100) * 7
+	
+	const modifier = creditContribution + tenureContribution + compatibilityContribution
+	
+	return {
+		modifier: Math.min(25, modifier), // Cap at 25% max raise
+		creditContribution: Math.round(creditContribution * 100) / 100,
+		tenureContribution: Math.round(tenureContribution * 100) / 100,
+		compatibilityContribution: Math.round(compatibilityContribution * 100) / 100
+	}
 }
 
 function mulberry32(a: number) {
@@ -200,7 +231,7 @@ function reducer(state: State, action: any) {
 			const careerHistory = [...state.careerHistory]
 			let job = state.job
 			let tenure = state.tenure
-			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | null
+			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | null
 			
 			// Credit tracking
 			let credit = state.credit
@@ -322,6 +353,24 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Savings interest earned (${(gameValues.hysaAPR * 100).toFixed(2)}% APY): $${monthlySaveInterest.toFixed(2)}` })
 			}
 
+			// Check for automatic yearly pay bump (credit > 800, 12 months since last auto bump)
+			let updatedJob = job
+			let newLastAutoBumpMonth = state.lastAutoBumpMonth
+			let newLastAutoBumpYear = state.lastAutoBumpYear
+			if (credit > 800 && tenure >= 12) {
+				const monthsSinceLastAutoBump = (nextYear - state.lastAutoBumpYear) * 12 + (nextMonth - state.lastAutoBumpMonth)
+				if (monthsSinceLastAutoBump >= 12) {
+					const autoBumpAmount = 3 // 3% annual bump for maintaining excellent credit
+					updatedJob = { ...job, base: fix(job.base * (1 + autoBumpAmount / 100)) }
+					const oldPay = Math.round(job.base * city.p * 0.8)
+					const newPay = Math.round(updatedJob.base * city.p * 0.8)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🎉 Automatic annual pay bump (credit > 800): $${oldPay}/mo → $${newPay}/mo (+3%)` })
+					celebration = 'pay-bump'
+					newLastAutoBumpMonth = nextMonth
+					newLastAutoBumpYear = nextYear
+				}
+			}
+
 			// Note: Car loan payoff would be tracked if we had a car loan field - adding for future use
 			// if (carLoanBefore > 0 && carLoanAfter <= 0) celebration = 'car-paid-off'
 
@@ -346,10 +395,12 @@ function reducer(state: State, action: any) {
 				pendingCity: null,
 				logs,
 				careerHistory,
-				job,
+				job: updatedJob,
 				pendingJob: null,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
+				lastAutoBumpMonth: newLastAutoBumpMonth,
+				lastAutoBumpYear: newLastAutoBumpYear,
 				celebration,
 				skippedPaymentThisMonth: false
 			}
@@ -364,6 +415,46 @@ function reducer(state: State, action: any) {
 			return { ...state, celebration: action.payload }
 		case 'CLEAR_CELEBRATION':
 			return { ...state, celebration: null }
+		case 'NEGOTIATE_PAY': {
+			const { negotiationModifier } = action.payload
+			const newBase = fix(state.job.base * (1 + negotiationModifier / 100))
+			const newJob = { ...state.job, base: newBase }
+			const logs = [...state.logs]
+			const oldPay = Math.round(state.job.base * state.city.p * 0.8)
+			const newPay = Math.round(newBase * state.city.p * 0.8)
+			logs.push({ 
+				date: `${state.month}/${state.year}`, 
+				msg: `Successfully negotiated pay raise: $${oldPay}/mo → $${newPay}/mo (+${negotiationModifier.toFixed(1)}%)` 
+			})
+			return {
+				...state,
+				job: newJob,
+				lastNegotiationMonth: state.month,
+				lastNegotiationYear: state.year,
+				logs,
+				celebration: 'pay-bump'
+			}
+		}
+		case 'APPLY_AUTO_PAY_BUMP': {
+			const { bumpPercentage } = action.payload
+			const newBase = fix(state.job.base * (1 + bumpPercentage / 100))
+			const newJob = { ...state.job, base: newBase }
+			const logs = [...state.logs]
+			const oldPay = Math.round(state.job.base * state.city.p * 0.8)
+			const newPay = Math.round(newBase * state.city.p * 0.8)
+			logs.push({
+				date: `${state.month}/${state.year}`,
+				msg: `Automatic annual pay bump (credit > 800): $${oldPay}/mo → $${newPay}/mo (+${bumpPercentage.toFixed(1)}%)`
+			})
+			return {
+				...state,
+				job: newJob,
+				lastAutoBumpMonth: state.month,
+				lastAutoBumpYear: state.year,
+				logs,
+				celebration: 'pay-bump'
+			}
+		}
 		case 'SET_STATE':
 			return { ...state, ...action.payload }
 		default:
@@ -645,7 +736,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier }}>
 			{children}
 		</GameContext.Provider>
 	)
