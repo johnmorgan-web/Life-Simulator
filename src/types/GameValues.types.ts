@@ -9,4 +9,7 @@ export type GameValues = {
   utilitiesCostBase: number; // Starting monthly utilities cost
   carMaintenance: number; // Monthly car maintenance
   phoneInternetBase: number; // Monthly phone & internet
+  // Financial rates (annual)
+  loanAPR: number; // Annual percentage rate for loans (decimal)
+  hysaAPR: number; // Annual percentage yield for savings (decimal)
 }

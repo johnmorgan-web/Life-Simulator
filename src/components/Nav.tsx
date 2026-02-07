@@ -7,7 +7,8 @@ export default function Nav({ tab, setTab }: any) {
     { id: 'transit', label: '🚗 Transit' },
     { id: 'relocate', label: '✈️ Relocate' },
     { id: 'resume', label: '📄 Resume' },
-    { id: 'lifestyle', label: '💎 Lifestyle' }
+    { id: 'lifestyle', label: '💎 Lifestyle' },
+    { id: 'loans', label: '💳 Loans' }
   ]
   return (
     <nav className="col-span-2">

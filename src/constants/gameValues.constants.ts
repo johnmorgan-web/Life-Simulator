@@ -11,6 +11,9 @@ const gameValues: GameValues = {
   utilitiesCostBase: 150, // Electric, water, internet (before phone/internet)
   carMaintenance: 100, // Oil changes, repairs, insurance
   phoneInternetBase: 80, // Phone and home internet
+  // Financial rates (annual)
+  loanAPR: 0.105, // national average personal loan APR (~10.5%)
+  hysaAPR: 0.02 // high-yield savings annual rate (~2%)
 };
 
 export default gameValues;

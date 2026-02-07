@@ -112,13 +112,24 @@ function reducer(state: State, action: any) {
 		case 'CHECK_ROW': {
 			const { id, done, newCheck } = action.payload
 			const ledger = state.ledger.map((tx: any) => (tx.id === id ? { ...tx, done } : tx))
-			return { ...state, ledger, check: newCheck ?? state.check }
+			let resultingCheck = newCheck ?? state.check
+			let newDebt = state.debt
+			const logs = [...state.logs]
+			if (newCheck !== undefined && newCheck < 0) {
+				const loanAmt = fix(Math.abs(newCheck))
+				newDebt = fix(state.debt + loanAmt)
+				logs.push({ date: `${state.month}/${state.year}`, msg: `Auto-loan taken: $${loanAmt.toFixed(2)} to cover negative checking` })
+				resultingCheck = 0
+			}
+			return { ...state, ledger, check: resultingCheck, debt: newDebt, logs }
 		}
 		case 'PROCESS_MONTH': {
 			const { paySave = 0, payDebt = 0 } = action.payload
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
 			const check = fix(state.check - (paySave + payDebt))
+
+			let resultingCheck = check
 
 			const eduProgress = { ...state.eduProgress }
 			let activeEdu = state.activeEdu
@@ -165,6 +176,14 @@ function reducer(state: State, action: any) {
 			let debtBefore = state.debt
 			let newDebt = fix(state.debt - payDebt + (state.pendingCity ? 1500 : 0))
 
+			// If the player's immediate payments push checking negative, convert shortfall into an auto-loan
+			if (resultingCheck < 0) {
+				const shortfall = fix(Math.abs(resultingCheck))
+				newDebt = fix(newDebt + shortfall)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Auto-loan taken: $${shortfall.toFixed(2)} to cover monthly payments` })
+				resultingCheck = 0
+			}
+
 			// If a job was accepted previously, apply it now at the start of the new month.
 			if (state.pendingJob) {
 				// record prior job with full dates and months (no extra month added)
@@ -198,13 +217,29 @@ function reducer(state: State, action: any) {
 				newDebt = 0
 			}
 
+			// Apply monthly interest on debt (if any) and add to logs
+			let saveBefore = state.save + paySave
+			if (newDebt > 0) {
+				const monthlyDebtInterest = fix(newDebt * (gameValues.loanAPR / 12))
+				newDebt = fix(newDebt + monthlyDebtInterest)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Loan interest charged (${(gameValues.loanAPR * 100).toFixed(2)}% APR): $${monthlyDebtInterest.toFixed(2)}` })
+			}
+
+			// Apply monthly interest to savings (HYSA)
+			let newSave = fix(saveBefore)
+			if (saveBefore > 0) {
+				const monthlySaveInterest = fix(saveBefore * (gameValues.hysaAPR / 12))
+				newSave = fix(saveBefore + monthlySaveInterest)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Savings interest earned (${(gameValues.hysaAPR * 100).toFixed(2)}% APY): $${monthlySaveInterest.toFixed(2)}` })
+			}
+
 			// Note: Car loan payoff would be tracked if we had a car loan field - adding for future use
 			// if (carLoanBefore > 0 && carLoanAfter <= 0) celebration = 'car-paid-off'
 
 			return {
 				...state,
-				check,
-				save: state.save + paySave,
+				check: resultingCheck,
+				save: newSave,
 				debt: newDebt,
 				tenure,
 				showSettlement: false,
@@ -518,7 +553,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues }}>
 			{children}
 		</GameContext.Provider>
 	)

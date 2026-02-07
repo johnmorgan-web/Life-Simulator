@@ -10,6 +10,7 @@ import Transit from './tabs/Transit'
 import Relocate from './tabs/Relocate'
 import Resume from './tabs/Resume'
 import Lifestyle from './tabs/Lifestyle'
+import Loans from './tabs/Loans'
 
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
@@ -22,6 +23,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'relocate') return <Relocate />
   if (tab === 'resume') return <Resume />
   if (tab === 'lifestyle') return <Lifestyle />
+  if (tab === 'loans') return <Loans />
   return <div className="p-6">Unknown tab</div>
 }
 
@@ -38,11 +40,48 @@ export function App() {
 }
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, dispatch, processMonth, openSettlement, acceptJob } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues } = useGame()
+  const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number } | null>(null)
+  const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
+  const [autoLoanAmount, setAutoLoanAmount] = useState(0)
+  
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
   const handleCelebrationComplete = () => {
     dispatch({ type: 'CLEAR_CELEBRATION' })
+  }
+
+  const handleBeginMonth = () => {
+    const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
+    const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
+    const totalPayment = savings + debtPayment
+    
+    // Check if this would result in negative checking balance
+    if (state.check - totalPayment < 0) {
+      const loanNeeded = Math.abs(state.check - totalPayment)
+      setAutoLoanAmount(loanNeeded)
+      setPendingPayments({ savings, debt: debtPayment })
+      setShowAutoLoanConfirm(true)
+    } else {
+      // No loan needed, process normally
+      processMonth(savings, debtPayment)
+    }
+  }
+
+  const handleConfirmAutoLoan = () => {
+    if (pendingPayments) {
+      processMonth(pendingPayments.savings, pendingPayments.debt)
+      setShowAutoLoanConfirm(false)
+      setPendingPayments(null)
+      setAutoLoanAmount(0)
+    }
+  }
+
+  const handleAdjustPayments = () => {
+    // Close the confirmation modal and let user adjust
+    setShowAutoLoanConfirm(false)
+    setPendingPayments(null)
+    setAutoLoanAmount(0)
   }
 
   return (
@@ -91,38 +130,68 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
             ) : null}
             <div className="space-y-4 mb-8">
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings <span className="text-xs text-slate-400">(HYSA: {(gameValues.hysaAPR * 100).toFixed(2)}% APY)</span></label>
                 <input type="number" id="pay-save" className="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00" />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt <span className="text-xs text-slate-400">(Loan APR: {(gameValues.loanAPR * 100).toFixed(2)}% APR)</span></label>
                 <input type="number" id="pay-debt" className="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00" />
               </div>
             </div>
             <button
-              onClick={() => {
-                const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
-                const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
-
-                if (savings == 0 && debtPayment == 0) {
-                  // Let user proceed without paying (if they have negative checking balance)
-                  processMonth();
-                } else if (state.check < savings + debtPayment) {
-                  // Check if they can afford the payments they're trying to make
-                  const inputs = document.querySelectorAll('#pay-save, #pay-debt') as NodeListOf<HTMLInputElement>;
-                  inputs.forEach(input => {
-                    input.classList.add('border-rose-600', 'bg-rose-50');
-                    setTimeout(() => {
-                      input.classList.remove('border-rose-600', 'bg-rose-50');
-                    }, 2000);
-                  });
-                } else {
-                  // Process the month with the specified payments
-                  processMonth(savings, debtPayment)
-                }
-              }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">
+              onClick={handleBeginMonth} 
+              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">
               Begin Next Month
             </button>
+          </div>
+        </div>
+      )}
+
+      {showAutoLoanConfirm && (
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-2 text-rose-600">⚠️ Auto-Loan Alert</h2>
+            <div className="mb-6 text-sm text-slate-700 bg-rose-50 p-4 rounded-xl border border-rose-200">
+              Your payments will exceed your checking balance. An automatic loan will be created to cover the shortfall.
+            </div>
+            
+            <div className="space-y-4 mb-8 bg-slate-50 p-4 rounded-xl">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Current Checking:</span>
+                <span className="font-bold">${state.check.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Planned Payments:</span>
+                <span className="font-bold text-rose-600">-${((pendingPayments?.savings || 0) + (pendingPayments?.debt || 0)).toFixed(2)}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between">
+                <span className="font-bold">Auto-Loan Amount:</span>
+                <span className="font-bold text-lg text-rose-600">${autoLoanAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">APR:</span>
+                <span className="font-semibold">{(gameValues.loanAPR * 100).toFixed(2)}%</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Monthly Interest:</span>
+                <span className="font-semibold text-rose-500">${(autoLoanAmount * (gameValues.loanAPR / 12)).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={handleConfirmAutoLoan}
+                className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold"
+              >
+                Accept Auto-Loan & Continue
+              </button>
+              <button
+                onClick={handleAdjustPayments}
+                className="w-full bg-slate-200 text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-300"
+              >
+                Adjust Payments
+              </button>
+            </div>
           </div>
         </div>
       )}
