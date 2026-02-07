@@ -56,7 +56,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
         <Nav tab={tab} setTab={setTab} />
         <div 
           className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"
-          style={{ minHeight: 'calc(100vh - 100px)'}}>
+          style={{ minHeight: 'calc(100vh - 130px)'}}>
           <TabContent tab={tab} />
         </div>
       </main>
