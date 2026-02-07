@@ -63,7 +63,7 @@ const jobBoard: Job[] = [
   { title: 'Security Officer', base: 3500, req: 'HS Diploma', certReq: 'Cybersecurity', tReq: 3, odds: 0.7, cat: 'Pro' },
   { title: 'Court Reporter', base: 4500, req: 'Bachelors Degree', certReq: 'Court Reporter', tReq: 3, odds: 0.5, cat: 'Pro' },
   { title: 'Personal Trainer', base: 2800, req: 'HS Diploma', certReq: 'Personal Training', tReq: 4, odds: 0.75, cat: 'Pro' },
-  { title: 'Ultra Wealthy Millionaire', base: 5000000, req: 'Bachelors Degree', certReq: 'Sales, Public Accountant, Project Management, Supply Chain, Quality Control, Real Estate',  tReq: 5, odds: 0.00005, cat: 'Pro' },
+  { title: 'Ultra Wealthy Millionaire', base: 5000000, req: 'Flight School', certReq: 'Sales, Public Accountant, Project Management, Supply Chain, Quality Control, Real Estate, Rotorcraft Category Rating',  tReq: 5, odds: 0.00005, cat: 'Pro' },
 ]
 
 export default jobBoard
