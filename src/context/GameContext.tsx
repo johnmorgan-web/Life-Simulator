@@ -5,10 +5,18 @@ import jobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
 import academyCourses from '../constants/academyCourses.constants'
-import gameValues, { getMonthlyCost } from '../constants/gameValues.constants'
+import gameValues from '../constants/gameValues.constants'
 import type { Job, Application } from '../types/models.types'
 
 type State = any
+
+const initializeEduProgress = () => {
+	const progress: any = {}
+	academyCourses.forEach(course => {
+		progress[course.n] = 0
+	})
+	return progress
+}
 
 const initialState: State = {
 	check: 1200.0,
@@ -21,7 +29,7 @@ const initialState: State = {
 	job: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 },
 	transit: { name: 'Walk/Bike', cost: 15, level: 1 },
 	activeEdu: null,
-	eduProgress: { 'HS Diploma': 0, 'Trade Cert': 0, 'Degree': 0 },
+	eduProgress: initializeEduProgress(),
 	ledger: [],
 	name: 'John Morgan',
 	tenure: 0,
@@ -37,12 +45,65 @@ const initialState: State = {
 	jobStartMonth: 2,
 	jobStartYear: 2026,
 	showSettlement: false,
-	applicationResults: []
+	applicationResults: [],
+	// Lifestyle and luxury services
+	luxuryServices: {
+		chef: false,
+		housekeeper: false,
+		chauffer: false,
+		therapist: false,
+		trainer: false,
+		concierge: false
+	},
+	entertainmentSpending: 0, // How much user spends on entertainment per month
+	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | null
 }
 
 const GameContext = createContext<any>(null)
 
 const fix = (n: number) => Math.round(n * 100) / 100
+
+function mulberry32(a: number) {
+	return function() {
+		let t = a += 0x6D2B79F5
+		t = Math.imul(t ^ (t >>> 15), t | 1)
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+	}
+}
+
+// Deterministic seasonal + noise multiplier based on year/month/category
+function variableMultiplier(year: number, month: number, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment') {
+	const seasonal: Record<string, number[]> = {
+		utilities: [0.02, 0.03, 0.02, 0.00, -0.01, -0.02, 0.03, 0.03, 0.01, 0.00, 0.01, 0.04],
+		food: [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.00, 0.01, 0.00, 0.00, 0.03, 0.04],
+		gas: [0.01, 0.01, 0.00, 0.00, 0.00, 0.03, 0.04, 0.03, 0.01, 0.00, 0.00, 0.00],
+		car: [0.02, 0.02, 0.01, 0.00, 0.00, -0.01, -0.01, 0.00, 0.01, 0.02, 0.02, 0.02],
+		entertainment: [0.00, 0.02, 0.03, 0.02, 0.01, 0.00, -0.01, 0.00, 0.01, 0.02, 0.03, 0.04]
+	}
+
+	const m = Math.max(1, Math.min(12, Math.floor(month)))
+	const season = (seasonal[category] && seasonal[category][m - 1]) || 0
+
+	// Build a seed from year, month, and category to ensure reproducibility
+	let catHash = 0
+	for (let i = 0; i < category.length; i++) catHash = (catHash * 31 + category.charCodeAt(i)) >>> 0
+	const seed = (year * 100 + m) ^ catHash
+	const rnd = mulberry32(seed)()
+	// deterministic noise in [-0.02, 0.02]
+	const noise = rnd * 0.04 - 0.02
+
+	let adjust = season + noise
+	if (adjust > 0.05) adjust = 0.05
+	if (adjust < -0.05) adjust = -0.05
+
+	return 1 + adjust
+}
+
+function variableCost(base: number, month: number, year: number, cityMultiplier = 1, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment') {
+	const mult = variableMultiplier(year, month, category)
+	return fix(base * cityMultiplier * mult)
+}
 
 function reducer(state: State, action: any) {
 	switch (action.type) {
@@ -67,6 +128,8 @@ function reducer(state: State, action: any) {
 			const careerHistory = [...state.careerHistory]
 			let job = state.job
 			let tenure = state.tenure
+			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | null
+
 			if (state.activeEdu) {
 				eduProgress[state.activeEdu] = (eduProgress[state.activeEdu] || 0) + 1
 				const course = academyCourses.find(c => c.n === state.activeEdu)
@@ -77,6 +140,9 @@ function reducer(state: State, action: any) {
 					credentialHistory.push({ name: state.activeEdu, month: nextMonth, year: nextYear, months: monthsStudied })
 					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Graduated: ${state.activeEdu} (${monthsStudied} mo)` })
 					activeEdu = null
+					// Trigger celebration for degree or certification
+					const courseType = course?.type || 'degree'
+					celebration = courseType === 'cert' ? 'certification' : 'degree'
 				} else {
 					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Continued study: ${state.activeEdu}` })
 				}
@@ -95,6 +161,10 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name}` })
 			}
 
+			// Track debt/car payoff before applying new debt
+			let debtBefore = state.debt
+			let newDebt = fix(state.debt - payDebt + (state.pendingCity ? 1500 : 0))
+
 			// If a job was accepted previously, apply it now at the start of the new month.
 			if (state.pendingJob) {
 				// record prior job with full dates and months (no extra month added)
@@ -107,22 +177,35 @@ function reducer(state: State, action: any) {
 					endYear: nextYear,
 					months: state.tenure
 				})
+				// Check if it's a promotion (higher salary) or job acceptance
+				const isPromotion = state.pendingJob.base > state.job.base
 				// switch to the new job
 				job = state.pendingJob
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
 				// reset tenure and start times and set new job start
-				tenure = 0;
+				tenure = 0
+				// Trigger celebration for job acceptance/promotion
+				celebration = isPromotion ? 'promotion' : 'job-accepted'
 			} else {
 				// no job change, increment tenure
 				tenure = state.tenure + 1
 			}
 
+			// Check for debt payoff
+			if (debtBefore > 0 && newDebt <= 0) {
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: 'Debt eliminated!' })
+				celebration = 'debt-paid-off'
+				newDebt = 0
+			}
+
+			// Note: Car loan payoff would be tracked if we had a car loan field - adding for future use
+			// if (carLoanBefore > 0 && carLoanAfter <= 0) celebration = 'car-paid-off'
+
 			return {
 				...state,
 				check,
 				save: state.save + paySave,
-				// Apply relocation cost if moving this month
-				debt: fix(state.debt - payDebt + (state.pendingCity ? 1500 : 0)),
+				debt: newDebt,
 				tenure,
 				showSettlement: false,
 				month: nextMonth,
@@ -140,7 +223,8 @@ function reducer(state: State, action: any) {
 				job,
 				pendingJob: null,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
-				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear
+				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
+				celebration
 			}
 		}
 		case 'TOGGLE_SETTLEMENT':
@@ -149,6 +233,10 @@ function reducer(state: State, action: any) {
 			const app = action.payload
 			return { ...state, applications: [...state.applications, app], logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Applied for ${app.job.title}` }] }
 		}
+		case 'TRIGGER_CELEBRATION':
+			return { ...state, celebration: action.payload }
+		case 'CLEAR_CELEBRATION':
+			return { ...state, celebration: null }
 		case 'SET_STATE':
 			return { ...state, ...action.payload }
 		default:
@@ -167,57 +255,65 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	function buildLedger(paySave = 0, payDebt = 0) {
 		const ledger: any[] = []
 		let id = 0
-		// Start with previous balance after payments
-		let bal = state.check - paySave - payDebt
-		ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
 
-		// Use pending job if present (applies at start of month)
+		// Start with previous balance after payments
+		let bal = state.check - paySave - payDebt;
+		ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
+		
+		// Get current job and calculate net salary
 		const job = state.pendingJob || state.job
 		const grossSalary = fix(job.base * state.city.p)
-		const netSalary = fix(grossSalary * 0.8)
-
+		const netSalary = fix(grossSalary * 0.8) // 80% after taxes
+		
 		// INCOME
 		bal = fix(bal + netSalary)
 		ledger.push({ id: id++, desc: `Net Salary: ${job.title}`, amt: netSalary, type: 'inc', bal, done: false })
-
-		// HOUSING - Dynamic rent based on % of salary
+		
+		// HOUSING - Dynamic rent based on 30% of salary
 		const rent = fix(netSalary * gameValues.rentPercentOfSalary * state.city.r)
 		bal = fix(bal - rent)
 		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
-
+		
 		// TRANSPORTATION
-		// Transit cost
-		bal = fix(bal - state.transit.cost)
-		ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
-		// If not chauffeur, apply gas + car maintenance (variable)
-		if (!state.luxuryServices.chauffer && state.transit.level > 1) {
-			const gasCost = fix(getMonthlyCost(gameValues.gasCostBase, state.month, 'gas') * state.city.p * 0.5)
-			const carMaint = fix(getMonthlyCost(gameValues.carMaintenance, state.month, 'car') * state.city.p)
-			const combined = fix(gasCost + carMaint)
-			bal = fix(bal - combined)
-			ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: combined, type: 'out', bal, done: false })
+		// If chauffeur hired, no gas/transit cost (chauffeur covers it)
+		if (!state.luxuryServices.chauffer) {
+			// Transit cost
+			bal = fix(bal - state.transit.cost)
+			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
+			
+			// Gas cost (if not using Walk/Bike)
+				if (state.transit.level > 1) {
+					const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas')
+					const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car')
+				const gasAndMaint = fix(gas + carMaint)
+				bal = fix(bal - gasAndMaint)
+				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
+			}
+		} else {
+			// Chauffeur cost handled in luxury services section
 		}
-
-		// UTILITIES & PHONE
-		const utilities = fix(getMonthlyCost(gameValues.utilitiesCostBase, state.month, 'utilities') * state.city.p)
+		
+		// UTILITIES & PHONE (utilities vary seasonally)
+		const utilities = variableCost(gameValues.utilitiesCostBase, state.month, state.year, state.city.p, 'utilities')
 		const phoneInternet = gameValues.phoneInternetBase
 		const totalUtilities = fix(utilities + phoneInternet)
 		bal = fix(bal - totalUtilities)
 		ledger.push({ id: id++, desc: 'Utilities & Phone/Internet', amt: totalUtilities, type: 'out', bal, done: false })
-
+		
 		// FOOD - If personal chef hired, no food costs (chef provides meals)
 		if (!state.luxuryServices.chef) {
-			const foodCost = fix(getMonthlyCost(gameValues.foodCostBase, state.month, 'food') * state.city.p * 0.8)
+			const foodCost = variableCost(gameValues.foodCostBase * 0.8, state.month, state.year, state.city.p, 'food')
 			bal = fix(bal - foodCost)
 			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
 		}
-
+		
 		// ENTERTAINMENT
 		if (state.entertainmentSpending > 0) {
-			bal = fix(bal - state.entertainmentSpending)
-			ledger.push({ id: id++, desc: 'Entertainment & Subscriptions', amt: state.entertainmentSpending, type: 'out', bal, done: false })
+			const entertainmentCost = variableCost(state.entertainmentSpending, state.month, state.year, 1, 'entertainment')
+			bal = fix(bal - entertainmentCost)
+			ledger.push({ id: id++, desc: 'Entertainment & Subscriptions', amt: entertainmentCost, type: 'out', bal, done: false })
 		}
-
+		
 		// EDUCATION - If currently studying
 		if (state.activeEdu) {
 			const course = academyCourses.find(c => c.n === state.activeEdu)
@@ -225,14 +321,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			bal = fix(bal - cost)
 			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
 		}
-
+		
 		// LUXURY SERVICES
 		let luxuryCosts = 0
 		const luxuryServicesList: string[] = []
-
+		
 		if (state.luxuryServices.chef) {
-			const chefBase = getMonthlyCost(gameValues.foodCostBase, state.month, 'food')
-			const chefCost = fix(chefBase * 15 * state.city.p) // Personal chef scales with city
+			const chefCost = variableCost(gameValues.foodCostBase * 15, state.month, state.year, state.city.p, 'food') // Personal chef scales with food costs
 			luxuryCosts += chefCost
 			luxuryServicesList.push(`Chef: $${chefCost}`)
 		}
@@ -261,7 +356,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			luxuryCosts += conciergeCost
 			luxuryServicesList.push(`Concierge: $${conciergeCost}`)
 		}
-
+		
 		if (luxuryCosts > 0) {
 			bal = fix(bal - luxuryCosts)
 			ledger.push({ 
@@ -274,7 +369,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				details: luxuryServicesList
 			})
 		}
-
+		
 		dispatch({ type: 'INIT_LEDGER', payload: ledger })
 	}
 
@@ -336,6 +431,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 		// mark the chosen application and set as pendingJob to apply at next month progression
 		dispatch({ type: 'SET_STATE', payload: { applications: apps, pendingJob: chosen.job } })
+		// Trigger celebration for accepted job (celebration type will be determined in processMonth based on if it's a promotion)
+		if (chosen.job.base > state.job.base) {
+			triggerCelebration('promotion')
+		} else {
+			triggerCelebration('job-accepted')
+		}
 	}
 
 	function openSettlement() {
@@ -343,21 +444,45 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'SET_STATE', payload: { showSettlement: true } })
 	}
 
+	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted') {
+		dispatch({ type: 'TRIGGER_CELEBRATION', payload: event })
+		// Auto-clear after animation
+		setTimeout(() => {
+			dispatch({ type: 'CLEAR_CELEBRATION' })
+		}, 3500)
+	}
+
 	function scoreApplication(job: Job) {
 		let score = 50
+		// Education requirement (±20 points)
 		if (job.req) {
 			if (state.credentials.includes(job.req)) score += 20
 			else score -= 15
 		} else score += 10
+		
+		// Certificate requirement (±15 points)
+		if (job.certReq) {
+			if (state.credentials.includes(job.certReq)) score += 15
+			else score -= 10
+		} else score += 5
+		
+		// Credit score (±10 points)
 		if (state.credit >= 740) score += 10
 		else if (state.credit >= 670) score += 5
 		else if (state.credit < 580) score -= 10
+		
+		// Job tenure/stability (±15 points)
 		if (state.tenure >= 12) score += 15
 		else if (state.tenure >= 6) score += 10
 		else if (state.tenure >= 3) score += 5
+		
+		// Career history (±10 points)
 		if (state.careerHistory.length > 3) score += 10
 		else if (state.careerHistory.length > 0) score += 5
+		
+		// Credentials count bonus (±10 points)
 		if (state.credentials.length > 0) score += 10
+		
 		score = Math.max(0, Math.min(100, score))
 		score += Math.random() * 20 - 10
 		return Math.round(score)
@@ -375,7 +500,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			dMonth = dMonth % 12 || 12
 		}
 
-		
+		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
+		const variability = job.base * 0.05;
+		const adjustedBase = job.base + (Math.random() * variability * 2 - variability);
+		job.base = adjustedBase;
 		const app: Application = {
 			id: `app_${Date.now()}`,
 			job,
@@ -390,7 +518,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, jobBoard, cityData, lifeEvents, transitOptions, academyCourses }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses }}>
 			{children}
 		</GameContext.Provider>
 	)
