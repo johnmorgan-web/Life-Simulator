@@ -6,7 +6,8 @@ export default function Nav({ tab, setTab }: any) {
     { id: 'academy', label: '🏛️ Academy' },
     { id: 'transit', label: '🚗 Transit' },
     { id: 'relocate', label: '✈️ Relocate' },
-    { id: 'resume', label: '📄 Resume' }
+    { id: 'resume', label: '📄 Resume' },
+    { id: 'lifestyle', label: '💎 Lifestyle' }
   ]
   return (
     <nav className="col-span-2">

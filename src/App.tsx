@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Header from './components/Header'
 import Nav from './components/Nav'
+import Celebration from './components/Celebration'
 import { GameProvider, useGame } from './context/GameContext'
 import Ledger from './tabs/Ledger'
 import Careers from './tabs/Careers'
@@ -8,6 +9,7 @@ import Academy from './tabs/Academy'
 import Transit from './tabs/Transit'
 import Relocate from './tabs/Relocate'
 import Resume from './tabs/Resume'
+import Lifestyle from './tabs/Lifestyle'
 
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
@@ -19,6 +21,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'transit') return <Transit />
   if (tab === 'relocate') return <Relocate />
   if (tab === 'resume') return <Resume />
+  if (tab === 'lifestyle') return <Lifestyle />
   return <div className="p-6">Unknown tab</div>
 }
 
@@ -35,17 +38,25 @@ export function App() {
 }
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, processMonth, openSettlement, acceptJob } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob } = useGame()
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
+
+  const handleCelebrationComplete = () => {
+    dispatch({ type: 'CLEAR_CELEBRATION' })
+  }
 
   return (
     <>
+      <Celebration 
+        event={state.celebration} 
+        onComplete={handleCelebrationComplete} 
+      />
       <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
       <main className="flex-1 overflow-hidden p-6 max-w-7xl mx-auto w-full grid grid-cols-12 gap-6">
         <Nav tab={tab} setTab={setTab} />
         <div 
           className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"
-          style={{ minHeight: 'calc(100vh - 130px)'}}>
+          style={{ minHeight: 'calc(100vh - 100px)'}}>
           <TabContent tab={tab} />
         </div>
       </main>

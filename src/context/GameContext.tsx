@@ -5,7 +5,7 @@ import jobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
 import academyCourses from '../constants/academyCourses.constants'
-import gameValues from '../constants/gameValues.constants'
+import gameValues, { getMonthlyCost } from '../constants/gameValues.constants'
 import type { Job, Application } from '../types/models.types'
 
 type State = any
@@ -166,36 +166,115 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function buildLedger(paySave = 0, payDebt = 0) {
 		const ledger: any[] = []
-
+		let id = 0
 		// Start with previous balance after payments
-		let bal = state.check - paySave - payDebt;
-		ledger.push({ id: 0, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
-		
-		// Rent/Housing cost
-		const rent = fix(gameValues.rentBase * state.city.r)
+		let bal = state.check - paySave - payDebt
+		ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
+
+		// Use pending job if present (applies at start of month)
+		const job = state.pendingJob || state.job
+		const grossSalary = fix(job.base * state.city.p)
+		const netSalary = fix(grossSalary * 0.8)
+
+		// INCOME
+		bal = fix(bal + netSalary)
+		ledger.push({ id: id++, desc: `Net Salary: ${job.title}`, amt: netSalary, type: 'inc', bal, done: false })
+
+		// HOUSING - Dynamic rent based on % of salary
+		const rent = fix(netSalary * gameValues.rentPercentOfSalary * state.city.r)
 		bal = fix(bal - rent)
-		ledger.push({ id: 1, desc: 'Housing/Rent Payment', amt: rent, type: 'out', bal, done: false })
-		
+		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
+
+		// TRANSPORTATION
 		// Transit cost
 		bal = fix(bal - state.transit.cost)
-		ledger.push({ id: 2, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
-		
-		// Education cost if currently studying
-		if (state.activeEdu) {
-			const eduCosts: any = { 'HS Diploma': gameValues.hsDiplomaCost, 'Trade Cert': gameValues.tradeCertCost, 'Degree': gameValues.degreeCost }
-			const cost = eduCosts[state.activeEdu]
-			bal = fix(bal - cost)
-			ledger.push({ id: 5, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
+		ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
+		// If not chauffeur, apply gas + car maintenance (variable)
+		if (!state.luxuryServices.chauffer && state.transit.level > 1) {
+			const gasCost = fix(getMonthlyCost(gameValues.gasCostBase, state.month, 'gas') * state.city.p * 0.5)
+			const carMaint = fix(getMonthlyCost(gameValues.carMaintenance, state.month, 'car') * state.city.p)
+			const combined = fix(gasCost + carMaint)
+			bal = fix(bal - combined)
+			ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: combined, type: 'out', bal, done: false })
 		}
 
-		// Salary
-		/// Get job from pendingJob if exists
-		const job = state.pendingJob || state.job;
-		
-		const netPay = fix(job.base * state.city.p * 0.8)
-		bal = fix(bal + netPay)
+		// UTILITIES & PHONE
+		const utilities = fix(getMonthlyCost(gameValues.utilitiesCostBase, state.month, 'utilities') * state.city.p)
+		const phoneInternet = gameValues.phoneInternetBase
+		const totalUtilities = fix(utilities + phoneInternet)
+		bal = fix(bal - totalUtilities)
+		ledger.push({ id: id++, desc: 'Utilities & Phone/Internet', amt: totalUtilities, type: 'out', bal, done: false })
 
-		ledger.push({ id: 3, desc: `Net Salary: ${job.title}`, amt: netPay, type: 'inc', bal, done: false })
+		// FOOD - If personal chef hired, no food costs (chef provides meals)
+		if (!state.luxuryServices.chef) {
+			const foodCost = fix(getMonthlyCost(gameValues.foodCostBase, state.month, 'food') * state.city.p * 0.8)
+			bal = fix(bal - foodCost)
+			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
+		}
+
+		// ENTERTAINMENT
+		if (state.entertainmentSpending > 0) {
+			bal = fix(bal - state.entertainmentSpending)
+			ledger.push({ id: id++, desc: 'Entertainment & Subscriptions', amt: state.entertainmentSpending, type: 'out', bal, done: false })
+		}
+
+		// EDUCATION - If currently studying
+		if (state.activeEdu) {
+			const course = academyCourses.find(c => c.n === state.activeEdu)
+			const cost = course ? course.c : 1000
+			bal = fix(bal - cost)
+			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
+		}
+
+		// LUXURY SERVICES
+		let luxuryCosts = 0
+		const luxuryServicesList: string[] = []
+
+		if (state.luxuryServices.chef) {
+			const chefBase = getMonthlyCost(gameValues.foodCostBase, state.month, 'food')
+			const chefCost = fix(chefBase * 15 * state.city.p) // Personal chef scales with city
+			luxuryCosts += chefCost
+			luxuryServicesList.push(`Chef: $${chefCost}`)
+		}
+		if (state.luxuryServices.housekeeper) {
+			const housekeeperCost = 2000
+			luxuryCosts += housekeeperCost
+			luxuryServicesList.push(`Housekeeper: $${housekeeperCost}`)
+		}
+		if (state.luxuryServices.chauffer) {
+			const chauffeurCost = 3500
+			luxuryCosts += chauffeurCost
+			luxuryServicesList.push(`Chauffeur: $${chauffeurCost}`)
+		}
+		if (state.luxuryServices.therapist) {
+			const therapistCost = 2500
+			luxuryCosts += therapistCost
+			luxuryServicesList.push(`Therapist: $${therapistCost}`)
+		}
+		if (state.luxuryServices.trainer) {
+			const trainerCost = 1500
+			luxuryCosts += trainerCost
+			luxuryServicesList.push(`Trainer: $${trainerCost}`)
+		}
+		if (state.luxuryServices.concierge) {
+			const conciergeCost = 3000
+			luxuryCosts += conciergeCost
+			luxuryServicesList.push(`Concierge: $${conciergeCost}`)
+		}
+
+		if (luxuryCosts > 0) {
+			bal = fix(bal - luxuryCosts)
+			ledger.push({ 
+				id: id++, 
+				desc: `Luxury Services (${luxuryServicesList.length})`, 
+				amt: luxuryCosts, 
+				type: 'out', 
+				bal, 
+				done: false,
+				details: luxuryServicesList
+			})
+		}
+
 		dispatch({ type: 'INIT_LEDGER', payload: ledger })
 	}
 
@@ -296,10 +375,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			dMonth = dMonth % 12 || 12
 		}
 
-		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
-		const variability = job.base * 0.05;
-		const adjustedBase = job.base + (Math.random() * variability * 2 - variability);
-		job.base = adjustedBase;
+		
 		const app: Application = {
 			id: `app_${Date.now()}`,
 			job,
