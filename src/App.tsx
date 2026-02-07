@@ -3,6 +3,7 @@ import Header from './components/Header'
 import Nav from './components/Nav'
 import Celebration from './components/Celebration'
 import { GameProvider, useGame } from './context/GameContext'
+import Login from './components/Login'
 import Ledger from './tabs/Ledger'
 import Careers from './tabs/Careers'
 import Academy from './tabs/Academy'
@@ -146,6 +147,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
   return (
     <>
+      {!state.currentUser && <Login />}
       <Celebration 
         event={state.celebration} 
         onComplete={handleCelebrationComplete} 

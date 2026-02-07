@@ -67,6 +67,9 @@ const initialState: State = {
 	lastNegotiationYear: null as number | null,
 	lastAutoBumpMonth: 2,
 	lastAutoBumpYear: 2026
+	,
+	// Authentication / save
+	currentUser: null as string | null
 }
 
 const GameContext = createContext<any>(null)
@@ -111,19 +114,19 @@ function calculatePayNegotiationModifier(
 	tenure: number,
 	jobCompatibilityScore: number // 0-100 scale
 ): { modifier: number; creditContribution: number; tenureContribution: number; compatibilityContribution: number } {
-	// Credit contribution: 0-10% based on credit score
-	const creditContribution = Math.min(10, (creditScore - 300) / 55) // scales from 0 to 10%
+	// Credit contribution: 0-5% based on credit score
+	const creditContribution = Math.min(5, (creditScore - 300) / 55) // scales from 0 to 10%
 	
-	// Tenure contribution: 0-8% based on months in position, capped at 36 months
-	const tenureContribution = Math.min(8, (tenure / 36) * 8)
+	// Tenure contribution: 0-3% based on months in position, capped at 36 months
+	const tenureContribution = Math.min(3, (tenure / 36) * 8)
 	
-	// Job compatibility contribution: 0-7% based on how well matched you are (0-100)
-	const compatibilityContribution = (jobCompatibilityScore / 100) * 7
+	// Job compatibility contribution: 0-3% based on how well matched you are (0-100)
+	const compatibilityContribution = (jobCompatibilityScore / 100) * 3
 	
 	const modifier = creditContribution + tenureContribution + compatibilityContribution
 	
 	return {
-		modifier: Math.min(25, modifier), // Cap at 25% max raise
+		modifier: Math.min(11, modifier), // Cap at 11% max raise
 		creditContribution: Math.round(creditContribution * 100) / 100,
 		tenureContribution: Math.round(tenureContribution * 100) / 100,
 		compatibilityContribution: Math.round(compatibilityContribution * 100) / 100
@@ -136,6 +139,42 @@ function mulberry32(a: number) {
 		t = Math.imul(t ^ (t >>> 15), t | 1)
 		t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+	}
+}
+
+// Save and load helpers (localStorage)
+function saveStateForUser(user: string, state: any) {
+	try {
+		localStorage.setItem(`life-sim:${user}`, JSON.stringify(state))
+		// maintain index
+		const keys = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
+		if (!keys.includes(user)) {
+			keys.push(user)
+			localStorage.setItem('life-sim-keys', JSON.stringify(keys))
+		}
+		return true
+	} catch (e) {
+		console.error('Save failed', e)
+		return false
+	}
+}
+
+function loadStateForUser(user: string) {
+	try {
+		const raw = localStorage.getItem(`life-sim:${user}`)
+		if (!raw) return null
+		return JSON.parse(raw)
+	} catch (e) {
+		console.error('Load failed', e)
+		return null
+	}
+}
+
+function listSavedUsers() {
+	try {
+		return JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
+	} catch (e) {
+		return []
 	}
 }
 
@@ -601,8 +640,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function processMonth(paySave = 0, payDebt = 0) {
 		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt } })
-		// Rebuild ledger after state has updated from the reducer
-		setTimeout(() => buildLedger(paySave, payDebt), 0)
+		// Rebuild ledger after state has updated from the reducer and then save
+		setTimeout(() => {
+			buildLedger(paySave, payDebt)
+			// allow reducer to settle then save
+			setTimeout(() => {
+				saveGame()
+			}, 60)
+		}, 0)
 	}
 
 	function evaluateApplications() {
@@ -660,6 +705,47 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	function openSettlement() {
 		evaluateApplications()
 		dispatch({ type: 'SET_STATE', payload: { showSettlement: true } })
+		// Save after opening settlement so job application results are persisted
+		setTimeout(() => {
+			saveGame()
+		}, 60)
+	}
+
+	// --- Save / Load / Auth ---
+
+	function saveGame(user?: string) {
+		const u = user || state.currentUser
+		if (!u) return false
+		// create a snapshot without functions
+		const snapshot = { ...state, currentUser: u }
+		return saveStateForUser(u, snapshot)
+	}
+
+	function loadGame(user: string) {
+		const data = loadStateForUser(user)
+		if (!data) return false
+		dispatch({ type: 'SET_STATE', payload: data })
+		return true
+	}
+
+	function listSaves() {
+		return listSavedUsers()
+	}
+
+	function login(user: string, _password?: string) {
+		const data = loadStateForUser(user)
+		if (data) {
+			dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: user } })
+			return true
+		}
+		// No save yet, create a new slot with current initial-like state but set currentUser
+		dispatch({ type: 'SET_STATE', payload: { ...state, currentUser: user } })
+		saveStateForUser(user, { ...state, currentUser: user })
+		return true
+	}
+
+	function logout() {
+		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
 
 	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted') {
@@ -736,7 +822,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, saveGame, loadGame, listSaves, login, logout }}>
 			{children}
 		</GameContext.Provider>
 	)
