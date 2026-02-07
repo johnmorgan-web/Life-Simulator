@@ -246,16 +246,60 @@ function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, cur
 	return Math.round(baseMaintenance * 100) / 100
 }
 
-// Save and load helpers (localStorage)
-function saveStateForUser(user: string, state: any) {
+// Save and load helpers (localStorage) - supports named saves + autosave
+interface SaveFile {
+	name: string
+	timestamp: number
+	isAutoSave: boolean
+}
+
+function saveStateForUser(user: string, state: any, saveName?: string) {
 	try {
-		localStorage.setItem(`life-sim:${user}`, JSON.stringify(state))
-		// maintain index
-		const keys = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-		if (!keys.includes(user)) {
-			keys.push(user)
-			localStorage.setItem('life-sim-keys', JSON.stringify(keys))
+		const isAutoSave = !saveName || saveName === '__autosave__'
+		const fileName = saveName || '__autosave__'
+		
+		// Save the game state
+		localStorage.setItem(`life-sim:${user}:${fileName}`, JSON.stringify(state))
+		
+		// Update saves index for this user
+		const savesKey = `life-sim:saves:${user}`
+		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
+		
+		// Remove existing entry if it's being overwritten
+		saves = saves.filter(s => s.name !== fileName)
+		
+		// Add new save
+		saves.push({
+			name: fileName,
+			timestamp: Date.now(),
+			isAutoSave
+		})
+		
+		// Keep only last 5 saves, prioritize autosave
+		if (saves.length > 5) {
+			const autoSave = saves.find(s => s.isAutoSave)
+			const nonAutoSaves = saves.filter(s => !s.isAutoSave)
+			const keptNonAuto = nonAutoSaves.slice(-4)
+			saves = autoSave ? [autoSave, ...keptNonAuto] : keptNonAuto
+			
+			// Delete removed saves from storage
+			for (const save of saves.filter(s => s.isAutoSave === false)) {
+				const saveIndex = saves.indexOf(save)
+				if (saveIndex >= 5) {
+					localStorage.removeItem(`life-sim:${user}:${save.name}`)
+				}
+			}
 		}
+		
+		localStorage.setItem(savesKey, JSON.stringify(saves))
+		
+		// maintain user index
+		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
+		if (!users.includes(user)) {
+			users.push(user)
+			localStorage.setItem('life-sim-keys', JSON.stringify(users))
+		}
+		
 		return true
 	} catch (e) {
 		console.error('Save failed', e)
@@ -263,9 +307,10 @@ function saveStateForUser(user: string, state: any) {
 	}
 }
 
-function loadStateForUser(user: string) {
+function loadStateForUser(user: string, saveName?: string) {
 	try {
-		const raw = localStorage.getItem(`life-sim:${user}`)
+		const fileName = saveName || '__autosave__'
+		const raw = localStorage.getItem(`life-sim:${user}:${fileName}`)
 		if (!raw) return null
 		return JSON.parse(raw)
 	} catch (e) {
@@ -279,6 +324,58 @@ function listSavedUsers() {
 		return JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
 	} catch (e) {
 		return []
+	}
+}
+
+function listSavesForUser(user: string): SaveFile[] {
+	try {
+		const saves = JSON.parse(localStorage.getItem(`life-sim:saves:${user}`) || '[]')
+		// Sort: autosave first, then by timestamp descending
+		return saves.sort((a: SaveFile, b: SaveFile) => {
+			if (a.isAutoSave) return -1
+			if (b.isAutoSave) return 1
+			return b.timestamp - a.timestamp
+		})
+	} catch (e) {
+		return []
+	}
+}
+
+function deleteSaveForUser(user: string, saveName: string) {
+	try {
+		localStorage.removeItem(`life-sim:${user}:${saveName}`)
+		const savesKey = `life-sim:saves:${user}`
+		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
+		saves = saves.filter(s => s.name !== saveName)
+		localStorage.setItem(savesKey, JSON.stringify(saves))
+		return true
+	} catch (e) {
+		console.error('Delete save failed', e)
+		return false
+	}
+}
+
+function renameSaveForUser(user: string, oldName: string, newName: string) {
+	try {
+		// Check name doesn't already exist
+		const saves = listSavesForUser(user)
+		if (saves.some(s => s.name === newName)) {
+			return false // Name already exists
+		}
+		
+		// Copy state to new name
+		const state = loadStateForUser(user, oldName)
+		if (!state) return false
+		
+		// Save with new name
+		saveStateForUser(user, state, newName)
+		
+		// Delete old
+		deleteSaveForUser(user, oldName)
+		return true
+	} catch (e) {
+		console.error('Rename save failed', e)
+		return false
 	}
 }
 
@@ -921,16 +1018,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	// --- Save / Load / Auth ---
 
-	function saveGame(user?: string) {
-		const u = user || state.currentUser
+	function saveGame(saveName?: string) {
+		const u = state.currentUser
 		if (!u) return false
-		// create a snapshot without functions
 		const snapshot = { ...state, currentUser: u }
-		return saveStateForUser(u, snapshot)
+		return saveStateForUser(u, snapshot, saveName)
 	}
 
-	function loadGame(user: string) {
-		const data = loadStateForUser(user)
+	function loadGame(saveName?: string) {
+		const u = state.currentUser
+		if (!u) return false
+		const data = loadStateForUser(u, saveName)
 		if (!data) return false
 		dispatch({ type: 'SET_STATE', payload: data })
 		return true
@@ -938,6 +1036,85 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function listSaves() {
 		return listSavedUsers()
+	}
+
+	function getSavesForCurrentUser() {
+		const u = state.currentUser
+		if (!u) return []
+		return listSavesForUser(u)
+	}
+
+	function deleteSave(saveName: string) {
+		const u = state.currentUser
+		if (!u) return false
+		return deleteSaveForUser(u, saveName)
+	}
+
+	function renameSave(oldName: string, newName: string) {
+		const u = state.currentUser
+		if (!u) return false
+		return renameSaveForUser(u, oldName, newName)
+	}
+
+	function newGame() {
+		const freshState = {
+			check: 1200.0,
+			save: 0,
+			debt: 0,
+			credit: 600,
+			month: 2,
+			year: 2026,
+			city: cityData[3],
+			job: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 },
+			transit: { name: 'L1 - Walk/Bike', cost: 15, level: 1 },
+			activeEdu: null,
+			eduProgress: initializeEduProgress(),
+			ledger: [],
+			name: 'John Morgan',
+			tenure: 0,
+			logs: [],
+			careerHistory: [],
+			credentials: [],
+			credentialHistory: [],
+			applications: [],
+			pendingJob: null,
+			pendingTransit: null,
+			pendingCity: null,
+			eventHistory: [],
+			jobStartMonth: 2,
+			jobStartYear: 2026,
+			showSettlement: false,
+			applicationResults: [],
+			luxuryServices: {
+				chef: false,
+				housekeeper: false,
+				chauffer: false,
+				therapist: false,
+				trainer: false,
+				concierge: false
+			},
+			entertainmentSpending: 0,
+			celebration: null,
+			paymentStreak: 0,
+			calculationStreak: 0,
+			lastPaymentOnTime: true,
+			skippedPaymentThisMonth: false,
+			lastNegotiationMonth: null,
+			lastNegotiationYear: null,
+			lastAutoBumpMonth: 2,
+			lastAutoBumpYear: 2026,
+			currentUser: state.currentUser,
+			ownsVehicle: null,
+			garage: [],
+		}
+		dispatch({ type: 'SET_STATE', payload: freshState })
+		
+		// Build the initial month's ledger
+		setTimeout(() => {
+			buildLedger(0, 0)
+		}, 60)
+		
+		return true
 	}
 
 	function login(user: string, _password?: string) {
@@ -1030,7 +1207,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
 			{children}
 		</GameContext.Provider>
 	)
