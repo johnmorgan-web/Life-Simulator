@@ -2,37 +2,31 @@
 @import "tailwindcss";
 
 #root {
-	font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', sans-serif;
 }
 
 body {
-	background: #f1f5f9;
 	font-family: 'DM Sans', sans-serif;
 	height: 100vh;
 }
 
 .glass {
-	background: white;
 	border-radius: 1.2rem;
-	border: 1px solid #e2e8f0;
 	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .tab-active {
-	background: #f8fafc !important;
 	border-left: 4px solid #ef4444 !important;
 	color: #ef4444 !important;
 	font-weight: 700;
 }
 
 .correct {
-	background-color: #f0fdf4 !important;
 	border-color: #22c55e !important;
 	color: #15803d !important;
 }
 
 .card-active {
-	border: 2px solid #3b82f6 !important;
 	background: #eff6ff !important;
 }
 
@@ -45,12 +39,10 @@ body {
 .progress-fill {
 	transition: width 0.4s ease;
 	height: 100%;
-	background: #3b82f6;
 	border-radius: 99px;
 }
 
 .req-tag {
-	font-size: 8px;
 	font-weight: 800;
 	padding: 2px 5px;
 	border-radius: 4px;
