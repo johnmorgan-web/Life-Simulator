@@ -10,7 +10,7 @@ export default function Ledger({ ledger, onCheck, format }: any) {
         {showAutoCheck && (
           <button onClick={() => {
             ledger.forEach((tx: any) => {
-              if (!tx.done) onCheck(tx.id, tx.bal)
+              if (!tx.done) onCheck(tx.id, tx.bal, tx.bal)
             })
           }} className="py-2 px-3 bg-slate-900 text-white rounded">Auto Check</button>
         )}

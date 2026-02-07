@@ -56,12 +56,48 @@ const initialState: State = {
 		concierge: false
 	},
 	entertainmentSpending: 0, // How much user spends on entertainment per month
-	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | null
+	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | null,
+	// Credit tracking
+	paymentStreak: 0, // Consecutive on-time payments
+	calculationStreak: 0, // Consecutive correct balance checks
+	lastPaymentOnTime: true,
+	skippedPaymentThisMonth: false
 }
 
 const GameContext = createContext<any>(null)
 
 const fix = (n: number) => Math.round(n * 100) / 100
+
+// Dynamic APR based on credit score
+// 300 credit = 21% APR, 600 credit = 10.5% APR, 850 credit = 3% APR
+function calculateDynamicAPR(creditScore: number): number {
+	if (creditScore < 300) return 0.21
+	if (creditScore >= 850) return 0.03
+	// Linear interpolation between ranges
+	if (creditScore < 600) {
+		// 300-600: 21% to 10.5%
+		return 0.21 - ((creditScore - 300) / 300) * 0.105
+	} else {
+		// 600-850: 10.5% to 3%
+		return 0.105 - ((creditScore - 600) / 250) * 0.075
+	}
+}
+
+// Housing tier based on credit score
+function getHousingTier(creditScore: number): { name: string; multiplier: number } {
+	if (creditScore >= 750) return { name: 'Luxury', multiplier: 1.5 }
+	if (creditScore >= 700) return { name: 'Premium', multiplier: 1.25 }
+	if (creditScore >= 650) return { name: 'Standard', multiplier: 1.0 }
+	if (creditScore >= 600) return { name: 'Budget', multiplier: 0.85 }
+	return { name: 'Basic', multiplier: 0.7 }
+}
+
+// Salary bonus multiplier based on credit score (0-15% bonus)
+function calculateCreditBonus(creditScore: number): number {
+	if (creditScore < 300) return 0
+	if (creditScore >= 800) return 0.15
+	return ((creditScore - 300) / 550) * 0.15
+}
 
 function mulberry32(a: number) {
 	return function() {
@@ -112,21 +148,44 @@ function reducer(state: State, action: any) {
 		case 'INIT_LEDGER':
 			return { ...state, ledger: action.payload }
 		case 'CHECK_ROW': {
-			const { id, done, newCheck } = action.payload
+			const { id, done, newCheck, expectedCheck } = action.payload
 			const ledger = state.ledger.map((tx: any) => (tx.id === id ? { ...tx, done } : tx))
 			let resultingCheck = newCheck ?? state.check
 			let newDebt = state.debt
+			let credit = state.credit
+			let calculationStreak = state.calculationStreak
 			const logs = [...state.logs]
+			
+			// Validate calculation accuracy for credit scoring
+			if (expectedCheck !== undefined && newCheck !== undefined) {
+				if (Math.abs(newCheck - expectedCheck) < 0.01) {
+					// Correct calculation
+					calculationStreak += 1
+					const streakBonus = Math.min(25, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
+					credit = Math.min(850, credit + 2 + streakBonus)
+					if (calculationStreak % 5 === 0) {
+						logs.push({ date: `${state.month}/${state.year}`, msg: `✅ Calculation streak (${calculationStreak}) - credit +${2 + streakBonus} (${credit})` })
+					}
+				} else {
+					// Incorrect calculation
+					const difference = Math.abs(newCheck - expectedCheck)
+					const penalty = Math.min(30, Math.ceil(difference / 10)) // Higher penalties for bigger errors
+					credit = Math.max(300, credit - penalty)
+					calculationStreak = 0
+					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance - error of $${difference.toFixed(2)}, credit -${penalty} (${credit})` })
+				}
+			}
+			
 			if (newCheck !== undefined && newCheck < 0) {
 				const loanAmt = fix(Math.abs(newCheck))
 				newDebt = fix(state.debt + loanAmt)
 				logs.push({ date: `${state.month}/${state.year}`, msg: `Auto-loan taken: $${loanAmt.toFixed(2)} to cover negative checking` })
 				resultingCheck = 0
 			}
-			return { ...state, ledger, check: resultingCheck, debt: newDebt, logs }
+			return { ...state, ledger, check: resultingCheck, debt: newDebt, credit, calculationStreak, paymentStreak: state.paymentStreak, logs }
 		}
 		case 'PROCESS_MONTH': {
-			const { paySave = 0, payDebt = 0 } = action.payload
+			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
 			const check = fix(state.check - (paySave + payDebt))
@@ -142,6 +201,10 @@ function reducer(state: State, action: any) {
 			let job = state.job
 			let tenure = state.tenure
 			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | null
+			
+			// Credit tracking
+			let credit = state.credit
+			let paymentStreak = state.paymentStreak
 
 			if (state.activeEdu) {
 				eduProgress[state.activeEdu] = (eduProgress[state.activeEdu] || 0) + 1
@@ -219,13 +282,37 @@ function reducer(state: State, action: any) {
 				newDebt = 0
 			}
 
-			// Apply monthly interest on debt (if any) and add to logs
+			// Apply monthly interest on debt with dynamic APR based on credit score
 			let saveBefore = state.save + paySave
 			if (newDebt > 0) {
-				const monthlyDebtInterest = fix(newDebt * (gameValues.loanAPR / 12))
+				const dynamicAPR = calculateDynamicAPR(credit)
+				const monthlyDebtInterest = fix(newDebt * (dynamicAPR / 12))
 				newDebt = fix(newDebt + monthlyDebtInterest)
-				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Loan interest charged (${(gameValues.loanAPR * 100).toFixed(2)}% APR): $${monthlyDebtInterest.toFixed(2)}` })
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Loan interest charged (${(dynamicAPR * 100).toFixed(2)}% APR): $${monthlyDebtInterest.toFixed(2)}` })
+				
+				// Track payment on-time status for credit scoring
+				if (skippedPayment) {
+					credit = Math.max(300, credit - 50) // Major credit hit for skipped payment
+					paymentStreak = 0
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Payment skipped - credit score reduced by 50 points (${credit})` })
+				} else if (payDebt > 0) {
+					// On-time payment improves credit
+					paymentStreak += 1
+					const streakBonus = Math.min(30, Math.floor(paymentStreak / 3) * 5) // 5 points per 3 consecutive payments, max 30
+					credit = Math.min(850, credit + 5 + streakBonus)
+					if (paymentStreak % 3 === 0) {
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment streak (${paymentStreak} months) - credit +${5 + streakBonus} (${credit})` })
+					} else {
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment - credit +5 (${credit})` })
+					}
+				} else {
+					// Minimum payment required to maintain credit
+					credit = Math.max(300, credit - 20)
+					paymentStreak = 0
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Payment missed - credit score reduced by 20 points (${credit})` })
+				}
 			}
+
 
 			// Apply monthly interest to savings (HYSA)
 			let newSave = fix(saveBefore)
@@ -243,6 +330,8 @@ function reducer(state: State, action: any) {
 				check: resultingCheck,
 				save: newSave,
 				debt: newDebt,
+				credit,
+				paymentStreak,
 				tenure,
 				showSettlement: false,
 				month: nextMonth,
@@ -261,7 +350,8 @@ function reducer(state: State, action: any) {
 				pendingJob: null,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
-				celebration
+				celebration,
+				skippedPaymentThisMonth: false
 			}
 		}
 		case 'TOGGLE_SETTLEMENT':
@@ -410,12 +500,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'INIT_LEDGER', payload: ledger })
 	}
 
-	function checkRow(id: number, value: number) {
+	function checkRow(id: number, value: number, expectedCheck?: number) {
 		const tx = state.ledger.find((t: any) => t.id === id)
 		if (!tx) return
 		const done = Math.abs(value - tx.bal) < 0.01
 		const newCheck = done ? value : undefined
-		dispatch({ type: 'CHECK_ROW', payload: { id, done, newCheck } })
+		dispatch({ type: 'CHECK_ROW', payload: { id, done, newCheck, expectedCheck } })
 	}
 
 	function processMonth(paySave = 0, payDebt = 0) {
@@ -555,7 +645,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus }}>
 			{children}
 		</GameContext.Provider>
 	)

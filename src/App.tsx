@@ -41,9 +41,23 @@ export function App() {
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
   const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues } = useGame()
-  const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number } | null>(null)
+  const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
+  const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
+  
+  // Calculate dynamic APR based on credit score
+  const calculateDynamicAPR = (creditScore: number): number => {
+    if (creditScore < 300) return 0.21
+    if (creditScore >= 850) return 0.03
+    if (creditScore < 600) {
+      return 0.21 - ((creditScore - 300) / 300) * 0.105
+    } else {
+      return 0.105 - ((creditScore - 600) / 250) * 0.075
+    }
+  }
+  
+  const dynamicAPR = calculateDynamicAPR(state.credit)
   
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
@@ -56,21 +70,41 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
     const totalPayment = savings + debtPayment
     
-    // Check if this would result in negative checking balance
+    // Validate that payments won't cause negative balance
+    if (!validatePaymentInput(savings, debtPayment)) {
+      alert(`⚠️ Your combined payments ($${totalPayment.toFixed(2)}) exceed your checking balance ($${state.check.toFixed(2)}).\n\nPlease adjust your payments or use the Skip Payment option if needed.`)
+      return
+    }
+    
+    // Check if this would result in negative checking balance (should not happen with validation)
     if (state.check - totalPayment < 0) {
       const loanNeeded = Math.abs(state.check - totalPayment)
       setAutoLoanAmount(loanNeeded)
-      setPendingPayments({ savings, debt: debtPayment })
+      setPendingPayments({ savings, debt: debtPayment, skipped: false })
       setShowAutoLoanConfirm(true)
     } else {
       // No loan needed, process normally
-      processMonth(savings, debtPayment)
+      processMonth(savings, debtPayment, false)
+    }
+  }
+
+  const handleSkipPayment = () => {
+    const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
+    setPendingPayments({ savings, debt: 0, skipped: true })
+    setShowSkipPaymentConfirm(true)
+  }
+
+  const handleConfirmSkipPayment = () => {
+    if (pendingPayments) {
+      processMonth(pendingPayments.savings, 0, true)
+      setShowSkipPaymentConfirm(false)
+      setPendingPayments(null)
     }
   }
 
   const handleConfirmAutoLoan = () => {
     if (pendingPayments) {
-      processMonth(pendingPayments.savings, pendingPayments.debt)
+      processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped)
       setShowAutoLoanConfirm(false)
       setPendingPayments(null)
       setAutoLoanAmount(0)
@@ -82,6 +116,32 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     setShowAutoLoanConfirm(false)
     setPendingPayments(null)
     setAutoLoanAmount(0)
+  }
+
+  // Validate payment input to prevent negative checking balance
+  const validatePaymentInput = (savings: number, debt: number) => {
+    const totalPayment = savings + debt
+    return state.check - totalPayment >= 0
+  }
+
+  const handlePaymentChange = () => {
+    // Real-time validation as user types
+    const savingsEl = document.getElementById('pay-save') as HTMLInputElement
+    const debtEl = document.getElementById('pay-debt') as HTMLInputElement
+    
+    if (savingsEl && debtEl) {
+      const savings = parseFloat(savingsEl.value) || 0
+      const debt = parseFloat(debtEl.value) || 0
+      
+      if (!validatePaymentInput(savings, debt)) {
+        // Show visual feedback that input would cause negative balance
+        savingsEl.classList.add('border-rose-500', 'bg-rose-50')
+        debtEl.classList.add('border-rose-500', 'bg-rose-50')
+      } else {
+        savingsEl.classList.remove('border-rose-500', 'bg-rose-50')
+        debtEl.classList.remove('border-rose-500', 'bg-rose-50')
+      }
+    }
   }
 
   return (
@@ -131,18 +191,89 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
             <div className="space-y-4 mb-8">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings <span className="text-xs text-slate-400">(HYSA: {(gameValues.hysaAPR * 100).toFixed(2)}% APY)</span></label>
-                <input type="number" id="pay-save" className="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00" />
+                <input 
+                  type="number" 
+                  id="pay-save" 
+                  min="0"
+                  max={state.check}
+                  onChange={handlePaymentChange}
+                  className="w-full p-4 border rounded-xl font-bold mt-1" 
+                  placeholder="0.00" 
+                />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt <span className="text-xs text-slate-400">(Loan APR: {(gameValues.loanAPR * 100).toFixed(2)}% APR)</span></label>
-                <input type="number" id="pay-debt" className="w-full p-4 border rounded-xl font-bold mt-1" placeholder="0.00" />
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt <span className="text-xs text-slate-400">(Credit: {state.credit} • Dynamic APR: {(dynamicAPR * 100).toFixed(2)}%)</span></label>
+                <input 
+                  type="number" 
+                  id="pay-debt" 
+                  min="0"
+                  max={state.check}
+                  onChange={handlePaymentChange}
+                  className="w-full p-4 border rounded-xl font-bold mt-1" 
+                  placeholder="0.00" 
+                />
+              </div>
+              <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded">
+                <div>Available Checking: <span className="font-bold">${state.check.toFixed(2)}</span></div>
+                <div className="mt-1">Max Combined Payment: <span className="font-bold">${state.check.toFixed(2)}</span></div>
               </div>
             </div>
-            <button
-              onClick={handleBeginMonth} 
-              className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase">
-              Begin Next Month
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleBeginMonth} 
+                className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase hover:bg-slate-800">
+                Begin Next Month
+              </button>
+              {state.debt > 0 && (
+                <button
+                  onClick={handleSkipPayment}
+                  className="flex-1 bg-amber-600 text-white py-4 rounded-2xl font-bold uppercase hover:bg-amber-700"
+                  title="Skip payment this month (credit score will be impacted)"
+                >
+                  ⚠️ Skip Payment
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSkipPaymentConfirm && (
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-2 text-amber-600">⚠️ Skip Payment?</h2>
+            <div className="mb-6 text-sm text-slate-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
+              <p className="mb-2">Skipping your debt payment this month will:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Reduce your credit score by 50 points</li>
+                <li>Reset your payment streak to 0</li>
+                <li>Your loan will still accrue interest</li>
+              </ul>
+            </div>
+            <div className="bg-slate-100 p-4 rounded-xl mb-6 text-sm">
+              <div className="flex justify-between mb-2">
+                <span className="font-semibold">Current Credit:</span>
+                <span className="text-lg">{state.credit}</span>
+              </div>
+              <div className="flex justify-between text-rose-600 font-bold">
+                <span>After Skip:</span>
+                <span>{Math.max(300, state.credit - 50)}</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmSkipPayment}
+                className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-bold"
+              >
+                Confirm Skip
+              </button>
+              <button
+                onClick={() => setShowSkipPaymentConfirm(false)}
+                className="flex-1 bg-slate-300 text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-400"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
