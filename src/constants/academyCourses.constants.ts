@@ -8,6 +8,7 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Masters Degree', m: 12, c: 3000, type: 'degree', prereq: 'Bachelors Degree', icon: '🎩' },
   { n: 'PhD', m: 30, c: 5000, type: 'degree', prereq: 'Masters Degree', icon: '🧑‍🎓' },
   { n: 'Medical School', m: 24, c: 10000, type: 'degree', prereq: 'Bachelors Degree', icon: '🏥' },
+  { n: 'Flight School', m: 6, c: 6000, type: 'degree', prereq: 'Bachelors Degree', icon: '✈️' },
 
   // Certifications (alphabetical)
   { n: 'Adobe Certified Professional', m: 3, c: 400, type: 'cert', prereq: 'HS Diploma', icon: '🖌️' },
@@ -36,12 +37,14 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Public Accountant', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '📊' },
   { n: 'Quality Control', m: 3, c: 350, type: 'cert', prereq: 'HS Diploma', icon: '✅' },
   { n: 'Real Estate', m: 3, c: 400, type: 'cert', prereq: null, icon: '🏠' },
+  { n: 'Rotorcraft Category Rating', m: 36, c: 650, type: 'cert', prereq: 'Bachelors Degree', icon: '✈️' },
   { n: 'Sales', m: 2, c: 250, type: 'cert', prereq: null, icon: '💰' },
   { n: 'Social Work Case Manager', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '👩‍⚕️' },
   { n: 'Sonographer', m: 12, c: 1000, type: 'cert', prereq: 'HS Diploma', icon: '🫀' },
   { n: 'Supply Chain', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📦' },
   { n: 'Web Developer', m: 4, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🌐' },
   { n: 'Welder', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '🔥' },
+  
 ]
 
 export default academyCourses

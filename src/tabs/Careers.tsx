@@ -16,7 +16,8 @@ const EDU_LEVEL: Record<string, number> = {
   'Bachelors Degree': 2,
   'Masters Degree': 3,
   'PhD': 4,
-  'Medical School': 3
+  'Medical School': 3,
+  'Flight School': 3
 }
 
 // Calculate job compatibility score for current job (0-100 scale)
