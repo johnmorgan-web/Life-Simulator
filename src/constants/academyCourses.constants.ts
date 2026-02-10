@@ -129,6 +129,25 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Zoological Technician', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🦓' },
   { n: 'Cosmetology Operator License', m: 6, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '💇' },
   { n: 'Air Traffic Control', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🛫' },
+  { n: 'Veterinary Technician', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🐾' },
+  { n: 'Radiologic Technology', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🩻' },
+  { n: 'Respiratory Therapy', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🫁' },
+  { n: 'Dental Assist', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🦷' },
+  { n: 'Optician', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '👓' },
+  { n: 'Mortuary Science', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '⚰️' },
+  { n: 'Criminal Justice', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '👮' },
+  { n: 'Forensic Science', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🔬' },
+  { n: 'Criminal Justice', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '👮' },
+  { n: 'Pest Control', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🐜' },
+  { n: 'Public Relations', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📢' },
+  { n: 'Aviation Maintenance Technician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '✈️' },
+  
+
+
+
+
+
+
 
   //Military certs
   { n: 'Six Sigma Green Belt', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '✅' },

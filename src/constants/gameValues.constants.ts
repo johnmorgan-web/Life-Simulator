@@ -13,7 +13,7 @@ const gameValues: GameValues = {
   phoneInternetBase: 80, // Phone and home internet
   // Financial rates (annual)
   loanAPR: 0.105, // national average personal loan APR (~10.5%)
-  hysaAPR: 0.02 // high-yield savings annual rate (~2%)
+  hysaAPR: 0.0365 // high-yield savings annual rate (~3.65%)
 };
 
 export default gameValues;
