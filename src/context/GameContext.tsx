@@ -816,7 +816,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			
 			// Gas cost (if not using L1 Walk/Bike and no vehicle owned - vehicle costs handled separately)
 			if (state.transit.level > 1 && !(state.garage && state.garage.length > 0)) {
-				const gas = variableCost(gameValues.gasCostBase * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
+				const gas = variableCost(gameValues.gasCostPercentOfSalary * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
 				const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
 				const gasAndMaint = fix(gas + carMaint)
 				bal = fix(bal - gasAndMaint)
@@ -827,7 +827,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 		
 		// UTILITIES & PHONE (utilities vary seasonally)
-		const utilities = variableCost(gameValues.utilitiesCostBase, state.month, state.year, state.city.p, 'utilities', state.city.name)
+		const utilities = variableCost(gameValues.utilitiesCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'utilities', state.city.name)
 		const phoneInternet = gameValues.phoneInternetBase
 		const totalUtilities = fix(utilities + phoneInternet)
 		bal = fix(bal - totalUtilities)
@@ -835,7 +835,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		
 		// FOOD - If personal chef hired, no food costs (chef provides meals)
 		if (!state.luxuryServices.chef) {
-			const foodCost = variableCost(gameValues.foodCostBase * 0.8, state.month, state.year, state.city.p, 'food', state.city.name)
+			const foodCost = variableCost(gameValues.FoodCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'food', state.city.name)
 			bal = fix(bal - foodCost)
 			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
 		}
@@ -889,7 +889,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const luxuryServicesList: string[] = []
 		
 		if (state.luxuryServices.chef) {
-			const chefCost = variableCost(gameValues.foodCostBase * 15, state.month, state.year, state.city.p, 'food', state.city.name) // Personal chef scales with food costs
+			const chefCost = variableCost(gameValues.FoodCostPercentOfSalary * 15, state.month, state.year, state.city.p, 'food', state.city.name) // Personal chef scales with food costs
 			luxuryCosts += chefCost
 			luxuryServicesList.push(`Chef: $${chefCost}`)
 		}

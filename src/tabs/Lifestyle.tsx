@@ -198,7 +198,7 @@ export default function Lifestyle() {
                 <input
                   type="range"
                   min="0"
-                  max={Math.min(netSalary * 0.2, 500)} // Max 20% of income or $500
+                  max={Math.min(netSalary * 0.2, 20000)} // Max 20% of income or $20000
                   step="5"
                   value={state.entertainmentSpending}
                   onChange={e => handleEntertainmentChange(parseInt(e.target.value))}

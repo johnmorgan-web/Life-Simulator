@@ -61,14 +61,18 @@ const lifestyleExpenses: LifestyleExpenses = {
       minSalary: 6500,
       icon: '🎩',
       description: 'Premium service handling errands, reservations, and lifestyle management.'
-    }
+    },
+
   ],
   entertainmentOptions: [
     { name: 'Streaming Service', monthlyCost: 15, icon: '📺' },
     { name: 'Movie Tickets (2x/mo)', monthlyCost: 30, icon: '🎬' },
     { name: 'Concert/Sports (1x/mo)', monthlyCost: 75, icon: '🎵' },
     { name: 'Gaming Subscription', monthlyCost: 20, icon: '🎮' },
-    { name: 'Gym Membership', monthlyCost: 50, icon: '🏋️' }
+    { name: 'Gym Membership', monthlyCost: 50, icon: '🏋️' }, 
+    { name: 'Dining Out (2x/mo)', monthlyCost: 100, icon: '🍽️' },
+    { name: 'Hobby Supplies', monthlyCost: 40, icon: '🎨' },
+    { name: 'Travel Fund', monthlyCost: 200, icon: '✈️' },
   ]
 }
 
