@@ -37,8 +37,8 @@ export default function Ledger({ ledger, onCheck, format }: any) {
                   key={`inp-${tx.id}-${tx.bal}-${tx.done}`}
                   id={`inp-${tx.id}`}
                   type="number"
-                  step="0.01"
-                  className={`w-24 p-1 border-b text-right font-bold ${tx.done ? 'correct' : ''}`}
+                  step="0.00"
+                  className={`w-24 p-1 border-b text-right font-bold ${tx.done ? 'correct' :  'border-slate-300 focus:border-slate-500 focus:ring-slate-200'}`}
                   defaultValue={tx.done ? tx.bal.toFixed(2) : ''}
                   disabled={tx.done}
                 />

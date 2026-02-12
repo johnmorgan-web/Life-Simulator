@@ -55,8 +55,9 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
   if (!event) return null
 
   return (
-    <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
-      <div className="animate-bounce text-20xl">{celebrationMessages[event]}</div>
+    <div className="fixed inset-0 pointer-events-none flex items-start justify-center pt-20 z-50">
+      <div className="pointer-events-auto -translate-y-40"></div>
+      <div className="animate-bounce text-10xl">{celebrationMessages[event]}</div>
     </div>
   )
 }
