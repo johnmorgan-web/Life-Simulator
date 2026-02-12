@@ -2,7 +2,7 @@ import { useGame } from '../context/GameContext'
 import type { City } from '../types/models.types'
 import { useEffect, useRef, useState } from 'react'
 import countries from '../constants/countries.constants'
-import countryBoundaries from '../constants/countryBoundaries.constants'
+//import countryBoundaries from '../constants/countryBoundaries.constants'
 
 export default function Relocate() {
   const { state, dispatch, cityData, calculateRelocationCost } = useGame()
@@ -20,9 +20,8 @@ export default function Relocate() {
   const primaryVehicle = state.ownsVehicle || (hasVehicle ? state.garage[0] : null)
   // Define relocation transit options with costs
   const relocationTransitOptions = [
-    { id: 'public', label: 'Public Transit', costPerKm: 0.15, requiresVehicle: false, note: 'Moving truck rental + public transit' },
     { id: 'personal', label: 'Personal Vehicle', costPerKm: 0.35, requiresVehicle: true, note: 'Drive your own vehicle + moving truck' },
-    { id: 'luxury', label: 'Limousine Service', costPerKm: 0.75, requiresVehicle: false, note: 'Full-service limousine relocation' }
+    { id: 'luxury', label: 'Limousine Service', costPerKm: 0.75, requiresVehicle: true, note: 'Full-service limousine relocation' }
   ]
 
   useEffect(() => {
@@ -51,36 +50,36 @@ export default function Relocate() {
         ctx.fill()
 
         // draw country boundaries (polygons) with enhanced visibility
-        ctx.lineWidth = 1.5
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)'
-        ctx.fillStyle = 'rgba(6,182,212,0.12)'
-        countryBoundaries.forEach(cb => {
-          ctx.beginPath()
-          let firstPoint = true
-          for (let i = 0; i < cb.boundaries.length; i++) {
-            const [lat, lon] = cb.boundaries[i]
-            const phi = lat * Math.PI/180
-            const lambda = (lon * Math.PI/180) + rotation
-            const x3 = Math.cos(phi) * Math.sin(lambda)
-            const y3 = Math.sin(phi)
-            const z3 = Math.cos(phi) * Math.cos(lambda)
-            if (z3 > 0.05) { // only visible points
-              const x = size/2 + x3 * radius
-              const y = size/2 - y3 * radius
-              if (firstPoint) {
-                ctx.moveTo(x, y)
-                firstPoint = false
-              } else {
-                ctx.lineTo(x, y)
-              }
-            }
-          }
-          ctx.stroke()
-          ctx.fill()
-        })
+        //ctx.lineWidth = 1.5
+       // ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+        //ctx.fillStyle = 'rgba(6,182,212,0.12)'
+        //countryBoundaries.forEach(cb => {
+         // ctx.beginPath()
+         // let firstPoint = true
+         // for (let i = 0; i < cb.boundaries.length; i++) {
+         //   const [lat, lon] = cb.boundaries[i]
+         //   const phi = lat * Math.PI/180
+         //   const lambda = (lon * Math.PI/180) + rotation
+         //   const x3 = Math.cos(phi) * Math.sin(lambda)
+         //   const y3 = Math.sin(phi)
+         //   const z3 = Math.cos(phi) * Math.cos(lambda)
+        //    if (z3 > 0.05) { // only visible points
+        //      const x = size/2 + x3 * radius
+        //      const y = size/2 - y3 * radius
+        //      if (firstPoint) {
+        //        ctx.moveTo(x, y)
+        //        firstPoint = false
+        //      } else {
+         //       ctx.lineTo(x, y)
+         //     }
+         //   }
+        //  }
+       //   ctx.stroke()
+      //    ctx.fill()
+      //  })
 
         // draw latitude and longitude grid (graticule) with enhanced visibility
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
         ctx.lineWidth = 1.0
         // longitude lines (more frequent)
         for (let lon = -180; lon < 180; lon += 10) {
@@ -278,7 +277,7 @@ export default function Relocate() {
                   const transitCost = Math.round((500 + costInfo.distance * option.costPerKm) * 100) / 100
                   const canSelect = !option.requiresVehicle || hasVehicle
                   return (
-                    <label key={option.id} className={`block p-2 rounded cursor-pointer ${selectedTransit === option.id ? 'bg-violet-600 bg-opacity-30' : 'bg-slate-800'} ${!canSelect ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <label key={option.id} className={`block p-2 rounded cursor-pointer ${selectedTransit === option.id ? 'bg-white bg-opacity-30' : 'bg-white-800'} ${!canSelect ? 'opacity-50 cursor-not-allowed' : ''}`}>
                       <input 
                         type="radio" 
                         name="transit" 

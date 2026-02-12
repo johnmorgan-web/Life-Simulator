@@ -432,18 +432,18 @@ function reducer(state: State, action: any) {
 				if (Math.abs(newCheck - expectedCheck) < 0.01) {
 					// Correct calculation
 					calculationStreak += 1
-					const streakBonus = Math.min(25, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
+					const streakBonus = Math.min(10, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
 					credit = Math.min(850, credit + 2 + streakBonus)
-					if (calculationStreak % 5 === 0) {
+					if (calculationStreak % 1 === 0) {
 						logs.push({ date: `${state.month}/${state.year}`, msg: `✅ Calculation streak (${calculationStreak}) - credit +${2 + streakBonus} (${credit})` })
 					}
 				} else {
 					// Incorrect calculation
 					const difference = Math.abs(newCheck - expectedCheck)
-					const penalty = Math.min(30, Math.ceil(difference / 10)) // Higher penalties for bigger errors
-					credit = Math.max(300, credit - penalty)
+					const penalty = Math.min(300, Math.ceil(difference / 10)) // Higher penalties for bigger errors
+					credit = Math.max(850, credit - penalty)
 					calculationStreak = 0
-					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance - error of $${difference.toFixed(2)}, credit -${penalty} (${credit})` })
+					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance, credit -${penalty} (${credit})` })
 				}
 			}
 			
@@ -637,18 +637,18 @@ function reducer(state: State, action: any) {
 				} else if (payDebt > 0) {
 					// On-time payment improves credit
 					paymentStreak += 1
-					const streakBonus = Math.min(30, Math.floor(paymentStreak / 3) * 5) // 5 points per 3 consecutive payments, max 30
-					credit = Math.min(850, credit + 5 + streakBonus)
-					if (paymentStreak % 3 === 0) {
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment streak (${paymentStreak} months) - credit +${5 + streakBonus} (${credit})` })
+					const streakBonus = Math.min(10, Math.floor(paymentStreak / 3) * 5) // 5 points per 3 consecutive payments, max 10
+					credit = Math.min(850, credit + 3 + streakBonus)
+					if (paymentStreak % 1 === 0) {
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment streak (${paymentStreak} months) - credit +${1 + streakBonus} (${credit})` })
 					} else {
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment - credit +5 (${credit})` })
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment - credit +1 (${credit})` })
 					}
 				} else {
 					// Minimum payment required to maintain credit
-					credit = Math.max(300, credit - 20)
+					credit = Math.max(300, credit - 50)
 					paymentStreak = 0
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Payment missed - credit score reduced by 20 points (${credit})` })
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Payment missed - credit score reduced by 50 points (${credit})` })
 				}
 			}
 
@@ -665,14 +665,14 @@ function reducer(state: State, action: any) {
 			let updatedJob = job
 			let newLastAutoBumpMonth = state.lastAutoBumpMonth
 			let newLastAutoBumpYear = state.lastAutoBumpYear
-			if (credit > 800 && tenure >= 12) {
+			if (credit > 825 && tenure >= 12) {
 				const monthsSinceLastAutoBump = (nextYear - state.lastAutoBumpYear) * 12 + (nextMonth - state.lastAutoBumpMonth)
 				if (monthsSinceLastAutoBump >= 12) {
-					const autoBumpAmount = 3 // 3% annual bump for maintaining excellent credit
+					const autoBumpAmount = 1 // 1% annual bump for maintaining excellent credit
 					updatedJob = { ...job, base: fix(job.base * (1 + autoBumpAmount / 100)) }
 					const oldPay = Math.round(job.base * city.p * 0.8)
 					const newPay = Math.round(updatedJob.base * city.p * 0.8)
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🎉 Automatic annual pay bump (credit > 800): $${oldPay}/mo → $${newPay}/mo (+3%)` })
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🎉 Automatic annual pay bump (credit > 800): $${oldPay}/mo → $${newPay}/mo (+1%)` })
 					celebration = 'pay-bump'
 					newLastAutoBumpMonth = nextMonth
 					newLastAutoBumpYear = nextYear
@@ -738,7 +738,7 @@ function reducer(state: State, action: any) {
 			const oldPay = Math.round(state.job.base * state.city.p * 0.8)
 			const newPay = Math.round(newBase * state.city.p * 0.8)
 			logs.push({ 
-				date: `${state.month}/${state.year}`, 
+				date: state.tenure >= 6 ? `${state.month}/${state.year}` : `~${state.month}/${state.year}`, // if tenure < 6 months, show approximate date since negotiation may take time
 				msg: `Successfully negotiated pay raise: $${oldPay}/mo → $${newPay}/mo (+${negotiationModifier.toFixed(1)}%)` 
 			})
 			return {
@@ -759,7 +759,7 @@ function reducer(state: State, action: any) {
 			const newPay = Math.round(newBase * state.city.p * 0.8)
 			logs.push({
 				date: `${state.month}/${state.year}`,
-				msg: `Automatic annual pay bump (credit > 800): $${oldPay}/mo → $${newPay}/mo (+${bumpPercentage.toFixed(1)}%)`
+				msg: `Automatic annual pay bump (credit > 825): $${oldPay}/mo → $${newPay}/mo (+${bumpPercentage.toFixed(1)}%)`
 			})
 			return {
 				...state,

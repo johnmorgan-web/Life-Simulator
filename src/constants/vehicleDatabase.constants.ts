@@ -469,17 +469,17 @@ const vehicleDatabase = {
   conditions: {
     new: {
       label: 'New',
-      priceMultiplier: 1.0,
+      priceMultiplier: 1.0 +- Math.random() * 0.2,
       label_short: 'New'
     },
     used: {
       label: 'Used (2-5 years)',
-      priceMultiplier: 0.65,
+      priceMultiplier: 0.65 +- Math.random() * 0.2,
       label_short: 'Used'
     },
     lease: {
       label: 'Lease (36 months)',
-      priceMultiplier: 0,
+      priceMultiplier: 0.8 +- Math.random() * 0.2,
       label_short: 'Lease'
     }
   },

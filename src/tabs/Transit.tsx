@@ -12,10 +12,10 @@ export default function Transit() {
 
   // Get APR based on credit score
   const getAPR = () => {
-    if (state.credit >= 750) return 0.045
-    if (state.credit >= 700) return 0.055
-    if (state.credit >= 650) return 0.065
-    return 0.085
+    if (state.credit >= 750) return 0.06
+    if (state.credit >= 700) return 0.08
+    if (state.credit >= 650) return 0.13
+    return 0.18 // Subprime rate for credit below 650
   }
 
   // Purchase vehicle handler - show financing choice
@@ -55,7 +55,7 @@ export default function Transit() {
         // Financing option
         const apr = getAPR()
         const term = vehicleDatabase.financingTerms.monthlyPaymentMonths
-        monthlyPayment = calculateMonthlyPayment(price, apr, term)
+        monthlyPayment = calculateMonthlyPayment((price * apr)/ term + price, apr, term)
         monthsRemaining = term
       } else {
         // Cash payment - no financing

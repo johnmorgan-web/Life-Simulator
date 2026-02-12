@@ -65,8 +65,8 @@ export default function Careers() {
   const canNegotiatePay = useMemo(() => {
     if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return true
     const monthsSinceLastNegotiation = (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
-    return monthsSinceLastNegotiation >= 6
-  }, [state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year])
+    return monthsSinceLastNegotiation >= 6 && state.tenure >= 6
+  }, [state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year, state.tenure])
 
   // Get months until next negotiation eligible
   const monthsUntilNegotiationEligible = useMemo(() => {
@@ -101,19 +101,21 @@ export default function Careers() {
     const jobPay = j.base * state.city.p * 0.8
 
     if (!j.req || state.credentials.includes(j.req)) {
-      education = 30
+      education = 15
     } else {
       education = -15
     }
 
     if (!j.certReq || state.credentials.includes(j.certReq)) {
-      certificate = 35
+      certificate = 20
     } else {
       certificate = -10
     }
 
     if (state.transit.level >= j.tReq) {
-      transit = 20
+      transit = 5
+      } else {
+      transit = -25
     }
 
     const payBumpAmount = Math.max(0, jobPay - currentPay)

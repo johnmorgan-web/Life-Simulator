@@ -6,9 +6,9 @@ const gameValues: GameValues = {
   tradeCertCost: 800,
   degreeCost: 1200,
   rentPercentOfSalary: 0.30, // 30% of salary goes to rent (industry standard)
-  FoodCostPercentOfSalary: 0.08,  // Basic food costs (fast food, groceries for low earners)
+  FoodCostPercentOfSalary: 150,  // Basic food costs (fast food, groceries for low earners)
   gasCostPercentOfSalary: 0.05, // Monthly gas for vehicle
-  utilitiesCostPercentOfSalary: 0.03, // Electric, water, internet (before phone/internet)
+  utilitiesCostPercentOfSalary: 200, // Electric, water, internet (before phone/internet)
   carMaintenance: 100, // Oil changes, repairs, insurance
   phoneInternetBase: 80, // Phone and home internet
   // Financial rates (annual)
