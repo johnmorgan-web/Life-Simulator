@@ -5,7 +5,9 @@
 * Missing types everywhere
 * Fire luxury services when can longer afford
 * Change transit level is no longer to meet requirements for level
-Drop credit score when input of wrong answer and check
+* Drop credit score when input of wrong answer and check
+* Resets credit score to 850 even with debt
+* Payment towards debt bringing up pay raise celebration
 
 # Base game logic upgrades
 * Random events/encounters
@@ -31,11 +33,9 @@ Drop credit score when input of wrong answer and check
 
 ## Careers
 
-* Initiate promotions after specific tenures ✅
   * Career page update to show (continue career, look for new job)
-
-
   * Increase types of required certifications for jobs...more than one cert
+  * Decrease pay increase
 
 ## Ledger
 * Increase number of monthly bills
