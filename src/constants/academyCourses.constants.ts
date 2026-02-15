@@ -73,12 +73,14 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Respiratory Therapist', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🫁' },
   { n: 'Sonographer', m: 12, c: 1000, type: 'cert', prereq: 'HS Diploma', icon: '🫀' },
   { n: 'Surgical Technician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🔪' },
+  { n: 'Veterinary Technician', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🐾' },
+  { n: 'Surgery Certificate', m: 12, c: 1500, type: 'cert', prereq: 'Medical School', icon: '🔪' },
 
   // Construction certs
-  { n: 'Construction Management', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🏗️' },
-  { n: 'Construction Project Management', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🏗️' },
-  { n: 'Construction Estimating', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📐' },
-  { n: 'Construction Supervision', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '👷' },
+  { n: 'Construction Management', m: 6, c: 700, type: 'cert', prereq: 'Construction Project Management', icon: '🏗️' },
+  { n: 'Construction Project Management', m: 6, c: 700, type: 'cert', prereq: 'Construction Estimating', icon: '🏗️' },
+  { n: 'Construction Estimating', m: 4, c: 500, type: 'cert', prereq: 'Construction Supervision', icon: '📐' },
+  { n: 'Construction Supervision', m: 4, c: 500, type: 'cert', prereq: 'Construction Safety', icon: '👷' },
   { n: 'Construction Safety', m: 1, c: 200, type: 'cert', prereq: 'HS Diploma', icon: '⛑️' },
   { n: 'Electrician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '💡' },
   { n: 'HVAC', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '❄️' },
@@ -95,6 +97,7 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Early Childhood Education', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🧸' },
   { n: 'Special Education', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '♿' },
   { n: 'Teaching English as a Second Language', m: 4, c: 500, type: 'cert', prereq: 'Bachelors Degree', icon: '🌎' },
+  { n: 'Teaching Certificate', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '📚' },
 
   //Real Estate
   { n: 'Real Estate', m: 3, c: 400, type: 'cert', prereq: null, icon: '🏠' },
@@ -140,8 +143,8 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Criminal Justice', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '👮' },
   { n: 'Pest Control', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🐜' },
   { n: 'Public Relations', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📢' },
-  { n: 'Aviation Maintenance Technician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '✈️' },
   
+
 
 
 
@@ -152,6 +155,17 @@ const academyCourses: AcademyCourse[] = [
   //Military certs
   { n: 'Six Sigma Green Belt', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '✅' },
   { n: 'Six Sigma Black Belt', m: 12, c: 700, type: 'cert', prereq: 'Six Sigma Green Belt', icon: '✅' },
+  { n: 'Infantry', m: 36, c: 0, type: 'cert', prereq: 'Military Academy', icon: '🎖️' },
+  { n: 'Special Forces', m: 36, c: 0, type: 'cert', prereq: 'Infantry', icon: '🪖' },
+  { n: 'Cyber Warfare', m: 12, c: 600, type: 'cert', prereq: 'Infantry', icon: '💻' },
+  { n: 'Intelligence Analyst', m: 12, c: 600, type: 'cert', prereq: 'Infantry', icon: '🧠' },
+  { n: 'Logistics', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '📦' },
+  { n: 'Military Intelligence', m: 12, c: 600, type: 'cert', prereq: 'Infantry', icon: '🧠' },
+  { n: 'Military Police', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '👮' },
+  { n: 'Combat Medic', m: 12, c: 600, type: 'cert', prereq: 'Medical Assist', icon: '🩺' },
+  { n: 'Military Pilot', m: 36, c: 0, type: 'cert', prereq: 'Flight School', icon: '✈️' },
+  { n: 'ASVAB Test', m: 1, c: 0, type: 'cert', prereq: 'Military Academy', icon: '🎖️' },
+  { n: 'Aviation Maintenance Technician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '✈️' },
 
 
 ]

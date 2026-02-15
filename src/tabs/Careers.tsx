@@ -101,19 +101,19 @@ export default function Careers() {
     const jobPay = j.base * state.city.p * 0.8
 
     if (!j.req || state.credentials.includes(j.req)) {
-      education = 15
+      education = 45
     } else {
-      education = -15
+      education = -30
     }
 
     if (!j.certReq || state.credentials.includes(j.certReq)) {
-      certificate = 20
+      certificate = 35
     } else {
-      certificate = -10
+      certificate = -20
     }
 
     if (state.transit.level >= j.tReq) {
-      transit = 5
+      transit = 20
       } else {
       transit = -25
     }
