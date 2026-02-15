@@ -36,6 +36,7 @@
   * Career page update to show (continue career, look for new job)
   * Increase types of required certifications for jobs...more than one cert
   * Decrease pay increase
+  * Need to add job requirements if looking to build promotion system or prior experience
 
 ## Ledger
 * Increase number of monthly bills

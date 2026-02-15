@@ -109,6 +109,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       setShowAutoLoanConfirm(false)
       setPendingPayments(null)
       setAutoLoanAmount(0)
+      dispatch({ type: 'UPDATE_CREDIT', payload: Math.max(300, state.credit - 50) })
     }
   }
 
@@ -234,7 +235,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 >
                   ⚠️ Skip Payment
                 </button>
-              )}
+                 )}
             </div>
           </div>
         </div>

@@ -28,7 +28,7 @@ function calculateJobCompatibilityScore(job: Job, credentials: string[], transit
   if (job.req && credentials.includes(job.req)) {
     score += 20
   } else if (job.req) {
-    score -= 15
+    score -= 20
   }
   
   // Certificate requirement (±15 points)
@@ -36,7 +36,7 @@ function calculateJobCompatibilityScore(job: Job, credentials: string[], transit
     if (credentials.includes(job.certReq)) {
       score += 15
     } else {
-      score -= 10
+      score -= 15
     }
   }
   
@@ -44,7 +44,7 @@ function calculateJobCompatibilityScore(job: Job, credentials: string[], transit
   if (transitLevel >= job.tReq) {
     score += 15
   } else {
-    score -= 10
+    score -= 15
   }
   
   return Math.max(0, Math.min(100, score))
@@ -79,6 +79,10 @@ export default function Careers() {
   // Handle negotiation button click
   const handleNegotiatePay = () => {
     const compatibilityScore = calculateJobCompatibilityScore(state.job, state.credentials, state.transit.level)
+    let successChance = 0.30 // Base 30% chance
+    successChance += (state.credit / 850) * 0.2 // Up to +20% based on credit score
+    successChance += Math.min(state.tenure / 60, 1) * 0.22 // Up to +22% based on tenure (maxes out at 5 years)
+    successChance += (compatibilityScore / 100) * 0.05 // Up to +5% based on job fit
     const result = calculatePayNegotiationModifier(state.credit, state.tenure, compatibilityScore)
     setNegotiationModifier(result.modifier)
     setShowNegotiationModal(true)
@@ -119,7 +123,7 @@ export default function Careers() {
     }
 
     const payBumpAmount = Math.max(0, jobPay - currentPay)
-    payBump = Math.min(25, Math.round((payBumpAmount / Math.max(1, currentPay)) * 100))
+    payBump = Math.min(10, Math.round((payBumpAmount / Math.max(1, currentPay)) * 100))
 
     const total = education + certificate + transit + payBump
 

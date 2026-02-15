@@ -1,6 +1,7 @@
 import type { Job } from "../types/models.types"
 
 const jobBoard: Job[] = [
+
   // Entry Level (No Education)
   { title: 'Odd Jobs', base: 800, req: null, certReq: null, tReq: 1, odds: 1, cat: 'Entry' },
   { title: 'Fast Food Worker', base: 1100, req: null, certReq: 'Food and Beverage', tReq: 1, odds: 0.9, cat: 'Entry' },
@@ -20,7 +21,7 @@ const jobBoard: Job[] = [
   { title: 'Call Center Rep', base: 1800, req: 'HS Diploma', certReq: 'Customer Service', tReq: 2, odds: 0.8, cat: 'Entry' },
   { title: 'Grocery Stocker', base: 1600, req: 'HS Diploma', certReq: 'Customer Service', tReq: 1, odds: 0.9, cat: 'Entry' },
   { title: 'Laundry Attendant', base: 1200, req: 'HS Diploma', certReq: 'Customer Service', tReq: 1, odds: 0.85, cat: 'Entry' },
-
+  
   // Military (Requires HS)
   { title: 'Army Private', base: 1900, req: 'Military Academy', certReq: 'ASVAB Test', tReq: 1, odds: 0.95, cat: 'Military' },
   { title: 'Navy Seaman', base: 1950, req: 'Military Academy', certReq: 'ASVAB Test', tReq: 1, odds: 0.9, cat: 'Military' },
@@ -43,7 +44,7 @@ const jobBoard: Job[] = [
   { title: 'Field Artillery', base: 3600, req: 'Military Academy', certReq: null, tReq: 3, odds: 0.35, cat: 'Military' },
   { title: 'Infantry', base: 3500, req: 'Military Academy', certReq: 'Infantry', tReq: 3, odds: 0.4, cat: 'Military' },
 
-  // Skilled Trades (Trade Cert or specific certs)
+  // Skilled Trades (Requires Trade Cert)
   { title: 'Electrician', base: 2900, req: 'Trade Cert', certReq: 'OSHA 10/30 Safety Cards', tReq: 3, odds: 0.7, cat: 'Skilled' },
   { title: 'HVAC Tech', base: 2750, req: 'Trade Cert', certReq: 'HVAC', tReq: 3, odds: 0.75, cat: 'Skilled' },
   { title: 'Plumber', base: 3100, req: 'Trade Cert', certReq: 'Plumbing Design', tReq: 3, odds: 0.65, cat: 'Skilled' },
@@ -85,7 +86,6 @@ const jobBoard: Job[] = [
   { title: 'Respiratory Therapist', base: 3700, req: 'Trade Cert', certReq: 'Respiratory Therapy', tReq: 4, odds: 0.5, cat: 'Skilled' },
   { title: 'Dental Assistant', base: 2500, req: 'Trade Cert', certReq: 'Dental Assist', tReq: 2, odds: 0.7, cat: 'Skilled' },
   { title: 'Optician', base: 3000, req: 'Trade Cert', certReq: 'Optician', tReq: 3, odds: 0.6, cat: 'Skilled' },
-
   
   // Professional (Degree Required)
   { title: 'Software Dev', base: 6500, req: 'Bachelors Degree', certReq: 'Web Developer', tReq: 1, odds: 0.45, cat: 'Pro' },

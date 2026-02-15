@@ -6,6 +6,7 @@ const transitOptions: TransitOption[] = [
     { n: 'L3 - Uber/Lyft', c: 200, l: 3 },
     { n: 'L4 - Owned Vehicle', c: 425, l: 4 },
     { n: 'L5 - Chauffeur Service', c: 800, l: 5 },
+    { n: 'L5 - Helicopter', c: 5000, l: 5 }
 ]
 
 export default transitOptions

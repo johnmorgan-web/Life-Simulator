@@ -98,14 +98,6 @@ function calculateDynamicAPR(creditScore: number): number {
 	}
 }
 
-// Housing tier based on credit score
-function getHousingTier(creditScore: number): { name: string; multiplier: number } {
-	if (creditScore >= 750) return { name: 'Luxury', multiplier: 1.5 }
-	if (creditScore >= 700) return { name: 'Premium', multiplier: 1.25 }
-	if (creditScore >= 650) return { name: 'Standard', multiplier: 1.0 }
-	if (creditScore >= 600) return { name: 'Budget', multiplier: 0.85 }
-	return { name: 'Basic', multiplier: 0.7 }
-}
 
 // Salary bonus multiplier based on credit score (0-15% bonus)
 function calculateCreditBonus(creditScore: number): number {
@@ -133,7 +125,7 @@ function calculatePayNegotiationModifier(
 	const modifier = creditContribution + tenureContribution + compatibilityContribution
 	
 	return {
-		modifier: Math.min(11, modifier), // Cap at 11% max raise
+		modifier: Math.min(3, modifier), // Cap at 3% max raise
 		creditContribution: Math.round(creditContribution * 100) / 100,
 		tenureContribution: Math.round(tenureContribution * 100) / 100,
 		compatibilityContribution: Math.round(compatibilityContribution * 100) / 100
@@ -236,7 +228,7 @@ function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, cur
 	const ageYears = ageMonths / 12
 	
 	// Base maintenance: $50-150 per month depending on class
-	let baseMaintenance = 50 * classData.baseMaintenanceFactor
+	let baseMaintenance = 80 * classData.baseMaintenanceFactor
 	
 	// Increase with age: +20% per year after 3 years
 	if (ageYears > 3) {
@@ -433,7 +425,7 @@ function reducer(state: State, action: any) {
 					// Correct calculation
 					calculationStreak += 1
 					const streakBonus = Math.min(10, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
-					credit = Math.min(850, credit + 2 + streakBonus)
+					credit = Math.min(state.credit, credit + 2 + streakBonus)
 					if (calculationStreak % 1 === 0) {
 						logs.push({ date: `${state.month}/${state.year}`, msg: `✅ Calculation streak (${calculationStreak}) - credit +${2 + streakBonus} (${credit})` })
 					}
@@ -441,7 +433,7 @@ function reducer(state: State, action: any) {
 					// Incorrect calculation
 					const difference = Math.abs(newCheck - expectedCheck)
 					const penalty = Math.min(300, Math.ceil(difference / 10)) // Higher penalties for bigger errors
-					credit = Math.max(850, credit - penalty)
+					credit = Math.max(state.credit, credit - penalty)
 					calculationStreak = 0
 					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance, credit -${penalty} (${credit})` })
 				}
@@ -1207,7 +1199,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, getHousingTier, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
 			{children}
 		</GameContext.Provider>
 	)
