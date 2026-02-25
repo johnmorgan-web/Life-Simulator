@@ -86,6 +86,12 @@ const jobBoard: Job[] = [
   { title: 'Respiratory Therapist', base: 3700, req: 'Trade Cert', certReq: 'Respiratory Therapy', tReq: 4, odds: 0.5, cat: 'Skilled' },
   { title: 'Dental Assistant', base: 2500, req: 'Trade Cert', certReq: 'Dental Assist', tReq: 2, odds: 0.7, cat: 'Skilled' },
   { title: 'Optician', base: 3000, req: 'Trade Cert', certReq: 'Optician', tReq: 3, odds: 0.6, cat: 'Skilled' },
+  { title: 'Hearing Aid Specialist', base: 2800, req: 'Trade Cert', certReq: 'Hearing Aid Specialist', tReq: 3, odds: 0.65, cat: 'Skilled' },
+  { title: 'Funeral Service Worker', base: 2700, req: 'Trade Cert', certReq: 'Mortuary Science', tReq: 3, odds: 0.6, cat: 'Skilled' },
+  { title: 'Personal Care Aide', base: 2200, req: 'Trade Cert', certReq: 'Personal Care Aide', tReq: 2, odds: 0.75, cat: 'Skilled' },
+  { title: 'Home Health Aide', base: 2300, req: 'Trade Cert', certReq: 'Home Health Aide', tReq: 2, odds: 0.7, cat: 'Skilled' },
+  { title: 'Nursing Assistant', base: 2400, req: 'Trade Cert', certReq: 'Nursing Assistant', tReq: 3, odds: 0.65, cat: 'Skilled' },
+  
   
   // Professional (Degree Required)
   { title: 'Software Dev', base: 6500, req: 'Bachelors Degree', certReq: 'Web Developer', tReq: 1, odds: 0.45, cat: 'Pro' },
