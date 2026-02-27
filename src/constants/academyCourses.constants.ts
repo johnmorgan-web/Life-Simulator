@@ -32,6 +32,9 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Certified Public Accountant', m: 6, c: 700, type: 'cert', prereq: 'Certified Financial Planner', icon: '📊' }, 
   { n: 'Project Management Professional', m: 4, c: 550, type: 'cert', prereq: 'HS Diploma', icon: '📊' },
   { n: 'Tax Preparation', m: 3, c: 400, type: 'cert', prereq: 'HS Diploma', icon: '💰' },
+  { n: 'Personal Finance', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '💰' },
+  { n: 'Financial Advisor', m: 6, c: 700, type: 'cert', prereq: 'Personal Finance', icon: '💼' },
+  { n: 'Financial Planning', m: 6, c: 700, type: 'cert', prereq: 'Personal Finance', icon: '📊' },
   
   //Computer/IT certs
   
@@ -103,10 +106,18 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Real Estate', m: 3, c: 400, type: 'cert', prereq: null, icon: '🏠' },
   { n: 'Real Estate Appraiser', m: 4, c: 500, type: 'cert', prereq: 'Real Estate', icon: '🏠' },
   { n: 'Real Estate Broker', m: 6, c: 700, type: 'cert', prereq: 'Real Estate Appraiser', icon: '🏠' },
+  { n: 'Certified Financial Planner', m: 6, c: 700, type: 'cert', prereq: 'Financial Planning', icon: '💼' },
+  { n: 'Certified Public Accountant', m: 6, c: 700, type: 'cert', prereq: 'Financial Planning', icon: '📊' },
 
   //Counseling
   { n: 'Substance Abuse Counselor', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '🩺' },
   { n: 'Social Work Case Manager', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '👩‍⚕️' },
+  { n: 'Mental Health Counselor', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '🧠' },
+  { n: 'Marriage and Family Therapist', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '💑' },
+  { n: 'Rehabilitation Counselor', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '♿' },
+  { n: 'Career Counselor', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '💼' },
+  { n: 'School Counselor', m: 6, c: 700, type: 'cert', prereq: 'Bachelors Degree', icon: '🏫' },
+  { n: 'Grief Counselor', m: 6, c: 600, type: 'cert', prereq: 'Bachelors Degree', icon: '🕊️' },
 
 
   //Business
@@ -121,10 +132,23 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Help Desk', m: 2, c: 300, type: 'cert', prereq: 'Sales', icon: '💻' },
   { n: 'Telecommunications', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📞' },
   { n: 'Paralegal', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '⚖️' },
-  
+  { n: 'Legal Secretary', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '🖋️' },
+  { n: 'Legal Assistant', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '🖋️' },
+  { n: 'Legal Research', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '🔍' },
+  { n: 'Legal Writing', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '🖋️' },
+  { n: 'Legal Ethics', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '⚖️' },
+  { n: 'Legal Technology', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '💻'} ,
+  { n: 'Legal Project Management', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '📊' },
+  { n: 'Legal Compliance', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '✅' },
+  { n: 'Legal Writing', m: 4, c: 500, type: 'cert', prereq: 'Paralegal', icon: '🖋️' },
   
   { n: 'Personal Training', m: 3, c: 400, type: 'cert', prereq: 'HS Diploma', icon: '💪' },
   { n: 'Yoga Instructor', m: 3, c: 400, type: 'cert', prereq: 'HS Diploma', icon: '🧘' },
+  { n: 'Pilates Instructor', m: 3, c: 400, type: 'cert', prereq: 'HS Diploma', icon: '🤸' },
+  { n: 'Massage Therapist', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '💆' },
+  { n: 'Physical Therapy Assistant', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🩺' },
+  { n: 'Occupational Therapy Assistant', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🩺' },
+  { n: 'Athletic Trainer', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '🏋️' },
   
 
   { n: 'Rotorcraft Category Rating', m: 36, c: 650, type: 'cert', prereq: 'Bachelors Degree', icon: '✈️' },
@@ -143,6 +167,10 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Criminal Justice', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '👮' },
   { n: 'Pest Control', m: 6, c: 600, type: 'cert', prereq: 'HS Diploma', icon: '🐜' },
   { n: 'Public Relations', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '📢' },
+  { n: 'Event Planning', m: 4, c: 500, type: 'cert', prereq: 'HS Diploma', icon: '🎉' },
+  
+  
+  
   
 
 
@@ -166,6 +194,12 @@ const academyCourses: AcademyCourse[] = [
   { n: 'Military Pilot', m: 36, c: 0, type: 'cert', prereq: 'Flight School', icon: '✈️' },
   { n: 'ASVAB Test', m: 1, c: 0, type: 'cert', prereq: 'Military Academy', icon: '🎖️' },
   { n: 'Aviation Maintenance Technician', m: 6, c: 700, type: 'cert', prereq: 'HS Diploma', icon: '✈️' },
+  { n: 'Combat Engineer', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '🏗️' },
+  { n: 'Military Communications', m: 12, c: 600, type: 'cert', prereq: 'Infantry', icon: '📡' },
+  { n: 'Military Logistics', m: 12, c: 500, type: 'cert', prereq: 'Infantry', icon: '📦' },
+ 
+  
+
 
 
 ]
