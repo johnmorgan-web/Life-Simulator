@@ -1,59 +1,7 @@
 import { useGame } from '../context/GameContext'
 import type { Job } from '../types/models.types'
 import { useMemo, useState } from 'react'
-
-type DomainKey =
-  | 'technology'
-  | 'healthcare'
-  | 'finance'
-  | 'engineering'
-  | 'legal'
-  | 'education'
-  | 'logistics'
-  | 'service'
-  | 'creative'
-  | 'military'
-  | 'general'
-
-type DomainTone = { bg: string; border: string; text: string }
-
-const DOMAIN_TONES: Record<DomainKey, DomainTone> = {
-  technology: { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
-  healthcare: { bg: '#dcfce7', border: '#86efac', text: '#166534' },
-  finance: { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
-  engineering: { bg: '#ffedd5', border: '#fdba74', text: '#9a3412' },
-  legal: { bg: '#e2e8f0', border: '#94a3b8', text: '#334155' },
-  education: { bg: '#cffafe', border: '#67e8f9', text: '#155e75' },
-  logistics: { bg: '#ecfccb', border: '#bef264', text: '#3f6212' },
-  service: { bg: '#ffe4e6', border: '#fda4af', text: '#9f1239' },
-  creative: { bg: '#fce7f3', border: '#f9a8d4', text: '#9d174d' },
-  military: { bg: '#fee2e2', border: '#fca5a5', text: '#991b1b' },
-  general: { bg: '#f1f5f9', border: '#cbd5e1', text: '#0f172a' }
-}
-
-function resolveDomainKey(label: string): DomainKey {
-  const value = label.toLowerCase()
-  if (value.includes('tech') || value.includes('cyber') || value.includes('intelligence')) return 'technology'
-  if (value.includes('health') || value.includes('medical') || value.includes('nurs')) return 'healthcare'
-  if (value.includes('finance') || value.includes('business')) return 'finance'
-  if (value.includes('engineer') || value.includes('trade') || value.includes('construction')) return 'engineering'
-  if (value.includes('legal') || value.includes('security') || value.includes('law')) return 'legal'
-  if (value.includes('education') || value.includes('social')) return 'education'
-  if (value.includes('logistics') || value.includes('transport') || value.includes('aviation')) return 'logistics'
-  if (value.includes('service') || value.includes('hospitality')) return 'service'
-  if (value.includes('creative') || value.includes('commercial')) return 'creative'
-  if (value.includes('military') || value.includes('combat')) return 'military'
-  return 'general'
-}
-
-function domainBadgeStyle(domain: DomainKey) {
-  const tone = DOMAIN_TONES[domain]
-  return {
-    backgroundColor: tone.bg,
-    borderColor: tone.border,
-    color: tone.text
-  }
-}
+import { resolveDomainKey, domainBadgeStyle } from '../constants/domainColors.constants'
 
 type ScoreBreakdown = {
   total: number
@@ -110,6 +58,8 @@ export default function Careers() {
   const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
   const [view, setView] = useState<CareerView>('all')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all')
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null)
   const [showNegotiationModal, setShowNegotiationModal] = useState(false)
   const [negotiationModifier, setNegotiationModifier] = useState(0)
@@ -227,6 +177,47 @@ export default function Careers() {
     }
   }, [jobBoard, sort, state.credentials, state.transit, state.job, state.city])
 
+  const categoryOptions = useMemo(() => {
+    return Array.from(new Set<string>(jobBoard.map((j: Job) => j.cat || 'General'))).sort((a, b) => a.localeCompare(b))
+  }, [jobBoard])
+
+  const subcategoryOptions = useMemo(() => {
+    const byCategory = selectedCategory === 'all'
+      ? jobBoard
+      : jobBoard.filter((j: Job) => (j.cat || 'General') === selectedCategory)
+    return Array.from(new Set<string>(byCategory.map((j: Job) => j.subcat || 'General'))).sort((a, b) => a.localeCompare(b))
+  }, [jobBoard, selectedCategory])
+
+  const filteredSortedJobs = useMemo(() => {
+    return sortedJobs.filter((j: Job) => {
+      const category = j.cat || 'General'
+      const subcategory = j.subcat || 'General'
+      if (selectedCategory !== 'all' && category !== selectedCategory) return false
+      if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return false
+      return true
+    })
+  }, [sortedJobs, selectedCategory, selectedSubcategory])
+
+  const groupedJobs = useMemo(() => {
+    const grouped: Record<string, Job[]> = {}
+    filteredSortedJobs.forEach((j: Job) => {
+      const key = `${j.cat || 'General'} / ${j.subcat || 'General'}`
+      grouped[key] = grouped[key] || []
+      grouped[key].push(j)
+    })
+    return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [filteredSortedJobs])
+
+  const filteredRecommendations = useMemo(() => {
+    return recommendations.filter(({ job: j }) => {
+      const category = j.cat || 'General'
+      const subcategory = j.subcat || 'General'
+      if (selectedCategory !== 'all' && category !== selectedCategory) return false
+      if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return false
+      return true
+    })
+  }, [recommendations, selectedCategory, selectedSubcategory])
+
   return (
     <div>
       {/* Current Job Section */}
@@ -288,7 +279,54 @@ export default function Careers() {
       {/* Recommended Jobs View */}
       {view === 'recommended' && (
         <>
-          {recommendations.length > 0 ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label className="text-sm font-bold text-slate-500 ml-2">Category:</label>
+            <select
+              value={selectedCategory}
+              onChange={e => {
+                setSelectedCategory(e.target.value)
+                setSelectedSubcategory('all')
+              }}
+              className="p-2 border rounded"
+            >
+              <option value="all">All Categories</option>
+              {categoryOptions.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+            <select
+              value={selectedSubcategory}
+              onChange={e => setSelectedSubcategory(e.target.value)}
+              className="p-2 border rounded"
+            >
+              <option value="all">All Subcategories</option>
+              {subcategoryOptions.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedSubcategory('all')}
+              className={`req-tag ${selectedSubcategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+            >
+              All Tracks
+            </button>
+            {subcategoryOptions.map(sub => (
+              <button
+                key={sub}
+                onClick={() => setSelectedSubcategory(sub)}
+                className={`req-tag ${selectedSubcategory === sub ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
+
+          {filteredRecommendations.length > 0 ? (
             <div className="glass p-6 mb-4">
               <h3 className="font-bold text-lg mb-4">Jobs matched to your profile (sorted by match score)</h3>
               <div className="overflow-x-auto">
@@ -305,7 +343,7 @@ export default function Careers() {
                     </tr>
                   </thead>
                   <tbody>
-                    {recommendations.map(({ job: j, breakdown }) => {
+                    {filteredRecommendations.map(({ job: j, breakdown }) => {
                       const domain = resolveDomainKey(`${j.subcat || ''} ${j.cat || ''}`)
                       const eligibility = getJobEligibility(state, j)
                       const edMet = eligibility.educationMet
@@ -457,7 +495,7 @@ export default function Careers() {
       {view === 'all' && (
         <>
           {/* Sort Controls */}
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <label className="text-sm font-bold text-slate-500">Sort:</label>
             <select value={sort} onChange={e => setSort(e.target.value as SortKey)} className="p-2 border rounded">
               <option value="best-match">Best Match</option>
@@ -469,10 +507,62 @@ export default function Careers() {
               <option value="highest-edu">Highest Education Req</option>
               <option value="lowest-edu">Lowest Education Req</option>
             </select>
+
+            <label className="text-sm font-bold text-slate-500 ml-2">Category:</label>
+            <select
+              value={selectedCategory}
+              onChange={e => {
+                setSelectedCategory(e.target.value)
+                setSelectedSubcategory('all')
+              }}
+              className="p-2 border rounded"
+            >
+              <option value="all">All Categories</option>
+              {categoryOptions.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+            <select
+              value={selectedSubcategory}
+              onChange={e => setSelectedSubcategory(e.target.value)}
+              className="p-2 border rounded"
+            >
+              <option value="all">All Subcategories</option>
+              {subcategoryOptions.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            {sortedJobs.map((j: Job) => {
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedSubcategory('all')}
+              className={`req-tag ${selectedSubcategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+            >
+              All Tracks
+            </button>
+            {subcategoryOptions.map(sub => (
+              <button
+                key={sub}
+                onClick={() => setSelectedSubcategory(sub)}
+                className={`req-tag ${selectedSubcategory === sub ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-5">
+            {groupedJobs.map(([groupName, jobs]) => (
+              <div key={groupName} className="glass p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800">{groupName}</h4>
+                  <span className="text-xs text-slate-500 font-bold uppercase">{jobs.length} jobs</span>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+            {jobs.map((j: Job) => {
               const domain = resolveDomainKey(`${j.subcat || ''} ${j.cat || ''}`)
               const eligibility = getJobEligibility(state, j)
               const edMet = eligibility.educationMet
@@ -519,6 +609,15 @@ export default function Careers() {
                 </div>
               )
             })}
+                </div>
+              </div>
+            ))}
+
+            {groupedJobs.length === 0 && (
+              <div className="glass p-6 text-center text-slate-600">
+                No jobs match this category/subcategory filter.
+              </div>
+            )}
           </div>
         </>
       )}

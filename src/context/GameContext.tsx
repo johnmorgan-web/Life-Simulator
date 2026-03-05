@@ -23,64 +23,73 @@ function getRegisteredUserCount() {
 }
 
 function capacityScaleForUsers(registeredUsers: number) {
-	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 4x.
-	return Math.min(4, Math.max(1, 0.7 + registeredUsers * 0.3))
+	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 2x.
+	return Math.min(2, Math.max(1, 0.7 + registeredUsers * 0.3))
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
 
-function courseSubcategory(courseName: string, type: 'degree' | 'cert' = 'cert') {
-	const n = courseName.toLowerCase()
-	if (type === 'degree') {
-		if (hasAnyKeyword(n, ['medical', 'dental', 'veterinary', 'pharmacy'])) return 'Health Degrees'
-		if (hasAnyKeyword(n, ['law'])) return 'Law Degrees'
-		if (hasAnyKeyword(n, ['flight', 'military'])) return 'Service Degrees'
-		if (hasAnyKeyword(n, ['coding', 'mba'])) return 'Career Degrees'
-		return 'Academic Degrees'
+function explicitExperienceRequirement(jobTitle: string) {
+	const ladders: Record<string, { roles: string[]; minMonths: number }> = {
+		'Pilot': { roles: ['Air Traffic Controller', 'Military Pilot'], minMonths: 24 },
+		'Airline Pilot': { roles: ['Pilot', 'Military Pilot'], minMonths: 36 },
+		'Military Pilot': { roles: ['Air Force Airman', 'Navy Seaman'], minMonths: 18 },
+		'Surgeon': { roles: ['Physician', 'Registered Nurse'], minMonths: 36 },
+		'Physician': { roles: ['Registered Nurse', 'Medical Assistant'], minMonths: 36 },
+		'Lawyer': { roles: ['Paralegal', 'Court Clerk'], minMonths: 24 },
+		'Corporate Lawyer': { roles: ['Lawyer'], minMonths: 48 },
+		'Software Architect': { roles: ['Software Dev', 'Software Tester'], minMonths: 24 },
+		'Data Scientist': { roles: ['Data Analyst'], minMonths: 18 },
+		'AI Researcher': { roles: ['Data Scientist', 'Research Scientist'], minMonths: 18 },
+		'Investment Banker': { roles: ['Financial Analyst', 'Accountant'], minMonths: 18 },
+		'University Professor': { roles: ['Lab Researcher', 'Research Scientist'], minMonths: 36 }
 	}
-
-	if (hasAnyKeyword(n, ['aws', 'cloud', 'comptia', 'cyber', 'software', 'web', 'data', 'it'])) return 'Technology'
-	if (hasAnyKeyword(n, ['medical', 'nursing', 'dental', 'pharmacy', 'therapy', 'veterinary', 'radiologic', 'x-ray', 'surgical'])) return 'Healthcare'
-	if (hasAnyKeyword(n, ['financial', 'account', 'finance', 'tax', 'supply chain', 'project management', 'sales', 'human resources'])) return 'Business'
-	if (hasAnyKeyword(n, ['construction', 'electric', 'hvac', 'plumbing', 'welder', 'osha', 'safety', 'auto service'])) return 'Trades'
-	if (hasAnyKeyword(n, ['military', 'infantry', 'asvab', 'combat', 'warfare', 'special forces'])) return 'Military'
-	if (hasAnyKeyword(n, ['legal', 'paralegal', 'court', 'justice'])) return 'Legal & Public Safety'
-	if (hasAnyKeyword(n, ['teacher', 'education', 'counselor'])) return 'Education & Counseling'
-	if (hasAnyKeyword(n, ['pilot', 'air traffic', 'rotorcraft'])) return 'Aviation'
-	return 'General Skills'
+	return ladders[jobTitle] || null
 }
 
-function jobSubcategory(job: Job) {
-	const title = (job.title || '').toLowerCase()
-	const cert = (job.certReq || '').toLowerCase()
-	const req = (job.req || '').toLowerCase()
+function roleFamilyKeywords(title: string): string[] {
+	const t = title.toLowerCase()
+	if (hasAnyKeyword(t, ['pilot', 'air'])) return ['pilot', 'air', 'aviation', 'air force']
+	if (hasAnyKeyword(t, ['doctor', 'surgeon', 'nurse', 'physician'])) return ['doctor', 'surgeon', 'nurse', 'medical', 'physician']
+	if (hasAnyKeyword(t, ['lawyer', 'court', 'legal'])) return ['lawyer', 'court', 'legal', 'paralegal']
+	if (hasAnyKeyword(t, ['software', 'data', 'ai', 'architect'])) return ['software', 'data', 'ai', 'it']
+	if (hasAnyKeyword(t, ['finance', 'bank', 'account', 'advisor'])) return ['finance', 'bank', 'account', 'advisor']
+	if (hasAnyKeyword(t, ['engineer', 'architect'])) return ['engineer', 'architect']
+	return []
+}
 
-	if (job.cat === 'Military') {
-		if (hasAnyKeyword(title, ['pilot', 'aviation', 'air force'])) return 'Aviation & Flight Ops'
-		if (hasAnyKeyword(title, ['medic', 'doctor', 'nurse'])) return 'Medical Corps'
-		if (hasAnyKeyword(title, ['intel', 'cyber', 'analyst'])) return 'Intelligence & Cyber'
-		if (hasAnyKeyword(title, ['police', 'lawyer'])) return 'Security & Legal'
-		return 'Combat & Operations'
-	}
+const CERT_ALIASES: Record<string, string> = {
+	'Content Marketing': 'Public Relations',
+	'Special Operations': 'Special Forces',
+	'Civil Engineering': 'Construction Management',
+	'Welding': 'Welder',
+	'Massage Therapy': 'Massage Therapist',
+	'Physical Therapy': 'Physical Therapy Assistant',
+	'Occupational Therapy': 'Occupational Therapy Assistant',
+	'Personal Care Aide': 'Certified Nursing Assistant',
+	'Home Health Aide': 'Certified Nursing Assistant',
+	'Nursing Assistant': 'Certified Nursing Assistant',
+	'Dental Hygienist': 'Dental Assist',
+	'Radiologic Tech': 'Radiologic Technology',
+	'Business Analysis': 'Project Management',
+	'Financial Analyst': 'Financial Analysis',
+	'Medical Research': 'Medical Laboratory Scientist',
+	'Psychology': 'Mental Health Counselor',
+	'Artificial Intelligence': 'Data Science'
+}
 
-	if (hasAnyKeyword(title + ' ' + cert, ['software', 'data', 'web', 'cloud', 'cyber', 'it', 'ai'])) return 'Technology'
-	if (hasAnyKeyword(title + ' ' + cert + ' ' + req, ['nurse', 'doctor', 'surgeon', 'medical', 'therapist', 'dental', 'veterinary', 'pharmacy'])) return 'Healthcare'
-	if (hasAnyKeyword(title + ' ' + cert, ['account', 'financial', 'bank', 'advisor', 'investment'])) return 'Finance'
-	if (hasAnyKeyword(title + ' ' + cert, ['engineer', 'architect', 'construction', 'mechanic', 'electric', 'hvac', 'plumber', 'welder', 'operator'])) return 'Engineering & Trades'
-	if (hasAnyKeyword(title + ' ' + cert, ['lawyer', 'legal', 'court', 'investigator', 'police', 'officer'])) return 'Legal & Public Safety'
-	if (hasAnyKeyword(title + ' ' + cert, ['teacher', 'professor', 'social worker', 'counselor'])) return 'Education & Social Services'
-	if (hasAnyKeyword(title + ' ' + cert, ['driver', 'logistics', 'supply chain', 'warehouse', 'delivery', 'mail'])) return 'Logistics & Transport'
-	if (hasAnyKeyword(title + ' ' + cert, ['food', 'chef', 'bartender', 'retail', 'customer', 'hotel', 'housekeeper'])) return 'Service & Hospitality'
-	if (hasAnyKeyword(title + ' ' + cert, ['marketing', 'sales', 'publicist', 'writer', 'designer', 'director', 'athlete'])) return 'Creative & Commercial'
-	return job.cat === 'Entry' ? 'General Labor' : 'General Professional'
+const REQUIREMENT_ALIASES: Record<string, string> = {
+	'Veterinary School': 'Bachelors Degree',
+	'Pharmacy School': 'Bachelors Degree',
+	'Dental School': 'Bachelors Degree'
 }
 
 function capacityForJob(job: Job, rankInTrack: number) {
 	const baseByCategory: Record<string, number> = {
-		Entry: 240,
-		Skilled: 140,
-		Military: 90,
-		Pro: 70
+		Entry: 60,
+		Skilled: 35,
+		Military: 25,
+		Pro: 15
 	}
 	const base = baseByCategory[job.cat || 'Pro'] || 80
 	const drop = Math.min(55, rankInTrack * 12)
@@ -99,21 +108,53 @@ function buildAcademyCatalog() {
 		return {
 			...course,
 			category: type === 'degree' ? 'Degree Programs' : 'Certification Programs',
-			subcategory: courseSubcategory(course.n, type)
+			subcategory: course.subcategory || (type === 'degree' ? 'Academic Degrees' : 'General Skills')
 		}
 	})
 }
 
 function buildProgressiveJobBoard() {
+	const academyCredentialSet = new Set(rawAcademyCourses.map(c => c.n))
+	const jobTitleSet = new Set(rawJobBoard.map(j => j.title))
+
 	const enriched = rawJobBoard.map(job => ({
 		...job,
-		subcat: jobSubcategory(job),
+		subcat: job.subcat || (job.cat === 'Entry' ? 'General Labor' : 'General Professional'),
 		expReq: null,
-		capacity: 10
+		capacity: 10,
+		roleReqFromReq: null as string | null
 	}))
 
+	for (const job of enriched as any[]) {
+		// Normalize certification requirement names to known academy credentials.
+		if (job.certReq) {
+			if (!academyCredentialSet.has(job.certReq) && CERT_ALIASES[job.certReq]) {
+				job.certReq = CERT_ALIASES[job.certReq]
+			}
+			if (!academyCredentialSet.has(job.certReq)) {
+				job.certReq = null
+			}
+		}
+
+		// Normalize requirement names and convert role requirements into experience gates.
+		if (job.req) {
+			if (!academyCredentialSet.has(job.req) && REQUIREMENT_ALIASES[job.req]) {
+				job.req = REQUIREMENT_ALIASES[job.req]
+			}
+
+			if (!academyCredentialSet.has(job.req) && jobTitleSet.has(job.req)) {
+				job.roleReqFromReq = job.req
+				job.req = null
+			}
+
+			if (job.req && !academyCredentialSet.has(job.req)) {
+				job.req = null
+			}
+		}
+	}
+
 	const groups: Record<string, Job[]> = {}
-	for (const job of enriched) {
+	for (const job of enriched as any[]) {
 		const key = `${job.cat || 'Unknown'}::${job.subcat || 'General'}`
 		groups[key] = groups[key] || []
 		groups[key].push(job)
@@ -121,15 +162,35 @@ function buildProgressiveJobBoard() {
 
 	Object.values(groups).forEach(group => {
 		group.sort((a, b) => a.base - b.base)
-		group.forEach((job, idx) => {
-			const prior = group.slice(Math.max(0, idx - 2), idx).map(j => j.title)
-			const hasExperienceGate = idx > 0 && job.cat !== 'Entry'
-			job.expReq = hasExperienceGate
-				? {
-					roles: prior.length ? prior : [group[Math.max(0, idx - 1)].title],
-					minMonths: idx >= 4 ? 12 : idx >= 2 ? 6 : 3
+		group.forEach((job: any, idx) => {
+			const explicit = explicitExperienceRequirement(job.title)
+			if (job.cat === 'Entry') {
+				job.expReq = null
+			} else if (job.roleReqFromReq) {
+				job.expReq = {
+					roles: [job.roleReqFromReq],
+					minMonths: explicit?.minMonths || (idx >= 4 ? 12 : idx >= 2 ? 6 : 3)
 				}
-				: null
+			} else if (explicit) {
+				job.expReq = explicit
+			} else if (idx > 0) {
+				const family = roleFamilyKeywords(job.title)
+				const priorInTrack = group.slice(0, idx)
+				const logicalPrior = family.length
+					? priorInTrack.filter(prev => hasAnyKeyword(prev.title.toLowerCase(), family))
+					: priorInTrack
+
+				const feederRoles = logicalPrior.slice(Math.max(0, logicalPrior.length - 2)).map(r => r.title)
+				job.expReq = feederRoles.length
+					? {
+						roles: feederRoles,
+						minMonths: idx >= 4 ? 12 : idx >= 2 ? 6 : 3
+					}
+					: null
+			} else {
+				job.expReq = null
+			}
+			delete job.roleReqFromReq
 			job.capacity = capacityForJob(job, idx)
 		})
 	})
@@ -677,7 +738,7 @@ function reducer(state: State, action: any) {
 					// Correct calculation
 					calculationStreak += 1
 					const streakBonus = Math.min(10, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
-					credit = Math.min(state.credit, credit + 2 + streakBonus)
+					credit = Math.min(850, credit + 2 + streakBonus)
 					if (calculationStreak % 1 === 0) {
 						logs.push({ date: `${state.month}/${state.year}`, msg: `✅ Calculation streak (${calculationStreak}) - credit +${2 + streakBonus} (${credit})` })
 					}
@@ -685,7 +746,7 @@ function reducer(state: State, action: any) {
 					// Incorrect calculation
 					const difference = Math.abs(newCheck - expectedCheck)
 					const penalty = Math.min(300, Math.ceil(difference / 10)) // Higher penalties for bigger errors
-					credit = Math.max(state.credit, credit - penalty)
+					credit = Math.max(300, credit - penalty)
 					calculationStreak = 0
 					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance, credit -${penalty} (${credit})` })
 				}
@@ -740,9 +801,14 @@ function reducer(state: State, action: any) {
 					updatedGarage[i] = { ...updatedGarage[i], monthsOnMarket }
 					const saleChance = Math.min(monthsOnMarket / 6, 0.8)
 					if (Math.random() < saleChance) {
-						const proceeds = g.listPrice || 0
+						const noPayoutSale = !!g.financed || g.condition === 'lease' || (g.monthsRemaining || 0) > 0
+						const proceeds = noPayoutSale ? 0 : (g.listPrice || 0)
 						vehicleSaleProceeds += proceeds
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `💰 Vehicle sold after ${monthsOnMarket} months: +$${proceeds.toLocaleString()}` })
+						if (noPayoutSale) {
+							logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🚗 Financed/leased vehicle sold after ${monthsOnMarket} months: no savings payout` })
+						} else {
+							logs.push({ date: `${nextMonth}/${nextYear}`, msg: `💰 Vehicle sold after ${monthsOnMarket} months: +$${proceeds.toLocaleString()}` })
+						}
 						// remove from garage
 						updatedGarage[i] = null as any
 					}

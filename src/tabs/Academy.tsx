@@ -1,4 +1,5 @@
 import { useGame } from '../context/GameContext'
+import { domainBadgeStyle, resolveDomainKey } from '../constants/domainColors.constants'
 
 export default function Academy() {
   const { state, dispatch, academyCourses } = useGame()
@@ -36,12 +37,20 @@ export default function Academy() {
     <div className="space-y-5">
       {Object.entries(groupedCourses as Record<string, any[]>).map(([groupName, courses]) => (
       <div key={groupName}>
+        {(() => {
+          const category = groupName.split(' / ')[0] || 'Programs'
+          const subcategory = groupName.split(' / ')[1] || 'General'
+          const domain = resolveDomainKey(`${category} ${subcategory}`)
+          return (
         <div className="subcat-banner mb-2">
-          <span className="category-pill">{groupName.split(' / ')[0] || 'Programs'}</span>
-          <span className="subcat-pill">{groupName.split(' / ')[1] || 'General'}</span>
+          <span className="category-pill" style={domainBadgeStyle(domain)}>{category}</span>
+          <span className="subcat-pill" style={domainBadgeStyle(domain)}>{subcategory}</span>
         </div>
+          )
+        })()}
         <div className="grid grid-cols-2 gap-4">
         {courses.map((e: any) => {
+        const domain = resolveDomainKey(`${e.category || ''} ${e.subcategory || ''}`)
         const has = state.credentials.includes(e.n)
         const inProgress = state.activeEdu === e.n
         const progress = Math.min(100, (state.eduProgress[e.n] || 0) / e.m * 100)
@@ -55,7 +64,7 @@ export default function Academy() {
               <h4 className="font-bold">{e.n}</h4>
             </div>
             <div className="subcat-banner mb-2">
-              <span className="subcat-pill">{e.subcategory || 'General'}</span>
+              <span className="subcat-pill" style={domainBadgeStyle(domain)}>{e.subcategory || 'General'}</span>
             </div>
             <p className="text-xs text-slate-500 mb-2">${e.c}/mo × {e.m} months</p>
             {statusMsg && <p className="text-[10px] text-amber-600 font-bold mb-2">{statusMsg}</p>}

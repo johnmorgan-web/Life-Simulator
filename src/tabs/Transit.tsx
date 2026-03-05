@@ -9,6 +9,12 @@ export default function Transit() {
   const [selectedCondition, setSelectedCondition] = useState<'new' | 'used' | 'lease'>('new')
   const [financingModal, setFinancingModal] = useState<any>(null)
   const [transitConfirm, setTransitConfirm] = useState<any>(null)
+  const FINANCE_DOWN_PAYMENT_RATE = 0.1
+  const FINANCE_MIN_DOWN_PAYMENT = 300
+
+  const getFinanceDownPayment = (price: number) => {
+    return Math.max(FINANCE_MIN_DOWN_PAYMENT, Math.round(price * FINANCE_DOWN_PAYMENT_RATE))
+  }
 
   const toTransitState = (optionName: string) => {
     const option = transitOptions.find((t: TransitOption) => t.n === optionName)
@@ -34,6 +40,11 @@ export default function Transit() {
     return currentTransit
   }
 
+  const isNonPayoutSaleVehicle = (vehicle: any) => {
+    if (!vehicle) return false
+    return !!vehicle.financed || vehicle.condition === 'lease' || (vehicle.monthsRemaining || 0) > 0
+  }
+
   // Get APR based on credit score
   const getAPR = () => {
     if (state.credit >= 750) return 0.06
@@ -51,10 +62,14 @@ export default function Transit() {
     }
     
     const price = condition === 'new' ? vehicle.newPrice : vehicle.usedPrice
-    const monthlyPayment = calculateMonthlyPayment(price, getAPR(), 60)
+    const downPayment = getFinanceDownPayment(price)
+    const financedPrincipal = Math.max(0, price - downPayment)
+    const monthlyPayment = calculateMonthlyPayment(financedPrincipal, getAPR(), 60)
+    const dueAtSigning = downPayment + monthlyPayment
     const canPayCash = state.save >= price || state.check >= price
+    const canFinance = state.check >= dueAtSigning
     
-    setFinancingModal({ vehicle, condition, price, monthlyPayment, canPayCash })
+    setFinancingModal({ vehicle, condition, price, downPayment, monthlyPayment, dueAtSigning, canPayCash, canFinance })
   }
 
   // Purchase vehicle handler - with financing choice
@@ -79,8 +94,48 @@ export default function Transit() {
         // Financing option
         const apr = getAPR()
         const term = vehicleDatabase.financingTerms.monthlyPaymentMonths
-        monthlyPayment = calculateMonthlyPayment((price * apr)/ term + price, apr, term)
+        const downPayment = getFinanceDownPayment(price)
+        const financedPrincipal = Math.max(0, price - downPayment)
+        monthlyPayment = calculateMonthlyPayment(financedPrincipal, apr, term)
         monthsRemaining = term
+
+        const dueAtSigning = downPayment + monthlyPayment
+        if (state.check < dueAtSigning) {
+          alert(`Insufficient checking balance to finance this vehicle. You need $${dueAtSigning.toLocaleString()} available in checking for down payment + first monthly payment.`)
+          return
+        }
+
+        const newCheck = Math.round((state.check - dueAtSigning) * 100) / 100
+        const newVehicle = {
+          id: `${vehicle.id}-${state.month}-${state.year}`,
+          vehicleId: vehicle.id,
+          vehicleName: vehicle.name,
+          condition,
+          purchasePrice: price,
+          purchaseMonth: state.month,
+          purchaseYear: state.year,
+          monthlyPayment,
+          monthsRemaining,
+          purchasedNew: condition === 'new',
+          for_sale: false,
+          currentValue: price,
+          financed: true,
+          downPayment,
+          dueAtSigning
+        }
+
+        dispatch({
+          type: 'SET_STATE',
+          payload: {
+            check: newCheck,
+            garage: [...garage, newVehicle],
+            ownsVehicle: state.ownsVehicle || newVehicle,
+            transit: syncTransitForGarage([...garage, newVehicle], state.transit),
+            pendingTransit: null
+          }
+        })
+        setFinancingModal(null)
+        return
       } else {
         // Cash payment - no financing
         monthlyPayment = 0
@@ -180,15 +235,16 @@ export default function Transit() {
     // Mark primary vehicle for sale
     if (!state.ownsVehicle) return
     const currentValue = calculateVehicleValue(state.ownsVehicle, state.month, state.year)
+    const listPrice = isNonPayoutSaleVehicle(state.ownsVehicle) ? 0 : currentValue
     // update in garage as well
-    const updatedGarage = (garage || []).map((g: any) => g.id === state.ownsVehicle.id ? { ...g, for_sale: true, listPrice: currentValue, monthsOnMarket: 0 } : g)
-    dispatch({ type: 'SET_STATE', payload: { garage: updatedGarage, ownsVehicle: { ...state.ownsVehicle, for_sale: true, listPrice: currentValue, monthsOnMarket: 0 } } })
+    const updatedGarage = (garage || []).map((g: any) => g.id === state.ownsVehicle.id ? { ...g, for_sale: true, listPrice, monthsOnMarket: 0 } : g)
+    dispatch({ type: 'SET_STATE', payload: { garage: updatedGarage, ownsVehicle: { ...state.ownsVehicle, for_sale: true, listPrice, monthsOnMarket: 0 } } })
   }
 
   // Complete sale handler
   const completeSale = () => {
     if (!state.ownsVehicle || !state.ownsVehicle.for_sale) return
-    const proceeds = state.ownsVehicle.listPrice || 0
+    const proceeds = isNonPayoutSaleVehicle(state.ownsVehicle) ? 0 : (state.ownsVehicle.listPrice || 0)
     const newSave = Math.round((state.save + proceeds) * 100) / 100
     // remove from garage
     const updatedGarage = (garage || []).filter((g: any) => g.id !== state.ownsVehicle.id)
@@ -212,14 +268,15 @@ export default function Transit() {
     const v = garage.find((g: any) => g.id === id)
     if (!v) return
     const currentValue = calculateVehicleValue(v, state.month, state.year)
-    const updatedGarage = (garage || []).map((g: any) => g.id === id ? { ...g, for_sale: true, listPrice: currentValue, monthsOnMarket: 0 } : g)
+    const listPrice = isNonPayoutSaleVehicle(v) ? 0 : currentValue
+    const updatedGarage = (garage || []).map((g: any) => g.id === id ? { ...g, for_sale: true, listPrice, monthsOnMarket: 0 } : g)
     dispatch({ type: 'SET_STATE', payload: { garage: updatedGarage } })
   }
 
   const completeGarageSale = (id: string) => {
     const v = garage.find((g: any) => g.id === id)
     if (!v || !v.for_sale) return
-    const proceeds = v.listPrice || 0
+    const proceeds = isNonPayoutSaleVehicle(v) ? 0 : (v.listPrice || 0)
     const newSave = Math.round((state.save + proceeds) * 100) / 100
     const updatedGarage = (garage || []).filter((g: any) => g.id !== id)
     // if sold was primary, update ownsVehicle
@@ -457,11 +514,18 @@ export default function Transit() {
             {(financingModal.condition !== 'lease' || true) && (
               <button
                 onClick={() => purchaseVehicle(financingModal.vehicle, financingModal.condition, true)}
-                className="w-full py-3 rounded bg-emerald-600 text-white font-bold"
+                disabled={!financingModal.canFinance}
+                className={`w-full py-3 rounded font-bold ${financingModal.canFinance ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-600 cursor-not-allowed'}`}
               >
                 📊 Finance 60 Months @ ${financingModal.monthlyPayment}/mo
               </button>
             )}
+
+            <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded">
+              <p><span className="font-bold">Due at signing:</span> ${financingModal.dueAtSigning?.toLocaleString?.() || financingModal.dueAtSigning}</p>
+              <p>Down payment: ${financingModal.downPayment?.toLocaleString?.() || financingModal.downPayment} + first payment: ${financingModal.monthlyPayment}</p>
+              {!financingModal.canFinance && <p className="text-rose-600 font-bold mt-1">Need more checking balance to finance this vehicle.</p>}
+            </div>
 
             <button
               onClick={() => setFinancingModal(null)}
