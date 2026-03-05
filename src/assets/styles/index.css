@@ -49,6 +49,45 @@ body {
 	text-transform: uppercase;
 }
 
+.subcat-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 800;
+	line-height: 1;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	border: 1px solid #0369a1;
+	background: #e0f2fe;
+	color: #075985;
+}
+
+.category-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 800;
+	line-height: 1;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	border: 1px solid #334155;
+	background: #f1f5f9;
+	color: #0f172a;
+}
+
+.subcat-banner {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	flex-wrap: wrap;
+}
+
 /* Keep tab content width stable to avoid page shift when switching tabs */
 .tab-panel {
 	/* prevent long content from expanding page width */
