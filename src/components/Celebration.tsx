@@ -23,7 +23,7 @@ const celebrationMessages: CelebrationMessage = {
   'debt-paid-off': '💳 That much closer to financial freedom, a loan has been paid off!',
   'promotion': '🚀 Promotion unlocked! More pay, more pressure, more options.',
   'job-accepted': '✅ You just accepted a new job! Hopefully the people here are cooler...',
-  'rainbow': '🌈 Your therapist helped you see some color in the chaos this month.'
+  'rainbow': '🌈 Everything is working out for you.'
 }
 
 export default function Celebration({ event, onComplete }: { event: CelebrationEvent | null; onComplete: () => void }) {
