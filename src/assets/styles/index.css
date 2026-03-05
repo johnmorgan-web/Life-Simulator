@@ -88,6 +88,26 @@ body {
 	flex-wrap: wrap;
 }
 
+@keyframes tierFlashEmerald {
+	0% { color: #065f46; text-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+	50% { color: #047857; text-shadow: 0 0 14px rgba(16, 185, 129, 0.95); }
+	100% { color: #065f46; text-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes tierFlashSky {
+	0% { color: #075985; text-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+	50% { color: #0369a1; text-shadow: 0 0 14px rgba(59, 130, 246, 0.95); }
+	100% { color: #075985; text-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.tier-flash-emerald {
+	animation: tierFlashEmerald 0.45s ease-in-out;
+}
+
+.tier-flash-sky {
+	animation: tierFlashSky 0.45s ease-in-out;
+}
+
 /* Keep tab content width stable to avoid page shift when switching tabs */
 .tab-panel {
 	/* prevent long content from expanding page width */

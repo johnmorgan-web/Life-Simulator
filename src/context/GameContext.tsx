@@ -272,6 +272,96 @@ function getJobEligibility(state: State, job: Job) {
 const academyCourses = buildAcademyCatalog()
 const jobBoard = buildProgressiveJobBoard()
 
+function round2(value: number) {
+	return Math.round(value * 100) / 100
+}
+
+function hashString(value: string) {
+	let hash = 0
+	for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0
+	return hash
+}
+
+function entertainmentCapForSalary(job: any, city: any) {
+	const netSalary = Math.max(0, (job?.base || 0) * (city?.p || 1) * 0.8)
+	return round2(netSalary * 0.15)
+}
+
+function normalizeEntertainmentBudgets(entertainment: number, subscription: number, cap: number) {
+	let entertainmentBudget = Math.max(0, entertainment || 0)
+	let subscriptionBudget = Math.max(0, subscription || 0)
+	// Each category has its own 15% net-salary cap.
+	entertainmentBudget = Math.min(entertainmentBudget, cap)
+	subscriptionBudget = Math.min(subscriptionBudget, cap)
+	return {
+		entertainmentBudget: round2(entertainmentBudget),
+		subscriptionBudget: round2(subscriptionBudget)
+	}
+}
+
+function autoAdjustEntertainmentBudgets(
+	entertainment: number,
+	subscription: number,
+	year: number,
+	month: number,
+	jobTitle: string,
+	cityName: string,
+	cap: number
+) {
+	if ((entertainment || 0) <= 0 && (subscription || 0) <= 0) {
+		return { entertainmentBudget: 0, subscriptionBudget: 0 }
+	}
+	const seedBase = `${year}-${month}-${jobTitle}-${cityName}`
+	const entRnd = mulberry32(hashString(`${seedBase}-ent`))()
+	const subRnd = mulberry32(hashString(`${seedBase}-sub`))()
+	const entFactor = 0.92 + entRnd * 0.18
+	const subFactor = 0.92 + subRnd * 0.18
+	const adjustedEntertainment = round2(Math.max(0, (entertainment || 0) * entFactor))
+	const adjustedSubscription = round2(Math.max(0, (subscription || 0) * subFactor))
+	return normalizeEntertainmentBudgets(adjustedEntertainment, adjustedSubscription, cap)
+}
+
+function comfortableEntertainmentDefaults(job: any, city: any) {
+	const netSalary = Math.max(0, (job?.base || 0) * (city?.p || 1) * 0.8)
+	const targetTotal = round2(netSalary * 0.09)
+	return {
+		entertainmentSpending: round2(targetTotal * 0.65),
+		subscriptionEntertainmentSpending: round2(targetTotal * 0.35)
+	}
+}
+
+function subscriptionBadgeMilestones() {
+	return [
+		{ months: 3, id: 'sub-3', name: 'Binge Apprentice', icon: '📺' },
+		{ months: 6, id: 'sub-6', name: 'Fancy Pants Club Member', icon: '🎩' },
+		{ months: 12, id: 'sub-12', name: 'Streaming Sensei', icon: '🎖️' },
+		{ months: 24, id: 'sub-24', name: 'Legendary Subscription Overlord', icon: '👑' }
+	]
+}
+
+function entertainmentHostCount(budget: number) {
+	const thresholds = [30, 75, 100, 140, 220, 1200, 5000, 12000, 25000, 50000, 90000, 150000]
+	let count = 0
+	for (const t of thresholds) {
+		if (budget >= t) count += 1
+	}
+	return count
+}
+
+function ticketStubForHostCount(hostCount: number) {
+	if (hostCount >= 12) return { title: 'Lunar Theme Park Buyout', icon: '🌕' }
+	if (hostCount >= 11) return { title: 'Orbital Zero-Gravity Party', icon: '🛰️' }
+	if (hostCount >= 10) return { title: 'Cruise Ship Esports Festival', icon: '🛳️' }
+	if (hostCount >= 9) return { title: 'Private Island Weekend Carnival', icon: '🏝️' }
+	if (hostCount >= 8) return { title: 'Stadium Fireworks Spectacular', icon: '🎆' }
+	if (hostCount >= 7) return { title: 'Desert Supercar Treasure Rally', icon: '🏎️' }
+	if (hostCount >= 6) return { title: 'Chartered Yacht Game Night', icon: '🛥️' }
+	if (hostCount >= 5) return { title: 'Private Theme Park After-Hours', icon: '🎢' }
+	if (hostCount >= 4) return { title: 'Ballpark Gaming Takeover', icon: '🏟️' }
+	if (hostCount >= 3) return { title: 'VIP Laser Tag Bracket', icon: '🔫' }
+	return { title: 'Arcade + Pizza Night', icon: '🕹️' }
+}
+
 const initializeEduProgress = () => {
 	const progress: any = {}
 	academyCourses.forEach(course => {
@@ -318,8 +408,14 @@ const initialState: State = {
 		trainer: false,
 		concierge: false
 	},
-	entertainmentSpending: 0, // How much user spends on entertainment per month
-	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | null,
+	entertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).entertainmentSpending,
+	subscriptionEntertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).subscriptionEntertainmentSpending,
+	subscriptionStreakMonths: 0,
+	subscriptionBadges: [] as any[],
+	entertainmentTicketStubs: [] as any[],
+	happiness: 70,
+	workPenaltyPercent: 0,
+	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'rainbow' | null,
 	// Credit tracking
 	paymentStreak: 0, // Consecutive on-time payments
 	calculationStreak: 0, // Consecutive correct balance checks
@@ -767,6 +863,7 @@ function reducer(state: State, action: any) {
 
 			// Calculate vehicle costs before checking calculation
 			let vehicleCosts = 0
+			const chauffeurHired = !!state.luxuryServices?.chauffer
 			let ownsVehicle = state.ownsVehicle
 			let vehicleSaleProceeds = 0
 			const logs = [...state.logs]
@@ -783,9 +880,11 @@ function reducer(state: State, action: any) {
 				if (g.monthsRemaining > 0) {
 					vehicleCosts += g.monthlyPayment
 				}
-				// Gas and maintenance
-				vehicleCosts += calculateMonthlyGasCost(g)
-				vehicleCosts += calculateMonthlyMaintenanceCost(g, state.month, state.year)
+				// Gas and maintenance (chauffeur service covers these running costs)
+				if (!chauffeurHired) {
+					vehicleCosts += calculateMonthlyGasCost(g)
+					vehicleCosts += calculateMonthlyMaintenanceCost(g, state.month, state.year)
+				}
 
 				// Decrement months remaining if financing
 				if (g.monthsRemaining > 0) {
@@ -820,6 +919,10 @@ function reducer(state: State, action: any) {
 			// If primary vehicle was removed, update ownsVehicle
 			if (ownsVehicle && !updatedGarage.find((g: any) => g.id === ownsVehicle.id)) {
 				ownsVehicle = updatedGarage.length > 0 ? updatedGarage[0] : null
+			} else if (ownsVehicle) {
+				// Keep primary vehicle in sync with monthly loan/sale updates stored in garage.
+				const refreshedPrimary = updatedGarage.find((g: any) => g.id === ownsVehicle.id)
+				if (refreshedPrimary) ownsVehicle = refreshedPrimary
 			}
 
 			const check = fix(state.check - (paySave + payDebt + vehicleCosts))
@@ -835,7 +938,7 @@ function reducer(state: State, action: any) {
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
-			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | null
+			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'rainbow' | null
 			
 			// Credit tracking
 			let credit = state.credit
@@ -1043,6 +1146,127 @@ function reducer(state: State, action: any) {
 				}
 			}
 
+			const nextEntertainmentBudgets = autoAdjustEntertainmentBudgets(
+				state.entertainmentSpending || 0,
+				state.subscriptionEntertainmentSpending || 0,
+				nextYear,
+				nextMonth,
+				updatedJob.title,
+				city.name,
+				entertainmentCapForSalary(updatedJob, city)
+			)
+
+			const currentMonthEntertainmentBudgets = autoAdjustEntertainmentBudgets(
+				state.entertainmentSpending || 0,
+				state.subscriptionEntertainmentSpending || 0,
+				state.year,
+				state.month,
+				job.title,
+				state.city.name,
+				entertainmentCapForSalary(job, state.city)
+			)
+
+			let nextSubscriptionStreakMonths = (state.subscriptionStreakMonths || 0)
+			if ((currentMonthEntertainmentBudgets.subscriptionBudget || 0) > 0) {
+				nextSubscriptionStreakMonths += 1
+			} else {
+				nextSubscriptionStreakMonths = 0
+			}
+
+			const nextSubscriptionBadges = [...(state.subscriptionBadges || [])]
+			for (const milestone of subscriptionBadgeMilestones()) {
+				if (nextSubscriptionStreakMonths >= milestone.months && !nextSubscriptionBadges.some((b: any) => b.id === milestone.id)) {
+					nextSubscriptionBadges.push({
+						id: milestone.id,
+						name: milestone.name,
+						icon: milestone.icon,
+						months: milestone.months,
+						awardedMonth: nextMonth,
+						awardedYear: nextYear
+					})
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `${milestone.icon} Badge earned: ${milestone.name} (${milestone.months} month subscription streak)` })
+				}
+			}
+
+			const hostCount = entertainmentHostCount(currentMonthEntertainmentBudgets.entertainmentBudget || 0)
+			const wentIntoDebtThisMonth = debtBefore <= 0 && newDebt > 0
+			let nextEntertainmentTicketStubs = [...(state.entertainmentTicketStubs || [])]
+			if (hostCount >= 2 && !wentIntoDebtThisMonth) {
+				const stub = ticketStubForHostCount(hostCount)
+				nextEntertainmentTicketStubs.unshift({
+					id: `stub-${nextYear}-${nextMonth}-${hostCount}`,
+					title: stub.title,
+					icon: stub.icon,
+					hostedCount: hostCount,
+					month: nextMonth,
+					year: nextYear
+				})
+				nextEntertainmentTicketStubs = nextEntertainmentTicketStubs.slice(0, 24)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `${stub.icon} Ticket stub collected: ${stub.title} (hosted ${hostCount} entertainment events)` })
+			} else if (hostCount >= 2 && wentIntoDebtThisMonth) {
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🎟️ Ticket stub not awarded: entertainment spending pushed you into debt this month.` })
+			}
+
+			const monthsSinceVehiclePurchase = (() => {
+				if (!updatedGarage.length) return Number.MAX_SAFE_INTEGER
+				let best = Number.MAX_SAFE_INTEGER
+				for (const g of updatedGarage) {
+					if (typeof g.purchaseMonth !== 'number' || typeof g.purchaseYear !== 'number') continue
+					const months = (nextYear - g.purchaseYear) * 12 + (nextMonth - g.purchaseMonth)
+					if (months < best) best = months
+				}
+				return best
+			})()
+
+			const netMonthlyIncome = Math.max(0, updatedJob.base * city.p * 0.8)
+			const luxuryDiscretionary =
+				(state.luxuryServices?.chef ? 5250 : 0) +
+				(state.luxuryServices?.housekeeper ? 2000 : 0) +
+				(state.luxuryServices?.chauffer ? 3500 : 0) +
+				(state.luxuryServices?.therapist ? 2500 : 0) +
+				(state.luxuryServices?.trainer ? 1500 : 0) +
+				(state.luxuryServices?.concierge ? 3000 : 0)
+			const discretionarySpend = (nextEntertainmentBudgets.entertainmentBudget || 0) + (nextEntertainmentBudgets.subscriptionBudget || 0) + luxuryDiscretionary
+			let happinessDelta = 0
+
+			if (newDebt > 0) happinessDelta -= 5
+			if (tenure >= 12 && netMonthlyIncome < 3200) happinessDelta -= 4
+			if (netMonthlyIncome >= 10000) happinessDelta -= 2
+			if (netMonthlyIncome >= 20000) happinessDelta -= 2
+			if (monthsSinceVehiclePurchase > 6) happinessDelta -= 3
+			if (discretionarySpend < netMonthlyIncome * 0.03) happinessDelta -= 2
+
+			if (state.luxuryServices?.housekeeper) happinessDelta += 2
+			if (state.luxuryServices?.concierge) happinessDelta += 3
+			if (state.luxuryServices?.trainer) happinessDelta += 1
+			if (state.luxuryServices?.therapist) happinessDelta += 1
+
+			const nextHappiness = Math.max(0, Math.min(100, Math.round((state.happiness ?? 70) + happinessDelta)))
+
+			const workRiskBase = 0.12
+			const debtRisk = newDebt > 0 ? 0.06 : 0
+			const lowHappinessRisk = nextHappiness < 45 ? 0.08 : nextHappiness < 60 ? 0.04 : 0
+			const trainerRelief = state.luxuryServices?.trainer ? 0.07 : 0
+			const missWorkRisk = Math.max(0.01, Math.min(0.35, workRiskBase + debtRisk + lowHappinessRisk - trainerRelief))
+
+			const workSeed = hashString(`${nextYear}-${nextMonth}-${updatedJob.title}-${city.name}-work`)
+			const workRoll = mulberry32(workSeed)()
+			let nextWorkPenaltyPercent = 0
+			if (workRoll < missWorkRisk) {
+				nextWorkPenaltyPercent = round2(0.06 + mulberry32(workSeed ^ 0x9e3779b9)() * 0.12)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Missed work this month. Next statement salary reduced by ${(nextWorkPenaltyPercent * 100).toFixed(1)}%` })
+			} else if (state.luxuryServices?.trainer) {
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: '💪 Personal trainer kept your consistency high this month.' })
+			}
+
+			if (state.luxuryServices?.therapist) {
+				const rainbowSeed = hashString(`${nextYear}-${nextMonth}-${updatedJob.title}-${city.name}-rainbow`)
+				if (mulberry32(rainbowSeed)() < 0.35) {
+					celebration = 'rainbow' as any
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: '🌈 Therapy breakthrough! A rainbow moment boosted your mood.' })
+				}
+			}
+
 			return {
 				...state,
 				check: resultingCheck,
@@ -1074,6 +1298,13 @@ function reducer(state: State, action: any) {
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
 				lastAutoBumpMonth: newLastAutoBumpMonth,
 				lastAutoBumpYear: newLastAutoBumpYear,
+				entertainmentSpending: nextEntertainmentBudgets.entertainmentBudget,
+				subscriptionEntertainmentSpending: nextEntertainmentBudgets.subscriptionBudget,
+				subscriptionStreakMonths: nextSubscriptionStreakMonths,
+				subscriptionBadges: nextSubscriptionBadges,
+				entertainmentTicketStubs: nextEntertainmentTicketStubs,
+				happiness: nextHappiness,
+				workPenaltyPercent: nextWorkPenaltyPercent,
 				celebration,
 				skippedPaymentThisMonth: false
 			}
@@ -1153,15 +1384,25 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		
 		// Get current job and calculate net salary
 		const job = state.pendingJob || state.job
+		const applyLedgerDecimalVariance = (amount: number, key: string) => {
+			if (amount <= 0) return 0
+			const seedText = `${state.year}-${state.month}-${state.city.name}-${job.title}-${key}`
+			let hash = 0
+			for (let i = 0; i < seedText.length; i++) hash = (hash * 31 + seedText.charCodeAt(i)) >>> 0
+			const offset = ((hash % 91) - 45) / 100 // deterministic +/- $0.45 variance
+			return fix(Math.max(0.01, amount + offset))
+		}
 		const grossSalary = fix(job.base * state.city.p)
-		const netSalary = fix(grossSalary * 0.8) // 80% after taxes
+		const baseNetSalary = fix(grossSalary * 0.8)
+		const workPenaltyPercent = Math.max(0, Math.min(0.35, state.workPenaltyPercent || 0))
+		const netSalary = applyLedgerDecimalVariance(fix(baseNetSalary * (1 - workPenaltyPercent)), 'net-salary') // 80% after taxes + attendance adjustment
 		
 		// INCOME
 		bal = fix(bal + netSalary)
-		ledger.push({ id: id++, desc: `Net Salary: ${job.title}`, amt: netSalary, type: 'inc', bal, done: false })
+		ledger.push({ id: id++, desc: `Net Salary: ${job.title}${workPenaltyPercent > 0 ? ` (${(workPenaltyPercent * 100).toFixed(1)}% attendance impact)` : ''}`, amt: netSalary, type: 'inc', bal, done: false })
 		
 		// HOUSING - Dynamic rent based on 30% of salary
-		const rent = fix(netSalary * gameValues.rentPercentOfSalary * state.city.r)
+		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
 		bal = fix(bal - rent)
 		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
 		
@@ -1169,14 +1410,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// If chauffeur hired, no gas/transit cost (chauffeur covers it)
 		if (!state.luxuryServices.chauffer) {
 			// Transit cost
-			bal = fix(bal - state.transit.cost)
-			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: state.transit.cost, type: 'out', bal, done: false })
+			const transitCost = applyLedgerDecimalVariance(state.transit.cost, `transit-${state.transit.name}`)
+			bal = fix(bal - transitCost)
+			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: transitCost, type: 'out', bal, done: false })
 			
 			// Gas cost (if not using L1 Walk/Bike and no vehicle owned - vehicle costs handled separately)
 			if (state.transit.level > 1 && !(state.garage && state.garage.length > 0)) {
 				const gas = variableCost(gameValues.gasCostPercentOfSalary * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
 				const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
-				const gasAndMaint = fix(gas + carMaint)
+				const gasAndMaint = applyLedgerDecimalVariance(fix(gas + carMaint), 'gas-maint-no-vehicle')
 				bal = fix(bal - gasAndMaint)
 				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
 			}
@@ -1187,28 +1429,51 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// UTILITIES & PHONE (utilities vary seasonally)
 		const utilities = variableCost(gameValues.utilitiesCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'utilities', state.city.name)
 		const phoneInternet = gameValues.phoneInternetBase
-		const totalUtilities = fix(utilities + phoneInternet)
+		const totalUtilities = applyLedgerDecimalVariance(fix(utilities + phoneInternet), 'utilities-phone')
 		bal = fix(bal - totalUtilities)
 		ledger.push({ id: id++, desc: 'Utilities & Phone/Internet', amt: totalUtilities, type: 'out', bal, done: false })
 		
 		// FOOD - If personal chef hired, no food costs (chef provides meals)
 		if (!state.luxuryServices.chef) {
-			const foodCost = variableCost(gameValues.FoodCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'food', state.city.name)
+			const foodCost = applyLedgerDecimalVariance(variableCost(gameValues.FoodCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'food', state.city.name), 'food')
 			bal = fix(bal - foodCost)
 			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
 		}
 		
 		// ENTERTAINMENT
-		if (state.entertainmentSpending > 0) {
-			const entertainmentCost = variableCost(state.entertainmentSpending, state.month, state.year, 1, 'entertainment', state.city.name)
+		const entertainmentCap = entertainmentCapForSalary(job, state.city)
+		const adjustedEntertainment = autoAdjustEntertainmentBudgets(
+			state.entertainmentSpending || 0,
+			state.subscriptionEntertainmentSpending || 0,
+			state.year,
+			state.month,
+			job.title,
+			state.city.name,
+			entertainmentCap
+		)
+
+		if (adjustedEntertainment.entertainmentBudget > 0) {
+			const entertainmentCost = applyLedgerDecimalVariance(
+				variableCost(adjustedEntertainment.entertainmentBudget, state.month, state.year, 1, 'entertainment', state.city.name),
+				'entertainment-general'
+			)
 			bal = fix(bal - entertainmentCost)
-			ledger.push({ id: id++, desc: 'Entertainment & Subscriptions', amt: entertainmentCost, type: 'out', bal, done: false })
+			ledger.push({ id: id++, desc: 'Entertainment', amt: entertainmentCost, type: 'out', bal, done: false })
+		}
+
+		if (adjustedEntertainment.subscriptionBudget > 0) {
+			const subscriptionCost = applyLedgerDecimalVariance(
+				variableCost(adjustedEntertainment.subscriptionBudget, state.month, state.year, 1, 'entertainment', `${state.city.name}-subs`),
+				'entertainment-subscriptions'
+			)
+			bal = fix(bal - subscriptionCost)
+			ledger.push({ id: id++, desc: 'Subscription Entertainment', amt: subscriptionCost, type: 'out', bal, done: false })
 		}
 		
 		// EDUCATION - If currently studying
 		if (state.activeEdu) {
 			const course = academyCourses.find(c => c.n === state.activeEdu)
-			const cost = course ? course.c : 1000
+			const cost = applyLedgerDecimalVariance(course ? course.c : 1000, `tuition-${state.activeEdu}`)
 			bal = fix(bal - cost)
 			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
 		}
@@ -1221,23 +1486,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 				// Loan payment
 				if (g.monthsRemaining > 0) {
-					const payment = g.monthlyPayment
+					const payment = applyLedgerDecimalVariance(g.monthlyPayment, `vehicle-payment-${g.id}`)
 					bal = fix(bal - payment)
 					ledger.push({ id: id++, desc: `Vehicle Loan Payment: ${g.vehicleName}`, amt: payment, type: 'out', bal, done: false })
 				}
 
-				// Monthly gas for this vehicle
-				const gasCost = calculateMonthlyGasCost(g)
-				if (gasCost > 0) {
-					bal = fix(bal - gasCost)
-					ledger.push({ id: id++, desc: `Gas: ${g.vehicleName}`, amt: gasCost, type: 'out', bal, done: false })
-				}
+				if (!state.luxuryServices.chauffer) {
+					// Monthly gas for this vehicle
+					const gasCost = calculateMonthlyGasCost(g)
+					if (gasCost > 0) {
+						const adjustedGasCost = applyLedgerDecimalVariance(gasCost, `vehicle-gas-${g.id}`)
+						bal = fix(bal - adjustedGasCost)
+						ledger.push({ id: id++, desc: `Gas: ${g.vehicleName}`, amt: adjustedGasCost, type: 'out', bal, done: false })
+					}
 
-				// Monthly maintenance for this vehicle
-				const maintCost = calculateMonthlyMaintenanceCost(g, state.month, state.year)
-				if (maintCost > 0) {
-					bal = fix(bal - maintCost)
-					ledger.push({ id: id++, desc: `Maintenance: ${g.vehicleName}`, amt: maintCost, type: 'out', bal, done: false })
+					// Monthly maintenance for this vehicle
+					const maintCost = calculateMonthlyMaintenanceCost(g, state.month, state.year)
+					if (maintCost > 0) {
+						const adjustedMaintCost = applyLedgerDecimalVariance(maintCost, `vehicle-maint-${g.id}`)
+						bal = fix(bal - adjustedMaintCost)
+						ledger.push({ id: id++, desc: `Maintenance: ${g.vehicleName}`, amt: adjustedMaintCost, type: 'out', bal, done: false })
+					}
 				}
 			})
 		}
@@ -1247,32 +1516,32 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const luxuryServicesList: string[] = []
 		
 		if (state.luxuryServices.chef) {
-			const chefCost = variableCost(gameValues.FoodCostPercentOfSalary * 15, state.month, state.year, state.city.p, 'food', state.city.name) // Personal chef scales with food costs
+			const chefCost = applyLedgerDecimalVariance(variableCost(gameValues.FoodCostPercentOfSalary * 15, state.month, state.year, state.city.p, 'food', state.city.name), 'luxury-chef') // Personal chef scales with food costs
 			luxuryCosts += chefCost
 			luxuryServicesList.push(`Chef: $${chefCost}`)
 		}
 		if (state.luxuryServices.housekeeper) {
-			const housekeeperCost = 2000
+			const housekeeperCost = applyLedgerDecimalVariance(2000, 'luxury-housekeeper')
 			luxuryCosts += housekeeperCost
 			luxuryServicesList.push(`Housekeeper: $${housekeeperCost}`)
 		}
 		if (state.luxuryServices.chauffer) {
-			const chauffeurCost = 3500
+			const chauffeurCost = applyLedgerDecimalVariance(3500, 'luxury-chauffeur')
 			luxuryCosts += chauffeurCost
 			luxuryServicesList.push(`Chauffeur: $${chauffeurCost}`)
 		}
 		if (state.luxuryServices.therapist) {
-			const therapistCost = 2500
+			const therapistCost = applyLedgerDecimalVariance(2500, 'luxury-therapist')
 			luxuryCosts += therapistCost
 			luxuryServicesList.push(`Therapist: $${therapistCost}`)
 		}
 		if (state.luxuryServices.trainer) {
-			const trainerCost = 1500
+			const trainerCost = applyLedgerDecimalVariance(1500, 'luxury-trainer')
 			luxuryCosts += trainerCost
 			luxuryServicesList.push(`Trainer: $${trainerCost}`)
 		}
 		if (state.luxuryServices.concierge) {
-			const conciergeCost = 3000
+			const conciergeCost = applyLedgerDecimalVariance(3000, 'luxury-concierge')
 			luxuryCosts += conciergeCost
 			luxuryServicesList.push(`Concierge: $${conciergeCost}`)
 		}
@@ -1424,6 +1693,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function newGame() {
+		const defaultBudgets = comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3])
 		const freshState = {
 			check: 1200.0,
 			save: 0,
@@ -1461,7 +1731,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				trainer: false,
 				concierge: false
 			},
-			entertainmentSpending: 0,
+			entertainmentSpending: defaultBudgets.entertainmentSpending,
+			subscriptionEntertainmentSpending: defaultBudgets.subscriptionEntertainmentSpending,
+			subscriptionStreakMonths: 0,
+			subscriptionBadges: [],
+			entertainmentTicketStubs: [],
+			happiness: 70,
+			workPenaltyPercent: 0,
 			celebration: null,
 			paymentStreak: 0,
 			calculationStreak: 0,
@@ -1488,7 +1764,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	function login(user: string, _password?: string) {
 		const data = loadStateForUser(user)
 		if (data) {
-			dispatch({ type: 'SET_STATE', payload: { ...data, currentUser: user } })
+			const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
+			dispatch({
+				type: 'SET_STATE',
+				payload: {
+					...data,
+					currentUser: user,
+					entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+					subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+					subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+					subscriptionBadges: data.subscriptionBadges ?? [],
+					entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+					happiness: data.happiness ?? 70,
+					workPenaltyPercent: data.workPenaltyPercent ?? 0
+				}
+			})
 			return true
 		}
 		// No save yet, create a new slot with current initial-like state but set currentUser
@@ -1501,7 +1791,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
 
-	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted') {
+	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'rainbow') {
 		dispatch({ type: 'TRIGGER_CELEBRATION', payload: event })
 		// Auto-clear after animation
 		setTimeout(() => {

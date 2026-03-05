@@ -7,7 +7,9 @@ export type CelebrationEvent =
   | 'certification'
   | 'car-paid-off'
   | 'debt-paid-off'
+  | 'promotion'
   | 'job-accepted'
+  | 'rainbow'
 
 type CelebrationMessage = {
   [key in CelebrationEvent]: string
@@ -19,7 +21,9 @@ const celebrationMessages: CelebrationMessage = {
   'certification': '📜 Those extra hours of studying have paid off! You have earned a new certification!',
   'car-paid-off': '🚗 Your ride just got paid off! Should you go car shopping?',
   'debt-paid-off': '💳 That much closer to financial freedom, a loan has been paid off!',
-  'job-accepted': '✅ You just accepted a new job! Hopefully the people here are cooler...'
+  'promotion': '🚀 Promotion unlocked! More pay, more pressure, more options.',
+  'job-accepted': '✅ You just accepted a new job! Hopefully the people here are cooler...',
+  'rainbow': '🌈 Your therapist helped you see some color in the chaos this month.'
 }
 
 export default function Celebration({ event, onComplete }: { event: CelebrationEvent | null; onComplete: () => void }) {

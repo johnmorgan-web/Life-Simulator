@@ -64,6 +64,16 @@ export default function Careers() {
   const [showNegotiationModal, setShowNegotiationModal] = useState(false)
   const [negotiationModifier, setNegotiationModifier] = useState(0)
 
+  const getRoleExperienceMonths = (roleTitle: string) => {
+    let months = 0
+    if (state.job?.title === roleTitle) months += state.tenure || 0
+    const history = Array.isArray(state.careerHistory) ? state.careerHistory : []
+    for (const role of history) {
+      if (role?.title === roleTitle) months += role?.months || 0
+    }
+    return months
+  }
+
   // Check if user can negotiate pay (6 month cooldown)
   const canNegotiatePay = useMemo(() => {
     if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return true
@@ -350,6 +360,13 @@ export default function Careers() {
                       const certMet = eligibility.certificationMet
                       const trMet = eligibility.transitMet
                       const expMet = eligibility.experienceMet
+                      const feederRoles = j.expReq?.roles || []
+                      const feederRequiredMonths = j.expReq?.minMonths || 0
+                      const feederProgress = feederRoles.map(role => ({ role, months: getRoleExperienceMonths(role) }))
+                      const bestFeeder = feederProgress.reduce(
+                        (best, current) => (current.months > best.months ? current : best),
+                        { role: 'N/A', months: 0 }
+                      )
                       const canApply = eligibility.canApply
                       const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
                       const currentPay = (state.job?.base || 0) * state.city.p * 0.8
@@ -451,15 +468,41 @@ export default function Careers() {
                               </div>
                             )}
                           </td>
-                          <td className="text-center py-3 px-3">
-                            <div className="font-bold text-slate-900">{breakdown.total}</div>
-                            <div className="text-xs text-slate-500">
-                              E:{breakdown.education > 0 ? '+' : ''}{breakdown.education} 
-                              {' '}C:{breakdown.certificate > 0 ? '+' : ''}{breakdown.certificate}
+                          <td className="text-center py-3 px-3 relative">
+                            <div
+                              onMouseEnter={() => setHoveredTooltip(`${j.title}-score`)}
+                              onMouseLeave={() => setHoveredTooltip(null)}
+                              className="cursor-help inline-block"
+                            >
+                              <div className="font-bold text-slate-900">{breakdown.total}</div>
+                              <div className="text-xs text-slate-500">
+                                E:{breakdown.education > 0 ? '+' : ''}{breakdown.education}
+                                {' '}C:{breakdown.certificate > 0 ? '+' : ''}{breakdown.certificate}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {expMet ? 'Exp OK' : 'Need feeder role'} · {eligibility.openings} openings
+                              </div>
                             </div>
-                            <div className="text-[10px] text-slate-500">
-                              {expMet ? 'Exp OK' : 'Need feeder role'} · {eligibility.openings} openings
-                            </div>
+                            {hoveredTooltip === `${j.title}-score` && (
+                              <div className="absolute z-10 bg-slate-900 text-white text-xs rounded p-2 bottom-full mb-2 left-1/2 transform -translate-x-1/2 min-w-[220px] text-left whitespace-normal">
+                                <div className="font-bold mb-1">Score Breakdown</div>
+                                <div>Education: {breakdown.education > 0 ? '+' : ''}{breakdown.education}</div>
+                                <div>Certificate: {breakdown.certificate > 0 ? '+' : ''}{breakdown.certificate}</div>
+                                <div>Transit: {breakdown.transit > 0 ? '+' : ''}{breakdown.transit}</div>
+                                <div>Pay Bump: +{breakdown.payBump}</div>
+                                <div className="mt-2 font-bold">Feeder Role</div>
+                                {feederRoles.length > 0 ? (
+                                  <>
+                                    <div>Roles: {feederRoles.join(' or ')}</div>
+                                    <div>Required: {feederRequiredMonths} months</div>
+                                    <div>Best Progress: {bestFeeder.role} ({bestFeeder.months} months)</div>
+                                  </>
+                                ) : (
+                                  <div>No feeder role required</div>
+                                )}
+                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-slate-900 border-t-slate-900 border-l-transparent border-r-transparent"></div>
+                              </div>
+                            )}
                           </td>
                           <td className="text-right py-3 px-3">
                             <button
