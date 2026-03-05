@@ -13,6 +13,20 @@ type State = any
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
+function getRegisteredUserCount() {
+	try {
+		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
+		return Math.max(1, Array.isArray(users) ? users.length : 1)
+	} catch (e) {
+		return 1
+	}
+}
+
+function capacityScaleForUsers(registeredUsers: number) {
+	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 4x.
+	return Math.min(4, Math.max(1, 0.7 + registeredUsers * 0.3))
+}
+
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
 
 function courseSubcategory(courseName: string, type: 'degree' | 'cert' = 'cert') {
@@ -125,8 +139,11 @@ function buildProgressiveJobBoard() {
 
 function initializeJobMarket(jobs: Job[]): JobMarketState {
 	const market: JobMarketState = {}
+	const registeredUsers = getRegisteredUserCount()
+	const scale = capacityScaleForUsers(registeredUsers)
 	for (const job of jobs) {
-		const capacity = job.capacity || 10
+		const baseCapacity = job.capacity || 10
+		const capacity = Math.max(1, Math.round(baseCapacity * scale))
 		const seed = titleSeed(job.title)
 		const fillRate = 0.65 + (seed % 30) / 100
 		let occupied = Math.floor(capacity * fillRate)
@@ -148,9 +165,19 @@ function getRoleExperienceMonths(state: State, roleTitle: string) {
 
 function getJobOpenings(state: State, job: Job) {
 	const slot = state.jobMarket?.[job.title]
-	const capacity = slot?.capacity ?? job.capacity ?? 1
-	const occupied = slot?.occupied ?? 0
-	return Math.max(0, capacity - occupied)
+	const registeredUsers = getRegisteredUserCount()
+	const scale = capacityScaleForUsers(registeredUsers)
+
+	// Job capacity generated from progression rank acts as the baseline.
+	const baseCapacity = job.capacity ?? slot?.capacity ?? 1
+	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * scale))
+
+	const storedCapacity = slot?.capacity ?? dynamicCapacity
+	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.75)
+	const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75
+	const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * occupiedRatio)))
+
+	return Math.max(0, dynamicCapacity - dynamicOccupied)
 }
 
 function getJobEligibility(state: State, job: Job) {

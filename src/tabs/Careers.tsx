@@ -2,6 +2,59 @@ import { useGame } from '../context/GameContext'
 import type { Job } from '../types/models.types'
 import { useMemo, useState } from 'react'
 
+type DomainKey =
+  | 'technology'
+  | 'healthcare'
+  | 'finance'
+  | 'engineering'
+  | 'legal'
+  | 'education'
+  | 'logistics'
+  | 'service'
+  | 'creative'
+  | 'military'
+  | 'general'
+
+type DomainTone = { bg: string; border: string; text: string }
+
+const DOMAIN_TONES: Record<DomainKey, DomainTone> = {
+  technology: { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
+  healthcare: { bg: '#dcfce7', border: '#86efac', text: '#166534' },
+  finance: { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
+  engineering: { bg: '#ffedd5', border: '#fdba74', text: '#9a3412' },
+  legal: { bg: '#e2e8f0', border: '#94a3b8', text: '#334155' },
+  education: { bg: '#cffafe', border: '#67e8f9', text: '#155e75' },
+  logistics: { bg: '#ecfccb', border: '#bef264', text: '#3f6212' },
+  service: { bg: '#ffe4e6', border: '#fda4af', text: '#9f1239' },
+  creative: { bg: '#fce7f3', border: '#f9a8d4', text: '#9d174d' },
+  military: { bg: '#fee2e2', border: '#fca5a5', text: '#991b1b' },
+  general: { bg: '#f1f5f9', border: '#cbd5e1', text: '#0f172a' }
+}
+
+function resolveDomainKey(label: string): DomainKey {
+  const value = label.toLowerCase()
+  if (value.includes('tech') || value.includes('cyber') || value.includes('intelligence')) return 'technology'
+  if (value.includes('health') || value.includes('medical') || value.includes('nurs')) return 'healthcare'
+  if (value.includes('finance') || value.includes('business')) return 'finance'
+  if (value.includes('engineer') || value.includes('trade') || value.includes('construction')) return 'engineering'
+  if (value.includes('legal') || value.includes('security') || value.includes('law')) return 'legal'
+  if (value.includes('education') || value.includes('social')) return 'education'
+  if (value.includes('logistics') || value.includes('transport') || value.includes('aviation')) return 'logistics'
+  if (value.includes('service') || value.includes('hospitality')) return 'service'
+  if (value.includes('creative') || value.includes('commercial')) return 'creative'
+  if (value.includes('military') || value.includes('combat')) return 'military'
+  return 'general'
+}
+
+function domainBadgeStyle(domain: DomainKey) {
+  const tone = DOMAIN_TONES[domain]
+  return {
+    backgroundColor: tone.bg,
+    borderColor: tone.border,
+    color: tone.text
+  }
+}
+
 type ScoreBreakdown = {
   total: number
   education: number
@@ -253,6 +306,7 @@ export default function Careers() {
                   </thead>
                   <tbody>
                     {recommendations.map(({ job: j, breakdown }) => {
+                      const domain = resolveDomainKey(`${j.subcat || ''} ${j.cat || ''}`)
                       const eligibility = getJobEligibility(state, j)
                       const edMet = eligibility.educationMet
                       const certMet = eligibility.certificationMet
@@ -270,7 +324,10 @@ export default function Careers() {
                           <td className="py-3 px-3">
                             <div className="font-bold text-slate-900">{j.title}</div>
                             <div className="text-xs text-slate-500">${Math.round(jobPay)}/mo</div>
-                            <div className="text-[10px] text-slate-400">{j.cat} / {j.subcat || 'General'}</div>
+                            <div className="subcat-banner">
+                              <span className="category-pill" style={domainBadgeStyle(domain)}>{j.cat || 'General'}</span>
+                              <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
+                            </div>
                           </td>
                           <td className="text-center py-3 px-3">
                             {payIncrease > 0 ? (
@@ -416,6 +473,7 @@ export default function Careers() {
 
           <div className="grid grid-cols-3 gap-4">
             {sortedJobs.map((j: Job) => {
+              const domain = resolveDomainKey(`${j.subcat || ''} ${j.cat || ''}`)
               const eligibility = getJobEligibility(state, j)
               const edMet = eligibility.educationMet
               const certMet = eligibility.certificationMet
@@ -429,7 +487,11 @@ export default function Careers() {
                 <div key={j.title} className={`glass p-5 ${!canApply ? 'card-locked' : ''} ${isCurrent ? 'card-active' : ''}`}>
                   <h4 className="font-bold text-sm">{j.title}</h4>
                   <p className="text-emerald-600 font-bold">${Math.round(j.base * state.city.p * 0.8)}/mo</p>
-                  <p className="text-[10px] text-slate-500 mt-1">{j.cat} / {j.subcat || 'General'} · {eligibility.openings} openings</p>
+                  <div className="subcat-banner mt-1">
+                    <span className="category-pill" style={domainBadgeStyle(domain)}>{j.cat || 'General'}</span>
+                    <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
+                    <span className="req-tag bg-sky-100 text-sky-700">{eligibility.openings} openings</span>
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <span className={`req-tag ${edMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{j.req || 'No Edu'}</span>
                     {j.certReq && <span className={`req-tag ${certMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{j.certReq}</span>}
@@ -439,9 +501,7 @@ export default function Careers() {
                         {j.expReq.minMonths}mo in {j.expReq.roles.join(' or ')}
                       </span>
                     )}
-                    <span className={`req-tag ${eligibility.capacityMet ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700'}`}>
-                      Openings {eligibility.openings}
-                    </span>
+                    <span className={`req-tag ${eligibility.capacityMet ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700'}`}>Capacity {eligibility.capacityMet ? 'Open' : 'Full'}</span>
                   </div>
                   <div className="mt-3">
                     {isCurrent ? (

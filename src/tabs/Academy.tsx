@@ -36,7 +36,10 @@ export default function Academy() {
     <div className="space-y-5">
       {Object.entries(groupedCourses as Record<string, any[]>).map(([groupName, courses]) => (
       <div key={groupName}>
-        <h3 className="text-sm font-bold text-slate-600 mb-2">{groupName}</h3>
+        <div className="subcat-banner mb-2">
+          <span className="category-pill">{groupName.split(' / ')[0] || 'Programs'}</span>
+          <span className="subcat-pill">{groupName.split(' / ')[1] || 'General'}</span>
+        </div>
         <div className="grid grid-cols-2 gap-4">
         {courses.map((e: any) => {
         const has = state.credentials.includes(e.n)
@@ -50,6 +53,9 @@ export default function Academy() {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xl">{e.icon}</span>
               <h4 className="font-bold">{e.n}</h4>
+            </div>
+            <div className="subcat-banner mb-2">
+              <span className="subcat-pill">{e.subcategory || 'General'}</span>
             </div>
             <p className="text-xs text-slate-500 mb-2">${e.c}/mo × {e.m} months</p>
             {statusMsg && <p className="text-[10px] text-amber-600 font-bold mb-2">{statusMsg}</p>}
