@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from './components/Header'
 import Nav from './components/Nav'
 import Celebration from './components/Celebration'
@@ -40,8 +40,33 @@ export function App() {
   )
 }
 
+function cursorEmojiFromState(state: any, vehicleDatabase: any) {
+  const owned = state.ownsVehicle
+  if (owned?.vehicleId) {
+    const vehicle = vehicleDatabase?.vehicles?.find((v: any) => v.id === owned.vehicleId)
+    if (vehicle?.icon) return vehicle.icon
+  }
+
+  const title = (state.job?.title || '').toLowerCase()
+  if (title.includes('doctor') || title.includes('nurse') || title.includes('medic')) return '🩺'
+  if (title.includes('lawyer') || title.includes('court')) return '⚖️'
+  if (title.includes('engineer') || title.includes('mechanic')) return '🔧'
+  if (title.includes('pilot') || title.includes('air')) return '✈️'
+  if (title.includes('soldier') || title.includes('military') || title.includes('army') || title.includes('marine')) return '🎖️'
+  if (title.includes('teacher') || title.includes('professor')) return '📚'
+  if (title.includes('software') || title.includes('data') || title.includes('it')) return '💻'
+  if (title.includes('chef') || title.includes('food')) return '🍽️'
+  if (title.includes('driver')) return '🚗'
+  return '💼'
+}
+
+function cursorDataUrl(emoji: string) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><text x='16' y='22' font-size='20' text-anchor='middle'>${emoji}</text></svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, auto`
+}
+
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase } = useGame()
   const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
@@ -59,6 +84,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   }
   
   const dynamicAPR = calculateDynamicAPR(state.credit)
+
+  useEffect(() => {
+    document.body.style.cursor = cursorDataUrl(cursorEmojiFromState(state, vehicleDatabase))
+    return () => {
+      document.body.style.cursor = 'auto'
+    }
+  }, [state.job?.title, state.ownsVehicle?.vehicleId, vehicleDatabase])
   
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
@@ -165,7 +197,14 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
       {state.showSettlement && (
         <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl relative">
+            <button
+              onClick={() => dispatch({ type: 'SET_STATE', payload: { showSettlement: false } })}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
+              aria-label="Close reconciliation"
+            >
+              ×
+            </button>
             <h2 className="text-2xl font-bold mb-2">Reconciliation</h2>
             <div className="mb-6 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200">Journal verified.</div>
             {state.applicationResults && state.applicationResults.length ? (
@@ -222,6 +261,12 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
               </div>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => dispatch({ type: 'SET_STATE', payload: { showSettlement: false } })}
+                className="bg-slate-200 text-slate-900 py-4 px-4 rounded-2xl font-bold uppercase hover:bg-slate-300"
+              >
+                Close
+              </button>
               <button
                 onClick={handleBeginMonth} 
                 className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase hover:bg-slate-800">

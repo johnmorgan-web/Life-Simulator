@@ -10,6 +10,30 @@ export default function Transit() {
   const [financingModal, setFinancingModal] = useState<any>(null)
   const [transitConfirm, setTransitConfirm] = useState<any>(null)
 
+  const toTransitState = (optionName: string) => {
+    const option = transitOptions.find((t: TransitOption) => t.n === optionName)
+    if (!option) return { name: 'L1 - Walk/Bike', cost: 15, level: 1 }
+    return { name: option.n, cost: option.c, level: option.l }
+  }
+
+  const getHighestVehicleTransit = (garageList: any[]) => {
+    if (!garageList || garageList.length === 0) return null
+    const hasHelicopter = garageList.some((g: any) => {
+      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === g.vehicleId)
+      if (!vehicle) return false
+      return (vehicle.body || '').toLowerCase().includes('helicopter') || vehicle.icon === '🚁'
+    })
+    if (hasHelicopter) return toTransitState('L5 - Helicopter')
+    return toTransitState('L4 - Owned Vehicle')
+  }
+
+  const syncTransitForGarage = (garageList: any[], currentTransit: any) => {
+    const bestVehicleTransit = getHighestVehicleTransit(garageList)
+    if (bestVehicleTransit) return bestVehicleTransit
+    if ((currentTransit?.level || 1) >= 4) return toTransitState('L3 - Rideshare - Uber/Lyft')
+    return currentTransit
+  }
+
   // Get APR based on credit score
   const getAPR = () => {
     if (state.credit >= 750) return 0.06
@@ -86,7 +110,9 @@ export default function Transit() {
           payload: {
             save: newSave,
             garage: [...garage, newVehicle],
-            ownsVehicle: state.ownsVehicle || newVehicle
+            ownsVehicle: state.ownsVehicle || newVehicle,
+            transit: syncTransitForGarage([...garage, newVehicle], state.transit),
+            pendingTransit: null
           }
         })
         setFinancingModal(null)
@@ -112,7 +138,9 @@ export default function Transit() {
           payload: {
             check: newCheck,
             garage: [...garage, newVehicle],
-            ownsVehicle: state.ownsVehicle || newVehicle
+            ownsVehicle: state.ownsVehicle || newVehicle,
+            transit: syncTransitForGarage([...garage, newVehicle], state.transit),
+            pendingTransit: null
           }
         })
         setFinancingModal(null)
@@ -135,7 +163,15 @@ export default function Transit() {
         for_sale: false,
         currentValue: 0
       }
-      dispatch({ type: 'SET_STATE', payload: { garage: [...garage, newVehicle], ownsVehicle: state.ownsVehicle || newVehicle } })
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          garage: [...garage, newVehicle],
+          ownsVehicle: state.ownsVehicle || newVehicle,
+          transit: syncTransitForGarage([...garage, newVehicle], state.transit),
+          pendingTransit: null
+        }
+      })
     }
   }
 
@@ -158,7 +194,17 @@ export default function Transit() {
     const updatedGarage = (garage || []).filter((g: any) => g.id !== state.ownsVehicle.id)
     // update ownsVehicle to next available or null
     const newPrimary = updatedGarage.length > 0 ? updatedGarage[0] : null
-    dispatch({ type: 'SET_STATE', payload: { save: newSave, ownsVehicle: newPrimary, garage: updatedGarage, vehicleHistory: [...(state.vehicleHistory || []), state.ownsVehicle] } })
+    dispatch({
+      type: 'SET_STATE',
+      payload: {
+        save: newSave,
+        ownsVehicle: newPrimary,
+        garage: updatedGarage,
+        vehicleHistory: [...(state.vehicleHistory || []), state.ownsVehicle],
+        transit: syncTransitForGarage(updatedGarage, state.transit),
+        pendingTransit: null
+      }
+    })
   }
 
   // Sell a specific vehicle in garage (non-primary)
@@ -181,8 +227,21 @@ export default function Transit() {
     if (state.ownsVehicle?.id === id) {
       newPrimary = updatedGarage.length > 0 ? updatedGarage[0] : null
     }
-    dispatch({ type: 'SET_STATE', payload: { save: newSave, garage: updatedGarage, ownsVehicle: newPrimary, vehicleHistory: [...(state.vehicleHistory || []), v] } })
+    dispatch({
+      type: 'SET_STATE',
+      payload: {
+        save: newSave,
+        garage: updatedGarage,
+        ownsVehicle: newPrimary,
+        vehicleHistory: [...(state.vehicleHistory || []), v],
+        transit: syncTransitForGarage(updatedGarage, state.transit),
+        pendingTransit: null
+      }
+    })
   }
+
+  const autoVehicleTransit = getHighestVehicleTransit(garage)
+  const autoTransitManaged = !!autoVehicleTransit
 
   return (
     <div className="space-y-6">
@@ -195,6 +254,17 @@ export default function Transit() {
       {tab === 'transit' && (
         <div className="space-y-4">
           <h3 className="font-bold text-lg">🚌 Public Transit Options</h3>
+          {autoTransitManaged && (
+            <div className="glass p-4 border-l-4 border-sky-500 bg-sky-50">
+              <p className="text-xs font-bold text-sky-800 uppercase">Auto-Managed By Garage</p>
+              <p className="text-sm text-sky-900 mt-1">
+                Highest vehicle transit is active: <span className="font-bold">{autoVehicleTransit?.name}</span>.
+              </p>
+              <p className="text-xs text-sky-700 mt-1">
+                Buying or selling vehicles can automatically adjust your transit level.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-4">
             {transitOptions.map((o: TransitOption) => {
               const requiresVehicle = o.l === 3 && (o.n.includes('Car') || o.n.includes('Chauffer') || o.n.includes('Helicopter'))

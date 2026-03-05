@@ -7,7 +7,7 @@ import transitOptions from '../constants/transitOptions.constants'
 import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
-import type { Job, Application } from '../types/models.types'
+import type { Job, Application, LifeEvent } from '../types/models.types'
 
 type State = any
 
@@ -607,6 +607,57 @@ function variableCost(base: number, month: number, year: number, cityMultiplier 
 	return fix(base * cityMultiplier * mult)
 }
 
+function transitStateByName(name: string) {
+	const selected = transitOptions.find(t => t.n === name)
+	if (!selected) {
+		return { name: 'L1 - Walk/Bike', cost: 15, level: 1 }
+	}
+	return { name: selected.n, cost: selected.c, level: selected.l }
+}
+
+function garageHasHelicopter(garage: any[]) {
+	return garage.some(g => {
+		const vehicle = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
+		if (!vehicle) return false
+		const body = (vehicle.body || '').toLowerCase()
+		return body.includes('helicopter') || vehicle.icon === '🚁'
+	})
+}
+
+function preferredTransitFromGarage(garage: any[]) {
+	if (!garage || garage.length === 0) return null
+	if (garageHasHelicopter(garage)) {
+		return transitStateByName('L5 - Helicopter')
+	}
+	return transitStateByName('L4 - Owned Vehicle')
+}
+
+function syncTransitWithGarage(currentTransit: any, garage: any[]) {
+	const vehicleTransit = preferredTransitFromGarage(garage)
+	if (vehicleTransit) return vehicleTransit
+	if ((currentTransit?.level || 1) >= 4) {
+		return transitStateByName('L3 - Rideshare - Uber/Lyft')
+	}
+	return currentTransit
+}
+
+function pickInterMonthEvent(state: State): LifeEvent | null {
+	// Roughly half of months have an event that lands between statements.
+	if (Math.random() > 0.5) return null
+
+	const triggers = new Set<string>(['none', 'job'])
+	if (state.activeEdu) triggers.add('academy')
+	if ((state.garage || []).length > 0) triggers.add('car')
+	if ((state.credit || 600) < 620 || (state.paymentStreak || 0) === 0) triggers.add('burnout')
+	if ((state.job?.cat || '') === 'Military' || (state.job?.cat || '') === 'Skilled') triggers.add('hazard')
+	if (Math.random() < 0.35) triggers.add('health')
+	if (Math.random() < 0.25) triggers.add('family')
+
+	const pool = lifeEvents.filter(e => triggers.has(e.trigger))
+	if (!pool.length) return null
+	return pool[Math.floor(Math.random() * pool.length)]
+}
+
 function reducer(state: State, action: any) {
 	switch (action.type) {
 		case 'INIT_LEDGER':
@@ -713,6 +764,7 @@ function reducer(state: State, action: any) {
 			let activeEdu = state.activeEdu
 			const credentials = [...state.credentials]
 			const credentialHistory = [...state.credentialHistory]
+			const eventHistory = [...(state.eventHistory || [])]
 			const careerHistory = [...state.careerHistory]
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
@@ -746,6 +798,11 @@ function reducer(state: State, action: any) {
 				transit = { name: state.pendingTransit.n, cost: state.pendingTransit.c, level: state.pendingTransit.l }
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit changed to ${state.pendingTransit.n}` })
 			}
+			const syncedTransit = syncTransitWithGarage(transit, updatedGarage)
+			if (syncedTransit.name !== transit.name) {
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit auto-adjusted to ${syncedTransit.name} based on owned vehicles` })
+			}
+			transit = syncedTransit
 
 			// If a city relocation was planned previously, apply it only when scheduledMonth/year is reached.
 			let city = state.city
@@ -894,6 +951,32 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ WARNING: Your job requires transit level ${job.tReq} but you only have level ${transit.level}. You may lose your job!` })
 			}
 
+			// Between-month random event: applies after settlement and before the next statement.
+			const interMonthEvent = pickInterMonthEvent({ ...state, job: updatedJob, activeEdu, garage: updatedGarage, credit, paymentStreak })
+			if (interMonthEvent) {
+				const delta = interMonthEvent.type === 'in' ? interMonthEvent.amt : -interMonthEvent.amt
+				resultingCheck = fix(resultingCheck + delta)
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `${interMonthEvent.icon} Mid-month event: ${interMonthEvent.title} (${interMonthEvent.type === 'in' ? '+' : '-'}$${interMonthEvent.amt.toFixed(2)})`
+				})
+				eventHistory.push({
+					id: interMonthEvent.id,
+					title: interMonthEvent.title,
+					amount: interMonthEvent.amt,
+					type: interMonthEvent.type,
+					month: nextMonth,
+					year: nextYear
+				})
+
+				if (resultingCheck < 0) {
+					const eventShortfall = fix(Math.abs(resultingCheck))
+					newDebt = fix(newDebt + eventShortfall)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Auto-loan taken: $${eventShortfall.toFixed(2)} to cover event shortfall` })
+					resultingCheck = 0
+				}
+			}
+
 			return {
 				...state,
 				check: resultingCheck,
@@ -919,6 +1002,7 @@ function reducer(state: State, action: any) {
 				logs,
 				careerHistory,
 				job: updatedJob,
+				eventHistory,
 				pendingJob: pendingJobToApply,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
@@ -1151,8 +1235,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'CHECK_ROW', payload: { id, done, newCheck, expectedCheck } })
 	}
 
-	function processMonth(paySave = 0, payDebt = 0) {
-		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt } })
+	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false) {
+		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt, skippedPayment } })
 		// Rebuild ledger after state has updated from the reducer and then save
 		setTimeout(() => {
 			buildLedger(paySave, payDebt)
