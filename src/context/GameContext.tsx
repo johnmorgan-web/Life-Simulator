@@ -1,15 +1,188 @@
 // During migration we re-export the existing JS implementation to avoid duplication.
 import React, { createContext, useContext, useEffect, useReducer } from 'react'
 import cityData from '../constants/cityData.constants'
-import jobBoard from '../constants/jobBoard.constants'
+import rawJobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
-import academyCourses from '../constants/academyCourses.constants'
+import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import type { Job, Application } from '../types/models.types'
 
 type State = any
+
+type JobMarketState = Record<string, { capacity: number; occupied: number }>
+
+const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
+
+function courseSubcategory(courseName: string, type: 'degree' | 'cert' = 'cert') {
+	const n = courseName.toLowerCase()
+	if (type === 'degree') {
+		if (hasAnyKeyword(n, ['medical', 'dental', 'veterinary', 'pharmacy'])) return 'Health Degrees'
+		if (hasAnyKeyword(n, ['law'])) return 'Law Degrees'
+		if (hasAnyKeyword(n, ['flight', 'military'])) return 'Service Degrees'
+		if (hasAnyKeyword(n, ['coding', 'mba'])) return 'Career Degrees'
+		return 'Academic Degrees'
+	}
+
+	if (hasAnyKeyword(n, ['aws', 'cloud', 'comptia', 'cyber', 'software', 'web', 'data', 'it'])) return 'Technology'
+	if (hasAnyKeyword(n, ['medical', 'nursing', 'dental', 'pharmacy', 'therapy', 'veterinary', 'radiologic', 'x-ray', 'surgical'])) return 'Healthcare'
+	if (hasAnyKeyword(n, ['financial', 'account', 'finance', 'tax', 'supply chain', 'project management', 'sales', 'human resources'])) return 'Business'
+	if (hasAnyKeyword(n, ['construction', 'electric', 'hvac', 'plumbing', 'welder', 'osha', 'safety', 'auto service'])) return 'Trades'
+	if (hasAnyKeyword(n, ['military', 'infantry', 'asvab', 'combat', 'warfare', 'special forces'])) return 'Military'
+	if (hasAnyKeyword(n, ['legal', 'paralegal', 'court', 'justice'])) return 'Legal & Public Safety'
+	if (hasAnyKeyword(n, ['teacher', 'education', 'counselor'])) return 'Education & Counseling'
+	if (hasAnyKeyword(n, ['pilot', 'air traffic', 'rotorcraft'])) return 'Aviation'
+	return 'General Skills'
+}
+
+function jobSubcategory(job: Job) {
+	const title = (job.title || '').toLowerCase()
+	const cert = (job.certReq || '').toLowerCase()
+	const req = (job.req || '').toLowerCase()
+
+	if (job.cat === 'Military') {
+		if (hasAnyKeyword(title, ['pilot', 'aviation', 'air force'])) return 'Aviation & Flight Ops'
+		if (hasAnyKeyword(title, ['medic', 'doctor', 'nurse'])) return 'Medical Corps'
+		if (hasAnyKeyword(title, ['intel', 'cyber', 'analyst'])) return 'Intelligence & Cyber'
+		if (hasAnyKeyword(title, ['police', 'lawyer'])) return 'Security & Legal'
+		return 'Combat & Operations'
+	}
+
+	if (hasAnyKeyword(title + ' ' + cert, ['software', 'data', 'web', 'cloud', 'cyber', 'it', 'ai'])) return 'Technology'
+	if (hasAnyKeyword(title + ' ' + cert + ' ' + req, ['nurse', 'doctor', 'surgeon', 'medical', 'therapist', 'dental', 'veterinary', 'pharmacy'])) return 'Healthcare'
+	if (hasAnyKeyword(title + ' ' + cert, ['account', 'financial', 'bank', 'advisor', 'investment'])) return 'Finance'
+	if (hasAnyKeyword(title + ' ' + cert, ['engineer', 'architect', 'construction', 'mechanic', 'electric', 'hvac', 'plumber', 'welder', 'operator'])) return 'Engineering & Trades'
+	if (hasAnyKeyword(title + ' ' + cert, ['lawyer', 'legal', 'court', 'investigator', 'police', 'officer'])) return 'Legal & Public Safety'
+	if (hasAnyKeyword(title + ' ' + cert, ['teacher', 'professor', 'social worker', 'counselor'])) return 'Education & Social Services'
+	if (hasAnyKeyword(title + ' ' + cert, ['driver', 'logistics', 'supply chain', 'warehouse', 'delivery', 'mail'])) return 'Logistics & Transport'
+	if (hasAnyKeyword(title + ' ' + cert, ['food', 'chef', 'bartender', 'retail', 'customer', 'hotel', 'housekeeper'])) return 'Service & Hospitality'
+	if (hasAnyKeyword(title + ' ' + cert, ['marketing', 'sales', 'publicist', 'writer', 'designer', 'director', 'athlete'])) return 'Creative & Commercial'
+	return job.cat === 'Entry' ? 'General Labor' : 'General Professional'
+}
+
+function capacityForJob(job: Job, rankInTrack: number) {
+	const baseByCategory: Record<string, number> = {
+		Entry: 240,
+		Skilled: 140,
+		Military: 90,
+		Pro: 70
+	}
+	const base = baseByCategory[job.cat || 'Pro'] || 80
+	const drop = Math.min(55, rankInTrack * 12)
+	return Math.max(3, base - drop)
+}
+
+function titleSeed(title: string) {
+	let h = 0
+	for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) >>> 0
+	return h
+}
+
+function buildAcademyCatalog() {
+	return rawAcademyCourses.map(course => {
+		const type = course.type || 'degree'
+		return {
+			...course,
+			category: type === 'degree' ? 'Degree Programs' : 'Certification Programs',
+			subcategory: courseSubcategory(course.n, type)
+		}
+	})
+}
+
+function buildProgressiveJobBoard() {
+	const enriched = rawJobBoard.map(job => ({
+		...job,
+		subcat: jobSubcategory(job),
+		expReq: null,
+		capacity: 10
+	}))
+
+	const groups: Record<string, Job[]> = {}
+	for (const job of enriched) {
+		const key = `${job.cat || 'Unknown'}::${job.subcat || 'General'}`
+		groups[key] = groups[key] || []
+		groups[key].push(job)
+	}
+
+	Object.values(groups).forEach(group => {
+		group.sort((a, b) => a.base - b.base)
+		group.forEach((job, idx) => {
+			const prior = group.slice(Math.max(0, idx - 2), idx).map(j => j.title)
+			const hasExperienceGate = idx > 0 && job.cat !== 'Entry'
+			job.expReq = hasExperienceGate
+				? {
+					roles: prior.length ? prior : [group[Math.max(0, idx - 1)].title],
+					minMonths: idx >= 4 ? 12 : idx >= 2 ? 6 : 3
+				}
+				: null
+			job.capacity = capacityForJob(job, idx)
+		})
+	})
+
+	return enriched
+}
+
+function initializeJobMarket(jobs: Job[]): JobMarketState {
+	const market: JobMarketState = {}
+	for (const job of jobs) {
+		const capacity = job.capacity || 10
+		const seed = titleSeed(job.title)
+		const fillRate = 0.65 + (seed % 30) / 100
+		let occupied = Math.floor(capacity * fillRate)
+		if (occupied >= capacity) occupied = capacity - 1
+		market[job.title] = { capacity, occupied: Math.max(0, occupied) }
+	}
+	return market
+}
+
+function getRoleExperienceMonths(state: State, roleTitle: string) {
+	let months = 0
+	if (state.job?.title === roleTitle) months += state.tenure || 0
+	const history = Array.isArray(state.careerHistory) ? state.careerHistory : []
+	for (const role of history) {
+		if (role?.title === roleTitle) months += role?.months || 0
+	}
+	return months
+}
+
+function getJobOpenings(state: State, job: Job) {
+	const slot = state.jobMarket?.[job.title]
+	const capacity = slot?.capacity ?? job.capacity ?? 1
+	const occupied = slot?.occupied ?? 0
+	return Math.max(0, capacity - occupied)
+}
+
+function getJobEligibility(state: State, job: Job) {
+	const educationMet = !job.req || state.credentials.includes(job.req)
+	const certificationMet = !job.certReq || state.credentials.includes(job.certReq)
+	const transitMet = state.transit.level >= job.tReq
+	const openings = getJobOpenings(state, job)
+	const capacityMet = openings > 0
+
+	let experienceMet = true
+	let experienceDetail = ''
+	if (job.expReq && job.expReq.roles.length > 0) {
+		experienceMet = job.expReq.roles.some(role => getRoleExperienceMonths(state, role) >= job.expReq!.minMonths)
+		if (!experienceMet) {
+			experienceDetail = `${job.expReq.minMonths} months in ${job.expReq.roles.join(' or ')}`
+		}
+	}
+
+	return {
+		canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet,
+		educationMet,
+		certificationMet,
+		transitMet,
+		experienceMet,
+		capacityMet,
+		experienceDetail,
+		openings
+	}
+}
+
+const academyCourses = buildAcademyCatalog()
+const jobBoard = buildProgressiveJobBoard()
 
 const initializeEduProgress = () => {
 	const progress: any = {}
@@ -39,6 +212,7 @@ const initialState: State = {
 	credentials: [],
 	credentialHistory: [],
 	applications: [],
+	jobMarket: initializeJobMarket(jobBoard),
 	pendingJob: null,
 	pendingTransit: null,
 	pendingCity: null, // may contain scheduled relocation info: { name, lat, lon, scheduledMonth, scheduledYear, relocationCost, transportCost, sellVehicle }
@@ -513,6 +687,7 @@ function reducer(state: State, action: any) {
 			const credentials = [...state.credentials]
 			const credentialHistory = [...state.credentialHistory]
 			const careerHistory = [...state.careerHistory]
+			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
 			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | null
@@ -585,6 +760,19 @@ function reducer(state: State, action: any) {
 				const isPromotion = state.pendingJob.base > state.job.base
 				// switch to the new job
 				job = state.pendingJob
+				// Free one slot in old role and occupy one in the new role.
+				if (nextJobMarket[prev.title]) {
+					nextJobMarket[prev.title] = {
+						...nextJobMarket[prev.title],
+						occupied: Math.max(0, nextJobMarket[prev.title].occupied - 1)
+					}
+				}
+				if (nextJobMarket[state.pendingJob.title]) {
+					nextJobMarket[state.pendingJob.title] = {
+						...nextJobMarket[state.pendingJob.title],
+						occupied: Math.min(nextJobMarket[state.pendingJob.title].capacity, nextJobMarket[state.pendingJob.title].occupied + 1)
+					}
+				}
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
 				// reset tenure and start times and set new job start
 				tenure = 0
@@ -693,6 +881,7 @@ function reducer(state: State, action: any) {
 				activeEdu,
 				eduProgress,
 				credentials,
+				jobMarket: nextJobMarket,
 				credentialHistory,
 				transit,
 				pendingTransit: null,
@@ -955,6 +1144,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		apps.forEach(app => {
 			if (app.status === 'pending' && app.decisionMonth === state.month && app.decisionYear === state.year) {
+				const eligibility = getJobEligibility(state, app.job)
+				if (!eligibility.canApply) {
+					app.status = 'rejected'
+					results.push({ id: app.id, status: 'rejected', title: app.job.title, job: app.job })
+					logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title} (requirements changed or no openings)` })
+					changed = true
+					return
+				}
+
 				let accepted = false
 				if (app.score >= 75) accepted = Math.random() < 0.95
 				else if (app.score >= 60) accepted = Math.random() < 0.65
@@ -1069,6 +1267,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			credentials: [],
 			credentialHistory: [],
 			applications: [],
+			jobMarket: initializeJobMarket(jobBoard),
 			pendingJob: null,
 			pendingTransit: null,
 			pendingCity: null,
@@ -1135,6 +1334,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function scoreApplication(job: Job) {
 		let score = 50
+		const eligibility = getJobEligibility(state, job)
 		// Education requirement (±20 points)
 		if (job.req) {
 			if (state.credentials.includes(job.req)) score += 20
@@ -1156,6 +1356,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (state.tenure >= 12) score += 15
 		else if (state.tenure >= 6) score += 10
 		else if (state.tenure >= 3) score += 5
+
+		// Required prior role experience (±20 points)
+		if (job.expReq) {
+			if (eligibility.experienceMet) score += 20
+			else score -= 20
+		}
+
+		// Market openings influence (±10 points)
+		if (eligibility.openings <= 0) score -= 10
+		else if (eligibility.openings <= 3) score += 2
+		else score += 6
 		
 		// Career history (±10 points)
 		if (state.careerHistory.length > 3) score += 10
@@ -1170,6 +1381,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function applyForJob(job: Job) {
+		const existingPending = state.applications.some((a: any) => a.job?.title === job.title && a.status === 'pending')
+		if (existingPending) {
+			dispatch({ type: 'SET_STATE', payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Already applied: ${job.title}` }] } })
+			return
+		}
+
+		const eligibility = getJobEligibility(state, job)
+		if (!eligibility.canApply) {
+			const blocks: string[] = []
+			if (!eligibility.educationMet) blocks.push(`education (${job.req})`)
+			if (!eligibility.certificationMet) blocks.push(`certification (${job.certReq})`)
+			if (!eligibility.transitMet) blocks.push(`transit level ${job.tReq}`)
+			if (!eligibility.experienceMet) blocks.push(`experience (${eligibility.experienceDetail})`)
+			if (!eligibility.capacityMet) blocks.push('no openings')
+			dispatch({
+				type: 'SET_STATE',
+				payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Application blocked for ${job.title}: ${blocks.join(', ')}` }] }
+			})
+			return
+		}
+
 		const score = scoreApplication(job)
 		const appliedMonth = state.month
 		const appliedYear = state.year
@@ -1182,12 +1414,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
-		const variability = job.base * 0.05;
-		const adjustedBase = job.base + (Math.random() * variability * 2 - variability);
-		job.base = adjustedBase;
+		const variability = job.base * 0.05
+		const adjustedBase = job.base + (Math.random() * variability * 2 - variability)
+		const offeredJob = { ...job, base: adjustedBase }
 		const app: Application = {
 			id: `app_${Date.now()}`,
-			job,
+			job: offeredJob,
 			appliedMonth,
 			appliedYear,
 			decisionMonth: dMonth,
@@ -1199,7 +1431,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings }}>
 			{children}
 		</GameContext.Provider>
 	)

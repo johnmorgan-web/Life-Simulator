@@ -54,7 +54,7 @@ type SortKey = 'best-match' | 'certificates' | 'transit' | 'highest-pay' | 'lowe
 type CareerView = 'recommended' | 'all'
 
 export default function Careers() {
-  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch } = useGame()
+  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
   const [view, setView] = useState<CareerView>('all')
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null)
@@ -125,7 +125,11 @@ export default function Careers() {
     const payBumpAmount = Math.max(0, jobPay - currentPay)
     payBump = Math.min(10, Math.round((payBumpAmount / Math.max(1, currentPay)) * 100))
 
-    const total = education + certificate + transit + payBump
+    const eligibility = getJobEligibility(state, j)
+    const experienceBonus = eligibility.experienceMet ? 8 : -12
+    const capacityBonus = eligibility.capacityMet ? 6 : -20
+
+    const total = education + certificate + transit + payBump + experienceBonus + capacityBonus
 
     return { total, education, certificate, transit, payBump }
   }
@@ -249,10 +253,12 @@ export default function Careers() {
                   </thead>
                   <tbody>
                     {recommendations.map(({ job: j, breakdown }) => {
-                      const edMet = !j.req || state.credentials.includes(j.req)
-                      const certMet = !j.certReq || state.credentials.includes(j.certReq)
-                      const trMet = state.transit.level >= j.tReq
-                      const canApply = edMet && certMet && trMet
+                      const eligibility = getJobEligibility(state, j)
+                      const edMet = eligibility.educationMet
+                      const certMet = eligibility.certificationMet
+                      const trMet = eligibility.transitMet
+                      const expMet = eligibility.experienceMet
+                      const canApply = eligibility.canApply
                       const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
                       const currentPay = (state.job?.base || 0) * state.city.p * 0.8
                       const jobPay = j.base * state.city.p * 0.8
@@ -264,6 +270,7 @@ export default function Careers() {
                           <td className="py-3 px-3">
                             <div className="font-bold text-slate-900">{j.title}</div>
                             <div className="text-xs text-slate-500">${Math.round(jobPay)}/mo</div>
+                            <div className="text-[10px] text-slate-400">{j.cat} / {j.subcat || 'General'}</div>
                           </td>
                           <td className="text-center py-3 px-3">
                             {payIncrease > 0 ? (
@@ -355,6 +362,9 @@ export default function Careers() {
                               E:{breakdown.education > 0 ? '+' : ''}{breakdown.education} 
                               {' '}C:{breakdown.certificate > 0 ? '+' : ''}{breakdown.certificate}
                             </div>
+                            <div className="text-[10px] text-slate-500">
+                              {expMet ? 'Exp OK' : 'Need feeder role'} · {eligibility.openings} openings
+                            </div>
                           </td>
                           <td className="text-right py-3 px-3">
                             <button
@@ -406,21 +416,32 @@ export default function Careers() {
 
           <div className="grid grid-cols-3 gap-4">
             {sortedJobs.map((j: Job) => {
-              const edMet = !j.req || state.credentials.includes(j.req)
-              const certMet = !j.certReq || state.credentials.includes(j.certReq)
-              const trMet = state.transit.level >= j.tReq
+              const eligibility = getJobEligibility(state, j)
+              const edMet = eligibility.educationMet
+              const certMet = eligibility.certificationMet
+              const trMet = eligibility.transitMet
+              const expMet = eligibility.experienceMet
               const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
               const isCurrent = state.job?.title === j.title
-              const canApply = edMet && certMet && trMet
+              const canApply = eligibility.canApply
 
               return (
                 <div key={j.title} className={`glass p-5 ${!canApply ? 'card-locked' : ''} ${isCurrent ? 'card-active' : ''}`}>
                   <h4 className="font-bold text-sm">{j.title}</h4>
                   <p className="text-emerald-600 font-bold">${Math.round(j.base * state.city.p * 0.8)}/mo</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{j.cat} / {j.subcat || 'General'} · {eligibility.openings} openings</p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <span className={`req-tag ${edMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{j.req || 'No Edu'}</span>
                     {j.certReq && <span className={`req-tag ${certMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{j.certReq}</span>}
                     <span className={`req-tag ${trMet ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>Transit L{j.tReq}</span>
+                    {j.expReq && (
+                      <span className={`req-tag ${expMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {j.expReq.minMonths}mo in {j.expReq.roles.join(' or ')}
+                      </span>
+                    )}
+                    <span className={`req-tag ${eligibility.capacityMet ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700'}`}>
+                      Openings {eligibility.openings}
+                    </span>
                   </div>
                   <div className="mt-3">
                     {isCurrent ? (

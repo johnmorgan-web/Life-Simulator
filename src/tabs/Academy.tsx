@@ -1,8 +1,14 @@
 import { useGame } from '../context/GameContext'
-import academyCourses from '../constants/academyCourses.constants'
 
 export default function Academy() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch, academyCourses } = useGame()
+
+  const groupedCourses = academyCourses.reduce((acc: Record<string, any[]>, course: any) => {
+    const key = `${course.category || 'Programs'} / ${course.subcategory || 'General'}`
+    acc[key] = acc[key] || []
+    acc[key].push(course)
+    return acc
+  }, {})
 
   const canEnroll = (course: any) => {
     // Can't enroll if already graduated
@@ -27,8 +33,12 @@ export default function Academy() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {academyCourses.map(e => {
+    <div className="space-y-5">
+      {Object.entries(groupedCourses as Record<string, any[]>).map(([groupName, courses]) => (
+      <div key={groupName}>
+        <h3 className="text-sm font-bold text-slate-600 mb-2">{groupName}</h3>
+        <div className="grid grid-cols-2 gap-4">
+        {courses.map((e: any) => {
         const has = state.credentials.includes(e.n)
         const inProgress = state.activeEdu === e.n
         const progress = Math.min(100, (state.eduProgress[e.n] || 0) / e.m * 100)
@@ -61,7 +71,10 @@ export default function Academy() {
             )}
           </div>
         )
-      })}
+          })}
+          </div>
+        </div>
+        ))}
     </div>
   )
 }
