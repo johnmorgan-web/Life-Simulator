@@ -245,9 +245,18 @@ export default function Rewards() {
             <p className="text-xs uppercase font-bold text-slate-500 mb-2">Current Prize Pool ({wheelCategory})</p>
             <div className="space-y-2 mb-3">
               {prizePool.map((prize, idx) => (
-                <div key={`${prize.label}-${idx}`} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm flex items-center justify-between gap-3">
-                  <span className="font-bold text-slate-700">{prize.label}</span>
-                  <span className="text-[11px] px-2 py-1 rounded bg-slate-100 text-slate-600">Weight {prize.weight}</span>
+                <div key={`${prize.label}-${idx}`} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm flex items-center gap-3">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: wheelPalette[idx % wheelPalette.length] }}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="font-bold"
+                    style={{ color: wheelPalette[idx % wheelPalette.length] }}
+                  >
+                    {prize.label}
+                  </span>
                 </div>
               ))}
             </div>

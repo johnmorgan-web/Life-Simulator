@@ -5,7 +5,7 @@ import storeItems from '../constants/store.constants'
 import { useEffect, useRef, useState } from 'react'
 
 export default function Lifestyle() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch, buildLedger, getLuxuryServiceMonthlyPay } = useGame()
   const [tab, setTab] = useState<'Overview' | 'House' | 'Store'>('Overview')
   const [showHappinessTooltip, setShowHappinessTooltip] = useState(false)
   const [entTierFlash, setEntTierFlash] = useState(false)
@@ -16,6 +16,9 @@ export default function Lifestyle() {
   const handleToggleService = (serviceId: string) => {
     const updated = { ...state.luxuryServices, [serviceId]: !state.luxuryServices[serviceId] }
     dispatch({ type: 'SET_STATE', payload: { luxuryServices: updated } })
+    window.setTimeout(() => {
+      buildLedger(0, 0)
+    }, 0)
   }
 
   const handleEntertainmentChange = (newAmount: number) => {
@@ -62,6 +65,18 @@ export default function Lifestyle() {
   }
 
   const netSalary = getNetSalary()
+  const portfolioMarketValue = Array.isArray(state.portfolio)
+    ? state.portfolio.reduce((sum: number, holding: any) => {
+      const shares = Number(holding?.shares || 0)
+      const price = Number(state.marketPrices?.[holding?.ticker] || 0)
+      return sum + (shares * price)
+    }, 0)
+    : 0
+  const netWorth = Number(state.check || 0)
+    + Number(state.save || 0)
+    + Number(state.house?.value || 0)
+    + portfolioMarketValue
+    - Number(state.debt || 0)
   const getMaxEntertainmentBudget = () => Math.round(netSalary * 0.15)
   const maxEntertainmentBudget = Math.min(150000, getMaxEntertainmentBudget())
   const totalEntertainmentBudget = (state.entertainmentSpending || 0) + (state.subscriptionEntertainmentSpending || 0)
@@ -182,6 +197,10 @@ export default function Lifestyle() {
   const activeEntertainmentCount = getActiveCount(entertainmentSpend, entertainmentOptions)
   const activeSubscriptionCount = getActiveCount(subscriptionSpend, subscriptionOptions)
 
+  const monthlyLuxuryServicesCost = lifestyleExpenses.luxuryServices.reduce((sum, service) => {
+    return (state.luxuryServices as any)?.[service.id] ? sum + Number(getLuxuryServiceMonthlyPay(service.id) || 0) : sum
+  }, 0)
+
   useEffect(() => {
     if (!prevEntTierRef.current) {
       prevEntTierRef.current = entertainmentTier.name
@@ -207,15 +226,6 @@ export default function Lifestyle() {
       return () => clearTimeout(t)
     }
   }, [subscriptionTier.name])
-
-  const currentMonthlyExpenses = totalEntertainmentBudget + (
-    (state.luxuryServices.chef ? 5250 : 0) +
-    (state.luxuryServices.housekeeper ? 2000 : 0) +
-    (state.luxuryServices.chauffer ? 3500 : 0) +
-    (state.luxuryServices.therapist ? 2500 : 0) +
-    (state.luxuryServices.trainer ? 1500 : 0) +
-    (state.luxuryServices.concierge ? 3000 : 0)
-  )
 
   // House purchase handler - pull from savings first, then checking
   const buyHouse = (model: any) => {
@@ -300,7 +310,8 @@ export default function Lifestyle() {
               </div>
               <div className="bg-slate-50 p-3 rounded-lg">
                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Luxury Services</p>
-                <p className="text-xl font-bold text-blue-600">${currentMonthlyExpenses.toLocaleString()}</p>
+                <p className="text-xl font-bold text-blue-600">${monthlyLuxuryServicesCost.toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Auto-calculated from hired services</p>
               </div>
               <div className="bg-slate-50 p-3 rounded-lg">
                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Current Job</p>
@@ -403,13 +414,16 @@ export default function Lifestyle() {
             <div className="grid grid-cols-2 gap-4">
               {lifestyleExpenses.luxuryServices.map(service => {
                 const isActive = (state.luxuryServices as any)[service.id]
+                const monthlyServicePay = Number(getLuxuryServiceMonthlyPay(service.id) || 0)
                 const canAfford = netSalary >= service.minSalary
-                const affordabilityPercent = Math.round((service.monthlyBase / netSalary) * 100)
+                const netWorthGateMet = service.id !== 'accountant' || netWorth >= 50000000
+                const canHire = canAfford && netWorthGateMet
+                const affordabilityPercent = netSalary > 0 ? Math.round((monthlyServicePay / netSalary) * 100) : 0
 
                 return (
                   <div
                     key={service.id}
-                    className={`glass p-4 transition-all ${isActive ? 'ring-2 ring-emerald-500' : ''} ${!canAfford ? 'opacity-60' : ''}`}
+                    className={`glass p-4 transition-all ${isActive ? 'ring-2 ring-emerald-500' : ''} ${!canHire && !isActive ? 'opacity-60' : ''}`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
@@ -420,23 +434,29 @@ export default function Lifestyle() {
                     </div>
                     <div className="border-t border-slate-200 pt-2 mt-3">
                       <p className="text-xs font-bold text-slate-700">
-                        ${service.monthlyBase.toLocaleString()}/mo ({affordabilityPercent}% of income)
+                        ${monthlyServicePay.toLocaleString()}/mo ({affordabilityPercent}% of income)
                       </p>
-                      <p className="text-[10px] text-slate-500 mb-2">
-                        Requires: ${service.minSalary.toLocaleString()}/mo
-                      </p>
+                      {service.id === 'accountant' ? (
+                        <p className="text-[10px] text-slate-500 mb-2">
+                          Requires: $50,000,000 net worth (current: ${Math.max(0, Math.round(netWorth)).toLocaleString()})
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 mb-2">
+                          Requires: ${service.minSalary.toLocaleString()}/mo
+                        </p>
+                      )}
                       <button
                         onClick={() => handleToggleService(service.id)}
-                        disabled={!canAfford}
+                        disabled={!isActive && !canHire}
                         className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
                           isActive
                             ? 'bg-emerald-600 text-white'
-                            : canAfford
+                            : canHire
                             ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         }`}
                       >
-                        {isActive ? '✓ Hired' : canAfford ? 'Hire' : 'Unaffordable'}
+                        {isActive ? '✓ Hired' : canHire ? 'Hire' : service.id === 'accountant' && !netWorthGateMet ? 'Locked (Need $50M Net Worth)' : 'Unaffordable'}
                       </button>
                     </div>
                   </div>

@@ -45,6 +45,11 @@ export default function Transit() {
     return !!vehicle.financed || vehicle.condition === 'lease' || (vehicle.monthsRemaining || 0) > 0
   }
 
+  const createGarageEntryId = (vehicleId: string, condition: string) => {
+    const nonce = Math.random().toString(36).slice(2, 8)
+    return `${vehicleId}-${condition}-${state.month}-${state.year}-${Date.now()}-${nonce}`
+  }
+
   // Get APR based on credit score
   const getAPR = () => {
     if (state.credit >= 750) return 0.06
@@ -107,7 +112,7 @@ export default function Transit() {
 
         const newCheck = Math.round((state.check - dueAtSigning) * 100) / 100
         const newVehicle = {
-          id: `${vehicle.id}-${state.month}-${state.year}`,
+          id: createGarageEntryId(vehicle.id, condition),
           vehicleId: vehicle.id,
           vehicleName: vehicle.name,
           condition,
@@ -147,7 +152,7 @@ export default function Transit() {
         // Use savings
         const newSave = Math.round((state.save - price) * 100) / 100
         const newVehicle = {
-          id: `${vehicle.id}-${state.month}-${state.year}`,
+          id: createGarageEntryId(vehicle.id, condition),
           vehicleId: vehicle.id,
           vehicleName: vehicle.name,
           condition,
@@ -175,7 +180,7 @@ export default function Transit() {
         // Use checking
         const newCheck = Math.round((state.check - price) * 100) / 100
         const newVehicle = {
-          id: `${vehicle.id}-${state.month}-${state.year}`,
+          id: createGarageEntryId(vehicle.id, condition),
           vehicleId: vehicle.id,
           vehicleName: vehicle.name,
           condition,
@@ -205,7 +210,7 @@ export default function Transit() {
     } else {
       // Lease
       const newVehicle = {
-        id: `${vehicle.id}-lease-${state.month}-${state.year}`,
+        id: createGarageEntryId(vehicle.id, 'lease'),
         vehicleId: vehicle.id,
         vehicleName: vehicle.name,
         condition: 'lease',
@@ -299,6 +304,11 @@ export default function Transit() {
 
   const autoVehicleTransit = getHighestVehicleTransit(garage)
   const autoTransitManaged = !!autoVehicleTransit
+  const garageCountsByVehicleId = garage.reduce((acc: Record<string, number>, g: any) => {
+    const key = String(g.vehicleId || '')
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
 
   return (
     <div className="space-y-6">
@@ -384,13 +394,9 @@ export default function Transit() {
                                   </>
                                 )}
                                 {(() => {
-                                  const ownedEntry = garage.find((g: any) => g.vehicleId === vehicle.id && !g.for_sale)
                                   const financingEntry = garage.find((g: any) => g.vehicleId === vehicle.id && g.monthsRemaining > 0)
                                   if (financingEntry) {
-                                    return <button disabled className="w-full mt-2 py-1 rounded bg-amber-500 text-white text-xs font-bold">Financing (In Garage)</button>
-                                  }
-                                  if (ownedEntry) {
-                                    return <button disabled className="w-full mt-2 py-1 rounded bg-slate-400 text-white text-xs font-bold">Owned (In Garage)</button>
+                                    return <button onClick={() => showFinancingModal(vehicle, selectedCondition)} className="w-full mt-2 py-1 rounded bg-amber-600 text-white text-xs font-bold">Buy Another (Also Financed)</button>
                                   }
                                   return <button onClick={() => showFinancingModal(vehicle, selectedCondition)} className="w-full mt-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold">Buy Now</button>
                                 })()}
@@ -469,7 +475,15 @@ export default function Transit() {
                   {garage.map((g: any) => (
                     <div key={g.id} className="glass p-3 flex justify-between items-center">
                       <div>
-                        <p className="font-bold">{g.vehicleName} <span className="text-xs text-slate-500">({g.condition})</span></p>
+                        <p className="font-bold">
+                          {g.vehicleName}
+                          {garageCountsByVehicleId[g.vehicleId] > 1 && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                              x{garageCountsByVehicleId[g.vehicleId]}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500"> ({g.condition})</span>
+                        </p>
                         <p className="text-xs text-slate-400">Purchased: {g.purchaseMonth}/{g.purchaseYear} • ${g.purchasePrice.toLocaleString()}</p>
                       </div>
                       <div className="space-x-2">

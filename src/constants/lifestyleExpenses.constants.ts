@@ -62,6 +62,14 @@ const lifestyleExpenses: LifestyleExpenses = {
       icon: '🎩',
       description: 'Premium service handling errands, reservations, and lifestyle management.'
     },
+    {
+      id: 'accountant',
+      name: 'Private Accountant',
+      monthlyBase: 1250000,
+      minSalary: 0,
+      icon: '🧾',
+      description: 'Automatically sums all monthly debits into one simplified ledger entry. Requires $50M net worth to hire.'
+    },
 
   ],
   entertainmentOptions: [

@@ -468,8 +468,8 @@ function spinRewardPrize(state: any, forcedPrize?: any) {
 	const chosen = forcedPrize || chooseWeightedPrize(pool)
 
 	if (chosen.kind === 'vehicle') {
-		const availableVehicleId = rewardWheelVehicleGrantPool.find(id => !(state.garage || []).some((g: any) => g.vehicleId === id)) || rewardWheelVehicleGrantPool[0]
-		return { ...chosen, vehicleId: availableVehicleId }
+		const randomVehicleId = rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)]
+		return { ...chosen, vehicleId: randomVehicleId }
 	}
 
 	return chosen
@@ -587,6 +587,34 @@ function comfortableEntertainmentDefaults(job: any, city: any) {
 	}
 }
 
+function calculateLuxuryServiceMonthlyPay(serviceId: string, netMonthlyIncome: number) {
+	const income = Math.max(0, Number(netMonthlyIncome || 0))
+	const rules: Record<string, { base: number; pct: number; min: number; max: number }> = {
+		chef: { base: 2200, pct: 0.08, min: 3000, max: 20000 },
+		housekeeper: { base: 1200, pct: 0.03, min: 1600, max: 9000 },
+		chauffer: { base: 2000, pct: 0.05, min: 2800, max: 18000 },
+		therapist: { base: 1600, pct: 0.025, min: 2000, max: 11000 },
+		trainer: { base: 900, pct: 0.02, min: 1200, max: 7000 },
+		concierge: { base: 2500, pct: 0.04, min: 3000, max: 25000 },
+		accountant: { base: 250000, pct: 0.02, min: 1250000, max: 5000000 }
+	}
+
+	const rule = rules[serviceId]
+	if (!rule) return 0
+
+	const raw = rule.base + (income * rule.pct)
+	return round2(Math.min(rule.max, Math.max(rule.min, raw)))
+}
+
+function totalLuxuryServiceDiscretionary(state: any) {
+	const netMonthlyIncome = Math.max(0, Number(state?.job?.base || 0) * Number(state?.city?.p || 1) * 0.8)
+	const services = state?.luxuryServices || {}
+	return round2(Object.entries(services).reduce((sum, [serviceId, active]) => {
+		if (!active) return sum
+		return sum + calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome)
+	}, 0))
+}
+
 function subscriptionBadgeMilestones() {
 	return [
 		{ months: 3, id: 'sub-3', name: 'Binge Apprentice', icon: '📺' },
@@ -663,7 +691,8 @@ const initialState: State = {
 		chauffer: false,
 		therapist: false,
 		trainer: false,
-		concierge: false
+		concierge: false,
+		accountant: false
 	},
 	entertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).entertainmentSpending,
 	subscriptionEntertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).subscriptionEntertainmentSpending,
@@ -1508,13 +1537,7 @@ function reducer(state: State, action: any) {
 			})()
 
 			const netMonthlyIncome = Math.max(0, updatedJob.base * city.p * 0.8)
-			const luxuryDiscretionary =
-				(state.luxuryServices?.chef ? 5250 : 0) +
-				(state.luxuryServices?.housekeeper ? 2000 : 0) +
-				(state.luxuryServices?.chauffer ? 3500 : 0) +
-				(state.luxuryServices?.therapist ? 2500 : 0) +
-				(state.luxuryServices?.trainer ? 1500 : 0) +
-				(state.luxuryServices?.concierge ? 3000 : 0)
+			const luxuryDiscretionary = totalLuxuryServiceDiscretionary({ ...state, job: updatedJob, city })
 			const discretionarySpend = (nextEntertainmentBudgets.entertainmentBudget || 0) + (nextEntertainmentBudgets.subscriptionBudget || 0) + luxuryDiscretionary
 			let happinessDelta = 0
 			let negativeMoodDebuffs = 0
@@ -2020,49 +2043,88 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// LUXURY SERVICES
 		let luxuryCosts = 0
 		const luxuryServicesList: string[] = []
-		
-		if (state.luxuryServices.chef) {
-			const chefCost = applyLedgerDecimalVariance(variableCost(gameValues.FoodCostPercentOfSalary * 15, state.month, state.year, state.city.p, 'food', state.city.name), 'luxury-chef') // Personal chef scales with food costs
-			luxuryCosts += chefCost
-			luxuryServicesList.push(`Chef: $${chefCost}`)
-		}
-		if (state.luxuryServices.housekeeper) {
-			const housekeeperCost = applyLedgerDecimalVariance(2000, 'luxury-housekeeper')
-			luxuryCosts += housekeeperCost
-			luxuryServicesList.push(`Housekeeper: $${housekeeperCost}`)
-		}
-		if (state.luxuryServices.chauffer) {
-			const chauffeurCost = applyLedgerDecimalVariance(3500, 'luxury-chauffeur')
-			luxuryCosts += chauffeurCost
-			luxuryServicesList.push(`Chauffeur: $${chauffeurCost}`)
-		}
-		if (state.luxuryServices.therapist) {
-			const therapistCost = applyLedgerDecimalVariance(2500, 'luxury-therapist')
-			luxuryCosts += therapistCost
-			luxuryServicesList.push(`Therapist: $${therapistCost}`)
-		}
-		if (state.luxuryServices.trainer) {
-			const trainerCost = applyLedgerDecimalVariance(1500, 'luxury-trainer')
-			luxuryCosts += trainerCost
-			luxuryServicesList.push(`Trainer: $${trainerCost}`)
-		}
-		if (state.luxuryServices.concierge) {
-			const conciergeCost = applyLedgerDecimalVariance(3000, 'luxury-concierge')
-			luxuryCosts += conciergeCost
-			luxuryServicesList.push(`Concierge: $${conciergeCost}`)
+		const luxuryLineItems: Array<{ desc: string; amt: number }> = []
+		const netMonthlyIncome = Math.max(0, (job?.base || 0) * (state.city?.p || 1) * 0.8)
+		const luxuryServiceConfigs = [
+			{ id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
+			{ id: 'housekeeper', label: 'Housekeeper', varianceKey: 'luxury-housekeeper' },
+			{ id: 'chauffer', label: 'Chauffeur', varianceKey: 'luxury-chauffeur' },
+			{ id: 'therapist', label: 'Therapist', varianceKey: 'luxury-therapist' },
+			{ id: 'trainer', label: 'Trainer', varianceKey: 'luxury-trainer' },
+			{ id: 'concierge', label: 'Concierge', varianceKey: 'luxury-concierge' },
+			{ id: 'accountant', label: 'Accountant', varianceKey: 'luxury-accountant' }
+		]
+
+		for (const cfg of luxuryServiceConfigs) {
+			if (!(state.luxuryServices as any)?.[cfg.id]) continue
+			const baseCost = calculateLuxuryServiceMonthlyPay(cfg.id, netMonthlyIncome)
+			const adjustedCost = applyLedgerDecimalVariance(baseCost, cfg.varianceKey)
+			luxuryCosts += adjustedCost
+			luxuryServicesList.push(`${cfg.label}: $${adjustedCost}`)
+			luxuryLineItems.push({ desc: `Luxury Service: ${cfg.label}`, amt: adjustedCost })
 		}
 		
 		if (luxuryCosts > 0) {
-			bal = fix(bal - luxuryCosts)
-			ledger.push({ 
-				id: id++, 
-				desc: `Luxury Services (${luxuryServicesList.length})`, 
-				amt: luxuryCosts, 
-				type: 'out', 
-				bal, 
-				done: false,
-				details: luxuryServicesList
-			})
+			if (state.luxuryServices.housekeeper) {
+				bal = fix(bal - luxuryCosts)
+				ledger.push({ 
+					id: id++, 
+					desc: `Luxury Services (${luxuryServicesList.length})`, 
+					amt: luxuryCosts, 
+					type: 'out', 
+					bal, 
+					done: false,
+					details: luxuryServicesList
+				})
+			} else {
+				for (const line of luxuryLineItems) {
+					bal = fix(bal - line.amt)
+					ledger.push({
+						id: id++,
+						desc: line.desc,
+						amt: line.amt,
+						type: 'out',
+						bal,
+						done: false
+					})
+				}
+			}
+		}
+
+		if (state.luxuryServices?.accountant) {
+			const first = ledger[0]
+			const others = ledger.slice(1)
+			const totalDebits = fix(others.reduce((sum, row) => row?.type === 'out' ? sum + Number(row?.amt || 0) : sum, 0))
+			const nonDebitRows = others.filter((row) => row?.type !== 'out')
+
+			let runningBal = Number(first?.bal || 0)
+			const simplified: any[] = [{ ...first, id: 0, bal: runningBal, done: true }]
+
+			if (totalDebits > 0) {
+				runningBal = fix(runningBal - totalDebits)
+				simplified.push({
+					id: simplified.length,
+					desc: 'Accountant Summary: Total Debits',
+					amt: totalDebits,
+					type: 'out',
+					bal: runningBal,
+					done: false,
+					details: ['All debit items auto-summed by Accountant service']
+				})
+			}
+
+			for (const row of nonDebitRows) {
+				if (row?.type === 'in') runningBal = fix(runningBal + Number(row?.amt || 0))
+				simplified.push({
+					...row,
+					id: simplified.length,
+					bal: runningBal,
+					done: false
+				})
+			}
+
+			ledger.length = 0
+			ledger.push(...simplified)
 		}
 		
 		dispatch({ type: 'INIT_LEDGER', payload: ledger })
@@ -2172,7 +2234,40 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (!u) return false
 		const data = loadStateForUser(u, saveName)
 		if (!data) return false
-		dispatch({ type: 'SET_STATE', payload: data })
+		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
+		const marketPrices = normalizeMarketPrices(data.marketPrices)
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				...data,
+				currentUser: u,
+				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+				subscriptionBadges: data.subscriptionBadges ?? [],
+				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+				happiness: data.happiness ?? 70,
+				workPenaltyPercent: data.workPenaltyPercent ?? 0,
+				marketPrices,
+				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+				marketLearningLevel: data.marketLearningLevel ?? 'adult',
+				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+				totalGasPaid: Number(data.totalGasPaid ?? 0),
+				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
+				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+				rewardTokens: Number(data.rewardTokens ?? 0),
+				lastAchievementCategory: data.lastAchievementCategory ?? null,
+				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
+				activeTheme: data.activeTheme ?? 'default',
+				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
+			}
+		})
 		return true
 	}
 
@@ -2236,7 +2331,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				chauffer: false,
 				therapist: false,
 				trainer: false,
-				concierge: false
+				concierge: false,
+				accountant: false
 			},
 			entertainmentSpending: defaultBudgets.entertainmentSpending,
 			subscriptionEntertainmentSpending: defaultBudgets.subscriptionEntertainmentSpending,
@@ -2338,6 +2434,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	function logout() {
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
+
+	useEffect(() => {
+		if (!state.currentUser) return
+		// Persist cosmetic unlocks/theme selection immediately so refresh/load keeps them.
+		saveStateForUser(state.currentUser, { ...state, currentUser: state.currentUser })
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [state.currentUser, state.unlockedThemes, state.activeTheme])
 
 	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow') {
 		dispatch({ type: 'TRIGGER_CELEBRATION', payload: event })
@@ -2445,8 +2548,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'APPLY_JOB', payload: app })
 	}
 
+	function getLuxuryServiceMonthlyPay(serviceId: string) {
+		const netMonthlyIncome = Math.max(0, (state.job?.base || 0) * (state.city?.p || 1) * 0.8)
+		return calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome)
+	}
+
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay }}>
 			{children}
 		</GameContext.Provider>
 	)

@@ -187,6 +187,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   }, [state.job?.title, state.ownsVehicle?.vehicleId, vehicleDatabase])
 
   useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--app-accent', activeTheme.accent)
+    root.style.setProperty('--app-bg', activeTheme.bg)
+    document.body.style.backgroundColor = activeTheme.bg
+  }, [activeTheme.accent, activeTheme.bg])
+
+  useEffect(() => {
     const history = Array.isArray(state.eventHistory) ? state.eventHistory : []
     if (history.length > previousEventCountRef.current && !state.showSettlement) {
       const latestEvent = history[history.length - 1]
