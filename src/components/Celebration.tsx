@@ -31,8 +31,10 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
     if (!event) return
 
     // Trigger confetti
-    const duration = 5000
+    const isTherapistCelebration = event === 'rainbow'
+    const duration = isTherapistCelebration ? 3500 : 5000
     const end = Date.now() + duration
+    let frameCount = 0
 
     const frame = () => {
       if (Date.now() > end) {
@@ -40,15 +42,20 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
         return
       }
 
-      confetti({
-        particleCount: 2,
-        angle: Math.random() * 360,
-        spread: Math.random() * 100,
-        origin: {
-          x: Math.random(),
-          y: Math.random() * 0.5
-        }
-      })
+      // Therapist rainbow celebrations use lighter confetti cadence.
+      const shouldBurst = !isTherapistCelebration || frameCount % 6 === 0
+      if (shouldBurst) {
+        confetti({
+          particleCount: isTherapistCelebration ? 1 : 2,
+          angle: Math.random() * 360,
+          spread: Math.random() * 100,
+          origin: {
+            x: Math.random(),
+            y: Math.random() * 0.5
+          }
+        })
+      }
+      frameCount += 1
 
       requestAnimationFrame(frame)
     }

@@ -12,6 +12,7 @@ import Relocate from './tabs/Relocate'
 import Resume from './tabs/Resume'
 import Lifestyle from './tabs/Lifestyle'
 import Loans from './tabs/Loans'
+import Bank from './tabs/Bank'
 
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
@@ -25,6 +26,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'resume') return <Resume />
   if (tab === 'lifestyle') return <Lifestyle />
   if (tab === 'loans') return <Loans />
+  if (tab === 'bank') return <Bank />
   return <div className="p-6">Unknown tab</div>
 }
 

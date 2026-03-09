@@ -1228,18 +1228,25 @@ function reducer(state: State, action: any) {
 				(state.luxuryServices?.concierge ? 3000 : 0)
 			const discretionarySpend = (nextEntertainmentBudgets.entertainmentBudget || 0) + (nextEntertainmentBudgets.subscriptionBudget || 0) + luxuryDiscretionary
 			let happinessDelta = 0
+			let negativeMoodDebuffs = 0
 
-			if (newDebt > 0) happinessDelta -= 5
-			if (tenure >= 12 && netMonthlyIncome < 3200) happinessDelta -= 4
-			if (netMonthlyIncome >= 10000) happinessDelta -= 2
-			if (netMonthlyIncome >= 20000) happinessDelta -= 2
-			if (monthsSinceVehiclePurchase > 6) happinessDelta -= 3
-			if (discretionarySpend < netMonthlyIncome * 0.03) happinessDelta -= 2
+			if (newDebt > 0) negativeMoodDebuffs += 5
+			if (tenure >= 12 && netMonthlyIncome < 3200) negativeMoodDebuffs += 4
+			if (netMonthlyIncome >= 10000) negativeMoodDebuffs += 2
+			if (netMonthlyIncome >= 20000) negativeMoodDebuffs += 2
+			if (monthsSinceVehiclePurchase > 6) negativeMoodDebuffs += 3
+			if (discretionarySpend < netMonthlyIncome * 0.03) negativeMoodDebuffs += 2
+
+			happinessDelta -= negativeMoodDebuffs
 
 			if (state.luxuryServices?.housekeeper) happinessDelta += 2
 			if (state.luxuryServices?.concierge) happinessDelta += 3
 			if (state.luxuryServices?.trainer) happinessDelta += 1
-			if (state.luxuryServices?.therapist) happinessDelta += 1
+			if (state.luxuryServices?.therapist) {
+				// Therapist nearly neutralizes monthly mood debuffs without completely erasing consequences.
+				const therapistOffset = Math.floor(negativeMoodDebuffs * 0.85)
+				happinessDelta += therapistOffset + 1
+			}
 
 			const nextHappiness = Math.max(0, Math.min(100, Math.round((state.happiness ?? 70) + happinessDelta)))
 

@@ -593,7 +593,7 @@ export default function Lifestyle() {
               <li>• Personal Chef eliminates food costs entirely</li>
               <li>• Personal Chauffeur eliminates transit and vehicle gas/maintenance charges</li>
               <li>• Personal Trainer lowers your chance of missing work</li>
-              <li>• Personal Therapist can trigger random rainbow moments</li>
+              <li>• Personal Therapist can trigger random rainbow moments and offset most monthly mood debuffs</li>
               <li>• Housekeeper + Concierge improve monthly happiness</li>
               <li>• Happiness drops from debt, long low-pay stagnation, high-pay stress, stale purchases, and ultra-tight spending</li>
               <li>• Entertainment and subscriptions are discretionary, auto-adjusted monthly, and each capped at 15% of net salary</li>
