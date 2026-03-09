@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Header from './components/Header'
 import Nav from './components/Nav'
 import Celebration from './components/Celebration'
@@ -13,6 +13,9 @@ import Resume from './tabs/Resume'
 import Lifestyle from './tabs/Lifestyle'
 import Loans from './tabs/Loans'
 import Bank from './tabs/Bank'
+import StockMarket from './tabs/StockMarket'
+import Rewards from './tabs/Rewards'
+import { cosmeticThemes } from './constants/achievements.constants'
 
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
@@ -27,6 +30,8 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'lifestyle') return <Lifestyle />
   if (tab === 'loans') return <Loans />
   if (tab === 'bank') return <Bank />
+  if (tab === 'stocks') return <StockMarket />
+  if (tab === 'rewards') return <Rewards />
   return <div className="p-6">Unknown tab</div>
 }
 
@@ -67,12 +72,97 @@ function cursorDataUrl(emoji: string) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, auto`
 }
 
+function eventDialogCopy(event: any) {
+  const id = String(event?.id || '').toLowerCase()
+  const trigger = String(event?.trigger || '').toLowerCase()
+  const context = trigger || id.split('_')[0] || 'general'
+  const isIncome = event?.type === 'in'
+
+  const contextLabel: Record<string, string> = {
+    car: 'Transportation update',
+    acad: 'Education update',
+    academy: 'Education update',
+    health: 'Health update',
+    family: 'Family update',
+    hazard: 'Worksite update',
+    stress: 'Stress update',
+    burnout: 'Stress update',
+    job: 'Career update',
+    all: 'Life update',
+    none: 'Life update',
+    general: 'Life update'
+  }
+
+  const toneLineByContext: Record<string, { in: string; out: string }> = {
+    car: {
+      in: 'Your transportation situation improved this month.',
+      out: 'A vehicle-related issue hit your budget this month.'
+    },
+    acad: {
+      in: 'Your education effort paid off this month.',
+      out: 'School-related costs rose unexpectedly this month.'
+    },
+    academy: {
+      in: 'Your education effort paid off this month.',
+      out: 'School-related costs rose unexpectedly this month.'
+    },
+    health: {
+      in: 'Your health momentum created a positive outcome.',
+      out: 'A health-related expense needs attention this month.'
+    },
+    family: {
+      in: 'Family brought some financial relief this month.',
+      out: 'Family needs increased your expenses this month.'
+    },
+    hazard: {
+      in: 'Work conditions turned in your favor for now.',
+      out: 'A work-risk incident created an unexpected cost.'
+    },
+    stress: {
+      in: 'Your recovery efforts gave you a boost this month.',
+      out: 'Stress-management costs showed up this month.'
+    },
+    burnout: {
+      in: 'Your recovery efforts gave you a boost this month.',
+      out: 'Stress-management costs showed up this month.'
+    },
+    job: {
+      in: 'Your work track delivered an upside surprise.',
+      out: 'A job-related obligation impacted your finances.'
+    },
+    all: {
+      in: 'A general life event gave you a financial lift.',
+      out: 'A general life event created an extra expense.'
+    },
+    none: {
+      in: 'A general life event gave you a financial lift.',
+      out: 'A general life event created an extra expense.'
+    },
+    general: {
+      in: 'A general life event gave you a financial lift.',
+      out: 'A general life event created an extra expense.'
+    }
+  }
+
+  const contextKey = toneLineByContext[context] ? context : 'general'
+
+  return {
+    headline: isIncome ? 'Good News Event' : 'Unexpected Expense Event',
+    badge: contextLabel[context] || contextLabel.general,
+    toneLine: isIncome ? toneLineByContext[contextKey].in : toneLineByContext[contextKey].out,
+    continueLabel: isIncome ? 'Nice, Continue' : 'Got It, Continue'
+  }
+}
+
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
   const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase } = useGame()
+  const activeTheme = cosmeticThemes[state.activeTheme || 'default'] || cosmeticThemes.default
   const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
+  const [eventPopup, setEventPopup] = useState<any | null>(null)
+  const previousEventCountRef = useRef(Array.isArray(state.eventHistory) ? state.eventHistory.length : 0)
   
   // Calculate dynamic APR based on credit score
   const calculateDynamicAPR = (creditScore: number): number => {
@@ -93,6 +183,15 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       document.body.style.cursor = 'auto'
     }
   }, [state.job?.title, state.ownsVehicle?.vehicleId, vehicleDatabase])
+
+  useEffect(() => {
+    const history = Array.isArray(state.eventHistory) ? state.eventHistory : []
+    if (history.length > previousEventCountRef.current && !state.showSettlement) {
+      const latestEvent = history[history.length - 1]
+      if (latestEvent) setEventPopup(latestEvent)
+    }
+    previousEventCountRef.current = history.length
+  }, [state.eventHistory, state.showSettlement])
   
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
@@ -181,7 +280,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   }
 
   return (
-    <>
+    <div
+      className="app-shell"
+      style={{
+        ['--app-accent' as any]: activeTheme.accent,
+        ['--app-bg' as any]: activeTheme.bg
+      }}
+    >
       {!state.currentUser && <Login />}
       <Celebration 
         event={state.celebration} 
@@ -376,7 +481,50 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
           </div>
         </div>
       )}
-    </>
+
+      {eventPopup && (
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+            {(() => {
+              const dialog = eventDialogCopy(eventPopup)
+              return (
+                <>
+                  <div className="inline-block mb-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700">
+                    {dialog.badge}
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2">{eventPopup.icon || '🗞️'} {dialog.headline}</h2>
+                  <p className="text-sm text-slate-600 mb-3">{dialog.toneLine}</p>
+                </>
+              )
+            })()}
+            <div className="mb-4 text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <p className="font-bold text-slate-900">{eventPopup.title}</p>
+              <p className="mt-1">{eventPopup.desc || '"Expect the unexpected." -Heraclitus'}</p>
+            </div>
+
+            <div className="bg-slate-100 p-4 rounded-xl mb-6 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Financial Impact:</span>
+                <span className={`font-bold ${eventPopup.type === 'in' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {eventPopup.type === 'in' ? '+' : '-'}${Number(eventPopup.amount || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-slate-600">Date:</span>
+                <span className="font-semibold">{eventPopup.month}/{eventPopup.year}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setEventPopup(null)}
+              className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800"
+            >
+              {eventDialogCopy(eventPopup).continueLabel}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

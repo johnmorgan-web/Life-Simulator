@@ -7,6 +7,8 @@ import transitOptions from '../constants/transitOptions.constants'
 import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
+import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
+import { achievementRules } from '../constants/achievements.constants'
 import type { Job, Application, LifeEvent } from '../types/models.types'
 
 type State = any
@@ -282,6 +284,258 @@ function hashString(value: string) {
 	return hash
 }
 
+function initializeMarketPrices() {
+	const prices: Record<string, number> = {}
+	for (const asset of stockMarketAssets) {
+		prices[asset.ticker] = round2(asset.basePrice)
+	}
+	return prices
+}
+
+function normalizeMarketPrices(prices: any) {
+	const base = initializeMarketPrices()
+	if (!prices || typeof prices !== 'object') return base
+	for (const asset of stockMarketAssets) {
+		const n = Number(prices[asset.ticker])
+		if (Number.isFinite(n) && n > 0) base[asset.ticker] = round2(n)
+	}
+	return base
+}
+
+function advanceMarketPrices(currentPrices: any, year: number, month: number) {
+	const base = normalizeMarketPrices(currentPrices)
+	const next: Record<string, number> = {}
+	for (const asset of stockMarketAssets) {
+		const seed = hashString(`${asset.ticker}-${year}-${month}`)
+		const noise = (mulberry32(seed)() - 0.5) * 2
+		const monthlyMove = asset.drift + noise * asset.volatility
+		const boundedMove = Math.max(-0.25, Math.min(0.25, monthlyMove))
+		const updated = Math.max(1, base[asset.ticker] * (1 + boundedMove))
+		next[asset.ticker] = round2(updated)
+	}
+	return next
+}
+
+function normalizeAutoInvestConfig(config: any) {
+	const fallback = { enabled: false, monthlyAmount: 0, profileId: 'balanced' }
+	if (!config || typeof config !== 'object') return fallback
+	const profileExists = autoInvestProfiles.some(p => p.id === config.profileId)
+	return {
+		enabled: !!config.enabled,
+		monthlyAmount: Math.max(0, round2(Number(config.monthlyAmount || 0))),
+		profileId: profileExists ? config.profileId : fallback.profileId
+	}
+}
+
+function executionPriceWithSlippage(referencePrice: number, seedText: string, maxSlippage = 0.02) {
+	const seed = hashString(seedText)
+	const noise = (mulberry32(seed)() - 0.5) * 2
+	const pct = Math.max(-maxSlippage, Math.min(maxSlippage, noise * maxSlippage))
+	return round2(Math.max(0.01, referencePrice * (1 + pct)))
+}
+
+function slippageLabel(fillPrice: number, referencePrice: number) {
+	if (fillPrice >= referencePrice * 1.005) return 'ceiling fill'
+	if (fillPrice <= referencePrice * 0.995) return 'floor fill'
+	return 'mid fill'
+}
+
+function portfolioMarketValue(portfolio: any[], prices: Record<string, number>) {
+	return round2((Array.isArray(portfolio) ? portfolio : []).reduce((sum: number, h: any) => {
+		const shares = Number(h?.shares || 0)
+		const price = Number(prices[h?.ticker] || 0)
+		return sum + shares * price
+	}, 0))
+}
+
+function portfolioCostBasis(portfolio: any[]) {
+	return round2((Array.isArray(portfolio) ? portfolio : []).reduce((sum: number, h: any) => {
+		const shares = Number(h?.shares || 0)
+		const avgCost = Number(h?.avgCost || 0)
+		return sum + shares * avgCost
+	}, 0))
+}
+
+function countRelocations(logs: any[]) {
+	return (Array.isArray(logs) ? logs : []).filter((l: any) => String(l?.msg || '').includes('Relocated to ')).length
+}
+
+function achievementMetricValue(metric: string, snapshot: any) {
+	const garageCount = Array.isArray(snapshot.garage) ? snapshot.garage.length : 0
+	const activeLuxury = Object.values(snapshot.luxuryServices || {}).filter(Boolean).length
+	const prices = normalizeMarketPrices(snapshot.marketPrices)
+	const marketValue = portfolioMarketValue(snapshot.portfolio || [], prices)
+	const costBasis = portfolioCostBasis(snapshot.portfolio || [])
+	const unrealized = round2(marketValue - costBasis)
+	const netWorth = round2(Number(snapshot.check || 0) + Number(snapshot.save || 0) + Number(snapshot.house?.value || 0) + marketValue - Number(snapshot.debt || 0))
+
+	switch (metric) {
+		case 'vehiclesOwned':
+			return garageCount
+		case 'calculationStreak':
+			return Number(snapshot.calculationStreak || 0)
+		case 'relocationCount':
+			return countRelocations(snapshot.logs || [])
+		case 'lifestyleServices':
+			return activeLuxury
+		case 'stockUnrealizedGain':
+			return unrealized
+		case 'tenureMonths':
+			return Number(snapshot.tenure || 0)
+		case 'credentialsCount':
+			return Array.isArray(snapshot.credentials) ? snapshot.credentials.length : 0
+		case 'netWorth':
+			return netWorth
+		default:
+			return 0
+	}
+}
+
+function generateAchievementUnlocks(snapshot: any) {
+	const unlockedSet = new Set<string>(Array.isArray(snapshot.achievementsUnlocked) ? snapshot.achievementsUnlocked : [])
+	const unlockedNow: any[] = []
+	for (const rule of achievementRules) {
+		if (unlockedSet.has(rule.id)) continue
+		const metricValue = achievementMetricValue(rule.metric, snapshot)
+		if (metricValue >= rule.threshold) {
+			unlockedSet.add(rule.id)
+			unlockedNow.push(rule)
+		}
+	}
+	return unlockedNow
+}
+
+function addOrUpdateHolding(portfolio: any[], ticker: string, shares: number, price: number) {
+	const next = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : []
+	const idx = next.findIndex((h: any) => h.ticker === ticker)
+	const totalCost = round2(shares * price)
+	if (idx >= 0) {
+		const existing = next[idx]
+		const existingShares = Number(existing.shares || 0)
+		const existingAvg = Number(existing.avgCost || price)
+		const totalShares = existingShares + shares
+		const avgCost = totalShares > 0 ? round2(((existingShares * existingAvg) + totalCost) / totalShares) : round2(price)
+		next[idx] = { ...existing, shares: totalShares, avgCost }
+	} else {
+		next.push({ ticker, shares, avgCost: round2(price) })
+	}
+	return next
+}
+
+function spinRewardPrize(state: any) {
+	const category = state.lastAchievementCategory || 'wealth'
+	const vehicleGrantPool = ['honda-civic-2024', 'toyota-corolla-2024', 'hyundai-elantra-2024']
+	const pools: Record<string, any[]> = {
+		vehicles: [
+			{ kind: 'vehicle', weight: 4, label: 'Gifted commuter car' },
+			{ kind: 'theme', value: 'graphite', weight: 3, label: 'Graphite theme' },
+			{ kind: 'cash', value: 750, weight: 3, label: '$750 cash bonus' }
+		],
+		education: [
+			{ kind: 'vehicle', weight: 2, label: 'Scholar ride reward' },
+			{ kind: 'theme', value: 'ocean', weight: 4, label: 'Ocean theme' },
+			{ kind: 'stock', ticker: 'VTI', shares: 2, weight: 4, label: '2 VTI shares' }
+		],
+		stocks: [
+			{ kind: 'stock', ticker: 'VTI', shares: 2, weight: 5, label: '2 VTI shares' },
+			{ kind: 'cash', value: 1200, weight: 3, label: '$1,200 cash bonus' },
+			{ kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' }
+		],
+		wealth: [
+			{ kind: 'cash', value: 2000, weight: 5, label: '$2,000 cash bonus' },
+			{ kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
+			{ kind: 'stock', ticker: 'AAPL', shares: 1, weight: 2, label: '1 AAPL share' }
+		],
+		default: [
+			{ kind: 'cash', value: 500, weight: 4, label: '$500 cash bonus' },
+			{ kind: 'theme', value: 'ocean', weight: 3, label: 'Ocean theme' },
+			{ kind: 'stock', ticker: 'VTI', shares: 1, weight: 3, label: '1 VTI share' }
+		]
+	}
+	const pool = pools[category] || pools.default
+	const totalWeight = pool.reduce((sum, p) => sum + Number(p.weight || 1), 0)
+	let roll = Math.random() * totalWeight
+	let chosen = pool[pool.length - 1]
+	for (const p of pool) {
+		roll -= Number(p.weight || 1)
+		if (roll <= 0) {
+			chosen = p
+			break
+		}
+	}
+
+	if (chosen.kind === 'vehicle') {
+		const availableVehicleId = vehicleGrantPool.find(id => !(state.garage || []).some((g: any) => g.vehicleId === id)) || vehicleGrantPool[0]
+		return { ...chosen, vehicleId: availableVehicleId }
+	}
+
+	return chosen
+}
+
+function applyAutoInvestCycle(
+	checkBalance: number,
+	portfolio: any[],
+	marketPrices: Record<string, number>,
+	autoInvest: any,
+	logs: any[],
+	month: number,
+	year: number
+) {
+	const config = normalizeAutoInvestConfig(autoInvest)
+	if (!config.enabled || config.monthlyAmount <= 0) {
+		return { checkBalance, portfolio, logs, investedAmount: 0 }
+	}
+
+	const profile = autoInvestProfiles.find(p => p.id === config.profileId)
+	if (!profile) return { checkBalance, portfolio, logs, investedAmount: 0 }
+
+	const maxInvest = Math.min(checkBalance, config.monthlyAmount)
+	if (maxInvest <= 0) return { checkBalance, portfolio, logs, investedAmount: 0 }
+
+	let newCheck = checkBalance
+	let investedAmount = 0
+	const nextPortfolio = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : []
+	const tradeSummary: string[] = []
+
+	for (const [ticker, weight] of Object.entries(profile.allocations || {})) {
+		const allocation = maxInvest * Number(weight || 0)
+		const marketPrice = Number(marketPrices[ticker] || 0)
+		if (marketPrice <= 0 || allocation <= 0) continue
+		const price = executionPriceWithSlippage(marketPrice, `${ticker}-${month}-${year}-${profile.id}-auto`)
+
+		const shares = Math.floor(allocation / price)
+		if (shares <= 0) continue
+
+		const cost = round2(shares * price)
+		if (cost > newCheck) continue
+
+		const idx = nextPortfolio.findIndex((h: any) => h.ticker === ticker)
+		if (idx >= 0) {
+			const existing = nextPortfolio[idx]
+			const existingShares = Number(existing.shares || 0)
+			const existingAvg = Number(existing.avgCost || price)
+			const totalShares = existingShares + shares
+			const avgCost = totalShares > 0 ? round2(((existingShares * existingAvg) + cost) / totalShares) : round2(price)
+			nextPortfolio[idx] = { ...existing, shares: totalShares, avgCost }
+		} else {
+			nextPortfolio.push({ ticker, shares, avgCost: round2(price) })
+		}
+
+		newCheck = round2(newCheck - cost)
+		investedAmount = round2(investedAmount + cost)
+		tradeSummary.push(`${shares} ${ticker} @ ${price.toFixed(2)}`)
+	}
+
+	if (tradeSummary.length > 0) {
+		logs = [...logs, {
+			date: `${month}/${year}`,
+			msg: `🤖 Auto-invest (${profile.name}) executed: ${tradeSummary.join(', ')}`
+		}]
+	}
+
+	return { checkBalance: newCheck, portfolio: nextPortfolio, logs, investedAmount }
+}
+
 function entertainmentCapForSalary(job: any, city: any) {
 	const netSalary = Math.max(0, (job?.base || 0) * (city?.p || 1) * 0.8)
 	return round2(netSalary * 0.15)
@@ -434,7 +688,27 @@ const initialState: State = {
 	vehicleHistory: [] as any[], // Array of previously owned vehicles
 	// Housing & inventory
 	house: { model: null, level: 0, value: 0 },
-	inventory: [] as any[]
+	inventory: [] as any[],
+	// Stock market
+	marketPrices: initializeMarketPrices(),
+	marketPricesPrevious: initializeMarketPrices(),
+	portfolio: [] as any[],
+	marketLearningLevel: 'adult',
+	marketUsePlainLanguage: false,
+	autoInvest: {
+		enabled: false,
+		monthlyAmount: 0,
+		profileId: 'balanced'
+	},
+	stockInvestedThisMonth: 0,
+	stockInvestedLastMonth: 0,
+	achievementsUnlocked: [] as string[],
+	achievementHistory: [] as any[],
+	rewardTokens: 0,
+	lastAchievementCategory: null as string | null,
+	unlockedThemes: ['default'],
+	activeTheme: 'default',
+	rewardHistory: [] as any[]
 }
 
 const GameContext = createContext<any>(null)
@@ -826,7 +1100,7 @@ function reducer(state: State, action: any) {
 			let newDebt = state.debt
 			let credit = state.credit
 			let calculationStreak = state.calculationStreak
-			const logs = [...state.logs]
+			let logs = [...state.logs]
 			
 			// Validate calculation accuracy for credit scoring
 			if (expectedCheck !== undefined && newCheck !== undefined) {
@@ -866,7 +1140,7 @@ function reducer(state: State, action: any) {
 			const chauffeurHired = !!state.luxuryServices?.chauffer
 			let ownsVehicle = state.ownsVehicle
 			let vehicleSaleProceeds = 0
-			const logs = [...state.logs]
+			let logs = [...state.logs]
 			const garage = state.garage || []
 			let updatedGarage = garage.map((g: any) => ({ ...g }))
 
@@ -1134,6 +1408,9 @@ function reducer(state: State, action: any) {
 					title: interMonthEvent.title,
 					amount: interMonthEvent.amt,
 					type: interMonthEvent.type,
+					icon: interMonthEvent.icon,
+					desc: interMonthEvent.desc,
+					trigger: interMonthEvent.trigger,
 					month: nextMonth,
 					year: nextYear
 				})
@@ -1274,6 +1551,49 @@ function reducer(state: State, action: any) {
 				}
 			}
 
+			const previousMarketPrices = normalizeMarketPrices(state.marketPrices)
+			const autoInvestResult = applyAutoInvestCycle(
+				resultingCheck,
+				Array.isArray(state.portfolio) ? state.portfolio : [],
+				previousMarketPrices,
+				state.autoInvest,
+				logs,
+				nextMonth,
+				nextYear
+			)
+			resultingCheck = autoInvestResult.checkBalance
+			const nextPortfolio = autoInvestResult.portfolio
+			logs = autoInvestResult.logs
+			const stockInvestedLastMonth = round2(Number(state.stockInvestedThisMonth || 0) + Number(autoInvestResult.investedAmount || 0))
+			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
+
+			const achievementSnapshot = {
+				...state,
+				check: resultingCheck,
+				save: newSave,
+				debt: newDebt,
+				tenure,
+				credentials,
+				garage: updatedGarage,
+				portfolio: nextPortfolio,
+				marketPrices: nextMarketPrices,
+				logs,
+				luxuryServices: state.luxuryServices,
+				calculationStreak: state.calculationStreak,
+				house: state.house
+			}
+			const unlockedNow = generateAchievementUnlocks(achievementSnapshot)
+			const achievementsUnlocked = Array.from(new Set([...(state.achievementsUnlocked || []), ...unlockedNow.map((a: any) => a.id)]))
+			const achievementHistory = [...(state.achievementHistory || [])]
+			let rewardTokens = Number(state.rewardTokens || 0)
+			let lastAchievementCategory = state.lastAchievementCategory || null
+			for (const ach of unlockedNow) {
+				rewardTokens += Number(ach.tokenReward || 1)
+				lastAchievementCategory = ach.category
+				achievementHistory.unshift({ id: ach.id, title: ach.title, category: ach.category, month: nextMonth, year: nextYear })
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏆 Achievement unlocked: ${ach.title} (+${ach.tokenReward || 1} reward spin)` })
+			}
+
 			return {
 				...state,
 				check: resultingCheck,
@@ -1312,6 +1632,15 @@ function reducer(state: State, action: any) {
 				entertainmentTicketStubs: nextEntertainmentTicketStubs,
 				happiness: nextHappiness,
 				workPenaltyPercent: nextWorkPenaltyPercent,
+				marketPricesPrevious: previousMarketPrices,
+				marketPrices: nextMarketPrices,
+				portfolio: nextPortfolio,
+				stockInvestedThisMonth: 0,
+				stockInvestedLastMonth,
+				achievementsUnlocked,
+				achievementHistory: achievementHistory.slice(0, 40),
+				rewardTokens,
+				lastAchievementCategory,
 				celebration,
 				skippedPaymentThisMonth: false
 			}
@@ -1366,6 +1695,143 @@ function reducer(state: State, action: any) {
 				celebration: 'pay-bump'
 			}
 		}
+		case 'BUY_STOCK': {
+			const { ticker, shares } = action.payload || {}
+			const quantity = Math.max(0, Math.floor(Number(shares || 0)))
+			if (!ticker || quantity <= 0) return state
+
+			const asset = stockMarketAssets.find(a => a.ticker === ticker)
+			if (!asset) return state
+
+			const marketPrice = Number(state.marketPrices?.[ticker] || asset.basePrice)
+			const price = executionPriceWithSlippage(marketPrice, `${ticker}-${state.month}-${state.year}-${Date.now()}-buy`)
+			const totalCost = round2(price * quantity)
+			if (state.check < totalCost) {
+				const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `Stock buy blocked for ${ticker}: insufficient checking balance.` }]
+				return { ...state, logs }
+			}
+
+			const portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
+			const idx = portfolio.findIndex((h: any) => h.ticker === ticker)
+			if (idx >= 0) {
+				const existing = portfolio[idx]
+				const existingShares = Number(existing.shares || 0)
+				const existingAvg = Number(existing.avgCost || price)
+				const newShares = existingShares + quantity
+				const newAvg = newShares > 0 ? round2(((existingShares * existingAvg) + totalCost) / newShares) : price
+				portfolio[idx] = { ...existing, shares: newShares, avgCost: newAvg }
+			} else {
+				portfolio.push({ ticker, shares: quantity, avgCost: round2(price) })
+			}
+
+			const fillType = slippageLabel(price, marketPrice)
+			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📈 Bought ${quantity} ${ticker} @ $${price.toFixed(2)} (${fillType}, ${totalCost.toFixed(2)})` }]
+			return {
+				...state,
+				check: round2(state.check - totalCost),
+				stockInvestedThisMonth: round2(Number(state.stockInvestedThisMonth || 0) + totalCost),
+				portfolio,
+				logs
+			}
+		}
+		case 'SELL_STOCK': {
+			const { ticker, shares } = action.payload || {}
+			const quantity = Math.max(0, Math.floor(Number(shares || 0)))
+			if (!ticker || quantity <= 0) return state
+
+			const asset = stockMarketAssets.find(a => a.ticker === ticker)
+			if (!asset) return state
+
+			const portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
+			const idx = portfolio.findIndex((h: any) => h.ticker === ticker)
+			if (idx < 0) {
+				const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `Stock sale blocked for ${ticker}: no shares owned.` }]
+				return { ...state, logs }
+			}
+
+			const holding = portfolio[idx]
+			const ownedShares = Math.max(0, Math.floor(Number(holding.shares || 0)))
+			const sellShares = Math.min(quantity, ownedShares)
+			if (sellShares <= 0) return state
+
+			const marketPrice = Number(state.marketPrices?.[ticker] || asset.basePrice)
+			const price = executionPriceWithSlippage(marketPrice, `${ticker}-${state.month}-${state.year}-${Date.now()}-sell`)
+			const proceeds = round2(price * sellShares)
+			const remainingShares = ownedShares - sellShares
+			if (remainingShares > 0) {
+				portfolio[idx] = { ...holding, shares: remainingShares }
+			} else {
+				portfolio.splice(idx, 1)
+			}
+
+			const fillType = slippageLabel(price, marketPrice)
+			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📉 Sold ${sellShares} ${ticker} @ $${price.toFixed(2)} (${fillType}, +$${proceeds.toFixed(2)})` }]
+			return {
+				...state,
+				check: round2(state.check + proceeds),
+				portfolio,
+				logs
+			}
+		}
+		case 'SPIN_REWARD_WHEEL': {
+			if (Number(state.rewardTokens || 0) <= 0) return state
+			const prize = spinRewardPrize(state)
+			let check = Number(state.check || 0)
+			let portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
+			let garage = Array.isArray(state.garage) ? [...state.garage] : []
+			let ownsVehicle = state.ownsVehicle
+			let unlockedThemes = Array.isArray(state.unlockedThemes) ? [...state.unlockedThemes] : ['default']
+			const logs = [...state.logs]
+			const rewardHistory = Array.isArray(state.rewardHistory) ? [...state.rewardHistory] : []
+
+			if (prize.kind === 'cash') {
+				check = round2(check + Number(prize.value || 0))
+				logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: ${prize.label}` })
+			} else if (prize.kind === 'theme') {
+				if (!unlockedThemes.includes(prize.value)) unlockedThemes.push(prize.value)
+				logs.push({ date: `${state.month}/${state.year}`, msg: `🎨 Reward wheel: unlocked theme ${prize.value}` })
+			} else if (prize.kind === 'stock') {
+				const marketPrice = Number(state.marketPrices?.[prize.ticker] || 0)
+				if (marketPrice > 0 && Number(prize.shares || 0) > 0) {
+					portfolio = addOrUpdateHolding(portfolio, prize.ticker, Number(prize.shares), marketPrice)
+					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: granted ${prize.shares} ${prize.ticker} shares` })
+				}
+			} else if (prize.kind === 'vehicle') {
+				const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === prize.vehicleId)
+				if (vehicle) {
+					const rewardCar = {
+						id: `reward-${prize.vehicleId}-${Date.now()}`,
+						vehicleId: vehicle.id,
+						vehicleName: vehicle.name,
+						purchasePrice: vehicle.newPrice,
+						currentValue: vehicle.newPrice,
+						condition: 'new',
+						financed: false,
+						monthsRemaining: 0,
+						monthlyPayment: 0,
+						purchaseMonth: state.month,
+						purchaseYear: state.year,
+						for_sale: false
+					}
+					garage.push(rewardCar)
+					if (!ownsVehicle) ownsVehicle = rewardCar
+					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: gifted vehicle ${vehicle.name}` })
+				}
+			}
+
+			rewardHistory.unshift({ month: state.month, year: state.year, label: prize.label || prize.kind, category: state.lastAchievementCategory || 'general' })
+			return {
+				...state,
+				check,
+				portfolio,
+				garage,
+				ownsVehicle,
+				unlockedThemes: Array.from(new Set(unlockedThemes)),
+				rewardTokens: Math.max(0, Number(state.rewardTokens || 0) - 1),
+				rewardHistory: rewardHistory.slice(0, 40),
+				logs
+			}
+		}
 		case 'SET_STATE':
 			return { ...state, ...action.payload }
 		default:
@@ -1412,6 +1878,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
 		bal = fix(bal - rent)
 		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
+		const mortgagePayment = Math.max(
+			0,
+			Number(state.house?.mortgagePayment ?? state.house?.monthlyPayment ?? state.house?.mortgage ?? 0)
+		)
+		const housingPaymentForUtilities = mortgagePayment > 0 ? mortgagePayment : rent
 		
 		// TRANSPORTATION
 		// If chauffeur hired, no gas/transit cost (chauffeur covers it)
@@ -1433,8 +1904,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			// Chauffeur cost handled in luxury services section
 		}
 		
-		// UTILITIES & PHONE (utilities vary seasonally)
-		const utilities = variableCost(gameValues.utilitiesCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'utilities', state.city.name)
+		// UTILITIES & PHONE (utilities track your rent/mortgage burden and vary seasonally)
+		const utilitiesBase = fix(housingPaymentForUtilities * 0.12)
+		const utilities = variableCost(utilitiesBase, state.month, state.year, 1, 'utilities', state.city.name)
 		const phoneInternet = gameValues.phoneInternetBase
 		const totalUtilities = applyLedgerDecimalVariance(fix(utilities + phoneInternet), 'utilities-phone')
 		bal = fix(bal - totalUtilities)
@@ -1475,6 +1947,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			)
 			bal = fix(bal - subscriptionCost)
 			ledger.push({ id: id++, desc: 'Subscription Entertainment', amt: subscriptionCost, type: 'out', bal, done: false })
+		}
+
+		const stockInvestDebit = fix(Number(state.stockInvestedLastMonth || 0))
+		if (stockInvestDebit > 0) {
+			bal = fix(bal - stockInvestDebit)
+			ledger.push({ id: id++, desc: 'Stock Investments (Cost Basis)', amt: stockInvestDebit, type: 'out', bal, done: false })
 		}
 		
 		// EDUCATION - If currently studying
@@ -1701,6 +2179,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function newGame() {
 		const defaultBudgets = comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3])
+		const startingMarketPrices = initializeMarketPrices()
 		const freshState = {
 			check: 1200.0,
 			save: 0,
@@ -1757,6 +2236,25 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			currentUser: state.currentUser,
 			ownsVehicle: null,
 			garage: [],
+			marketPrices: startingMarketPrices,
+			marketPricesPrevious: startingMarketPrices,
+			portfolio: [],
+			marketLearningLevel: 'adult',
+			marketUsePlainLanguage: false,
+			autoInvest: {
+				enabled: false,
+				monthlyAmount: 0,
+				profileId: 'balanced'
+			},
+			stockInvestedThisMonth: 0,
+			stockInvestedLastMonth: 0,
+			achievementsUnlocked: [],
+			achievementHistory: [],
+			rewardTokens: 0,
+			lastAchievementCategory: null,
+			unlockedThemes: ['default'],
+			activeTheme: 'default',
+			rewardHistory: []
 		}
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
@@ -1772,6 +2270,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const data = loadStateForUser(user)
 		if (data) {
 			const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
+			const marketPrices = normalizeMarketPrices(data.marketPrices)
 			dispatch({
 				type: 'SET_STATE',
 				payload: {
@@ -1783,7 +2282,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 					subscriptionBadges: data.subscriptionBadges ?? [],
 					entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
 					happiness: data.happiness ?? 70,
-					workPenaltyPercent: data.workPenaltyPercent ?? 0
+					workPenaltyPercent: data.workPenaltyPercent ?? 0,
+					marketPrices,
+					marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+					portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+					marketLearningLevel: data.marketLearningLevel ?? 'adult',
+					marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+					autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+					stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+					stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+					achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+					achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+					rewardTokens: Number(data.rewardTokens ?? 0),
+					lastAchievementCategory: data.lastAchievementCategory ?? null,
+					unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
+					activeTheme: data.activeTheme ?? 'default',
+					rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
 				}
 			})
 			return true
