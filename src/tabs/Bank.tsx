@@ -2,6 +2,59 @@ import { useMemo } from 'react'
 import { useGame } from '../context/GameContext'
 import { getAffluenceComparisonFromState } from '../utils/affluence'
 
+function CoinHeap({ label, affluence, maxAffluence, accent, stats, userLabel }: {
+  label: string
+  affluence: number
+  maxAffluence: number
+  accent: string
+  userLabel: string
+  stats: {
+    annualIncome: number
+    checking: number
+    savings: number
+    investedStocks: number
+    carsOwned: number
+    luxuryServicesOwned: number
+    houseLevel: number
+  }
+}) {
+  const coins = Math.max(4, Math.round((Math.max(0, affluence) / Math.max(1, maxAffluence)) * 18))
+  const format = (amount: number) => amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+
+  return (
+    <div className="relative group glass p-4 border border-amber-200 bg-gradient-to-b from-amber-50 to-yellow-100">
+      <p className="text-[10px] uppercase font-bold text-slate-500">{label}</p>
+      <p className="text-sm font-bold text-slate-800 mb-2">{userLabel}</p>
+      <div className="min-h-[96px] flex flex-wrap-reverse content-end gap-1">
+        {Array.from({ length: coins }).map((_, i) => (
+          <span
+            key={`${label}-${i}`}
+            className="coin-dot"
+            style={{
+              backgroundColor: accent,
+              opacity: 0.72 + ((i % 5) * 0.05)
+            }}
+          />
+        ))}
+      </div>
+      <p className="text-sm font-bold mt-2 text-slate-900">{format(affluence)}</p>
+
+      <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-20 left-2 right-2 top-2 bg-slate-900 text-white rounded-xl p-3 shadow-2xl">
+        <p className="text-xs font-bold mb-2">{label} Snapshot</p>
+        <div className="text-[11px] space-y-1">
+          <p>Annual Income: <span className="font-bold">{format(stats.annualIncome)}</span></p>
+          <p>Checking: <span className="font-bold">{format(stats.checking)}</span></p>
+          <p>Savings: <span className="font-bold">{format(stats.savings)}</span></p>
+          <p>Stocks Invested: <span className="font-bold">{format(stats.investedStocks)}</span></p>
+          <p>Cars Owned: <span className="font-bold">{stats.carsOwned}</span></p>
+          <p>Luxury Services: <span className="font-bold">{stats.luxuryServicesOwned}</span></p>
+          <p>House Level: <span className="font-bold">{stats.houseLevel}</span></p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Bank() {
   const { state } = useGame()
 
@@ -74,6 +127,37 @@ export default function Bank() {
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700">
           Rank: <span className="font-bold">#{comparison.rank}</span> of <span className="font-bold">{comparison.count}</span>
           {' '}| Percentile: <span className="font-bold">{comparison.percentile}th</span>
+        </div>
+      </div>
+
+      <div className="glass p-6">
+        <h3 className="font-bold text-lg mb-1">🪙 Coin Heap Comparison</h3>
+        <p className="text-xs text-slate-500 mb-4">Hover each heap to compare annual income, balances, stock investment, cars, luxury services, and house level.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CoinHeap
+            label="You"
+            userLabel={comparison.currentUser}
+            affluence={comparison.currentAffluence}
+            maxAffluence={Math.max(1, comparison.currentAffluence, comparison.average, comparison.top.affluence)}
+            accent="#f59e0b"
+            stats={comparison.currentProfile}
+          />
+          <CoinHeap
+            label="Average"
+            userLabel="All Players"
+            affluence={comparison.average}
+            maxAffluence={Math.max(1, comparison.currentAffluence, comparison.average, comparison.top.affluence)}
+            accent="#eab308"
+            stats={comparison.averageProfile}
+          />
+          <CoinHeap
+            label="Wealthiest"
+            userLabel={comparison.top.user}
+            affluence={comparison.top.affluence}
+            maxAffluence={Math.max(1, comparison.currentAffluence, comparison.average, comparison.top.affluence)}
+            accent="#f97316"
+            stats={comparison.topProfile}
+          />
         </div>
       </div>
 

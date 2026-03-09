@@ -4,6 +4,7 @@ import { useGame } from '../context/GameContext'
 export default function Nav({ tab, setTab }: any) {
   const { state } = useGame()
   const vehicleCount = Array.isArray(state.garage) ? state.garage.length : 0
+  const rewardTokens = Number(state.rewardTokens || 0)
   const garageIconStrip = vehicleCount > 0 ? `${'🚘'.repeat(Math.min(vehicleCount, 3))}${vehicleCount > 3 ? '+' : ''}` : 'No vehicles'
 
   const tabs = [
@@ -26,9 +27,19 @@ export default function Nav({ tab, setTab }: any) {
           <p className="text-[10px] uppercase font-bold tracking-wide text-slate-500">Garage</p>
           <p className="text-xs font-bold text-slate-700">{garageIconStrip}</p>
         </div>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`w-full text-left px-4 py-3 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'}`}>{t.label}</button>
-        ))}
+        {tabs.map(t => {
+          const isRewards = t.id === 'rewards'
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`w-full text-left px-4 py-3 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'} flex items-center justify-between`}>
+              <span>{t.label}</span>
+              {isRewards && rewardTokens > 0 ? (
+                <span className="ml-2 min-w-6 h-6 px-2 rounded-full bg-violet-600 text-white text-xs font-bold inline-flex items-center justify-center">
+                  {rewardTokens}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
       </div>
     </nav>
   )

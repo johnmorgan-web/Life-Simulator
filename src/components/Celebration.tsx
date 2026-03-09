@@ -9,6 +9,7 @@ export type CelebrationEvent =
   | 'debt-paid-off'
   | 'promotion'
   | 'job-accepted'
+  | 'achievement'
   | 'rainbow'
 
 type CelebrationMessage = {
@@ -23,6 +24,7 @@ const celebrationMessages: CelebrationMessage = {
   'debt-paid-off': '💳 That much closer to financial freedom, a loan has been paid off!',
   'promotion': '🚀 Promotion unlocked! More pay, more pressure, more options.',
   'job-accepted': '✅ You just accepted a new job! Hopefully the people here are cooler...',
+  'achievement': '🏆 Achievement unlocked! You earned a new reward spin.',
   'rainbow': '🌈 Everything is working out for you.'
 }
 

@@ -8,7 +8,7 @@ import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
-import { achievementRules } from '../constants/achievements.constants'
+import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
 import type { Job, Application, LifeEvent } from '../types/models.types'
 
 type State = any
@@ -360,7 +360,16 @@ function countRelocations(logs: any[]) {
 	return (Array.isArray(logs) ? logs : []).filter((l: any) => String(l?.msg || '').includes('Relocated to ')).length
 }
 
-function achievementMetricValue(metric: string, snapshot: any) {
+function sumLedgerAmounts(ledger: any[], matcher: (desc: string) => boolean) {
+	return round2((Array.isArray(ledger) ? ledger : []).reduce((sum: number, row: any) => {
+		const desc = String(row?.desc || '')
+		if (!matcher(desc)) return sum
+		return sum + Number(row?.amt || 0)
+	}, 0))
+}
+
+function achievementMetricValue(rule: any, snapshot: any) {
+	const metric = String(rule?.metric || '')
 	const garageCount = Array.isArray(snapshot.garage) ? snapshot.garage.length : 0
 	const activeLuxury = Object.values(snapshot.luxuryServices || {}).filter(Boolean).length
 	const prices = normalizeMarketPrices(snapshot.marketPrices)
@@ -368,6 +377,7 @@ function achievementMetricValue(metric: string, snapshot: any) {
 	const costBasis = portfolioCostBasis(snapshot.portfolio || [])
 	const unrealized = round2(marketValue - costBasis)
 	const netWorth = round2(Number(snapshot.check || 0) + Number(snapshot.save || 0) + Number(snapshot.house?.value || 0) + marketValue - Number(snapshot.debt || 0))
+	const portfolio = Array.isArray(snapshot.portfolio) ? snapshot.portfolio : []
 
 	switch (metric) {
 		case 'vehiclesOwned':
@@ -386,6 +396,22 @@ function achievementMetricValue(metric: string, snapshot: any) {
 			return Array.isArray(snapshot.credentials) ? snapshot.credentials.length : 0
 		case 'netWorth':
 			return netWorth
+		case 'tickerShares': {
+			const ticker = String(rule?.ticker || '')
+			if (!ticker) return 0
+			const holding = portfolio.find((h: any) => h?.ticker === ticker)
+			return Number(holding?.shares || 0)
+		}
+		case 'singleStockShares':
+			return portfolio.reduce((max: number, h: any) => Math.max(max, Number(h?.shares || 0)), 0)
+		case 'lifetimeGasPaid':
+			return Number(snapshot.totalGasPaid || 0)
+		case 'lifetimeUtilitiesPaid':
+			return Number(snapshot.totalUtilitiesPaid || 0)
+		case 'ticketStubCount':
+			return Array.isArray(snapshot.entertainmentTicketStubs) ? snapshot.entertainmentTicketStubs.length : 0
+		case 'monthlyLuxuryEventSpend':
+			return Number(snapshot.maxMonthlyLuxuryEventSpend || 0)
 		default:
 			return 0
 	}
@@ -396,7 +422,7 @@ function generateAchievementUnlocks(snapshot: any) {
 	const unlockedNow: any[] = []
 	for (const rule of achievementRules) {
 		if (unlockedSet.has(rule.id)) continue
-		const metricValue = achievementMetricValue(rule.metric, snapshot)
+		const metricValue = achievementMetricValue(rule, snapshot)
 		if (metricValue >= rule.threshold) {
 			unlockedSet.add(rule.id)
 			unlockedNow.push(rule)
@@ -422,37 +448,7 @@ function addOrUpdateHolding(portfolio: any[], ticker: string, shares: number, pr
 	return next
 }
 
-function spinRewardPrize(state: any) {
-	const category = state.lastAchievementCategory || 'wealth'
-	const vehicleGrantPool = ['honda-civic-2024', 'toyota-corolla-2024', 'hyundai-elantra-2024']
-	const pools: Record<string, any[]> = {
-		vehicles: [
-			{ kind: 'vehicle', weight: 4, label: 'Gifted commuter car' },
-			{ kind: 'theme', value: 'graphite', weight: 3, label: 'Graphite theme' },
-			{ kind: 'cash', value: 750, weight: 3, label: '$750 cash bonus' }
-		],
-		education: [
-			{ kind: 'vehicle', weight: 2, label: 'Scholar ride reward' },
-			{ kind: 'theme', value: 'ocean', weight: 4, label: 'Ocean theme' },
-			{ kind: 'stock', ticker: 'VTI', shares: 2, weight: 4, label: '2 VTI shares' }
-		],
-		stocks: [
-			{ kind: 'stock', ticker: 'VTI', shares: 2, weight: 5, label: '2 VTI shares' },
-			{ kind: 'cash', value: 1200, weight: 3, label: '$1,200 cash bonus' },
-			{ kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' }
-		],
-		wealth: [
-			{ kind: 'cash', value: 2000, weight: 5, label: '$2,000 cash bonus' },
-			{ kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
-			{ kind: 'stock', ticker: 'AAPL', shares: 1, weight: 2, label: '1 AAPL share' }
-		],
-		default: [
-			{ kind: 'cash', value: 500, weight: 4, label: '$500 cash bonus' },
-			{ kind: 'theme', value: 'ocean', weight: 3, label: 'Ocean theme' },
-			{ kind: 'stock', ticker: 'VTI', shares: 1, weight: 3, label: '1 VTI share' }
-		]
-	}
-	const pool = pools[category] || pools.default
+function chooseWeightedPrize(pool: any[]) {
 	const totalWeight = pool.reduce((sum, p) => sum + Number(p.weight || 1), 0)
 	let roll = Math.random() * totalWeight
 	let chosen = pool[pool.length - 1]
@@ -463,9 +459,16 @@ function spinRewardPrize(state: any) {
 			break
 		}
 	}
+	return chosen
+}
+
+function spinRewardPrize(state: any, forcedPrize?: any) {
+	const category = state.lastAchievementCategory || 'wealth'
+	const pool = rewardWheelPrizePools[category] || rewardWheelPrizePools.default
+	const chosen = forcedPrize || chooseWeightedPrize(pool)
 
 	if (chosen.kind === 'vehicle') {
-		const availableVehicleId = vehicleGrantPool.find(id => !(state.garage || []).some((g: any) => g.vehicleId === id)) || vehicleGrantPool[0]
+		const availableVehicleId = rewardWheelVehicleGrantPool.find(id => !(state.garage || []).some((g: any) => g.vehicleId === id)) || rewardWheelVehicleGrantPool[0]
 		return { ...chosen, vehicleId: availableVehicleId }
 	}
 
@@ -669,7 +672,7 @@ const initialState: State = {
 	entertainmentTicketStubs: [] as any[],
 	happiness: 70,
 	workPenaltyPercent: 0,
-	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'rainbow' | null,
+	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow' | null,
 	// Credit tracking
 	paymentStreak: 0, // Consecutive on-time payments
 	calculationStreak: 0, // Consecutive correct balance checks
@@ -702,6 +705,9 @@ const initialState: State = {
 	},
 	stockInvestedThisMonth: 0,
 	stockInvestedLastMonth: 0,
+	totalGasPaid: 0,
+	totalUtilitiesPaid: 0,
+	maxMonthlyLuxuryEventSpend: 0,
 	achievementsUnlocked: [] as string[],
 	achievementHistory: [] as any[],
 	rewardTokens: 0,
@@ -1200,6 +1206,12 @@ function reducer(state: State, action: any) {
 			}
 
 			const check = fix(state.check - (paySave + payDebt + vehicleCosts))
+			const monthlyGasPaid = sumLedgerAmounts(state.ledger, (desc) => desc.includes('Gas'))
+			const monthlyUtilitiesPaid = sumLedgerAmounts(state.ledger, (desc) => desc.includes('Utilities & Phone/Internet'))
+			const monthlyLuxuryEventSpend = sumLedgerAmounts(state.ledger, (desc) => desc === 'Entertainment' || desc === 'Subscription Entertainment')
+			const totalGasPaid = round2(Number(state.totalGasPaid || 0) + monthlyGasPaid)
+			const totalUtilitiesPaid = round2(Number(state.totalUtilitiesPaid || 0) + monthlyUtilitiesPaid)
+			const maxMonthlyLuxuryEventSpend = Math.max(Number(state.maxMonthlyLuxuryEventSpend || 0), Number(monthlyLuxuryEventSpend || 0))
 
 			let resultingCheck = check
 
@@ -1212,7 +1224,7 @@ function reducer(state: State, action: any) {
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
-			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'rainbow' | null
+			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'achievement' | 'rainbow' | null
 			
 			// Credit tracking
 			let credit = state.credit
@@ -1580,7 +1592,10 @@ function reducer(state: State, action: any) {
 				logs,
 				luxuryServices: state.luxuryServices,
 				calculationStreak: state.calculationStreak,
-				house: state.house
+				house: state.house,
+				totalGasPaid,
+				totalUtilitiesPaid,
+				maxMonthlyLuxuryEventSpend
 			}
 			const unlockedNow = generateAchievementUnlocks(achievementSnapshot)
 			const achievementsUnlocked = Array.from(new Set([...(state.achievementsUnlocked || []), ...unlockedNow.map((a: any) => a.id)]))
@@ -1592,6 +1607,9 @@ function reducer(state: State, action: any) {
 				lastAchievementCategory = ach.category
 				achievementHistory.unshift({ id: ach.id, title: ach.title, category: ach.category, month: nextMonth, year: nextYear })
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏆 Achievement unlocked: ${ach.title} (+${ach.tokenReward || 1} reward spin)` })
+			}
+			if (unlockedNow.length > 0) {
+				celebration = 'achievement'
 			}
 
 			return {
@@ -1637,6 +1655,9 @@ function reducer(state: State, action: any) {
 				portfolio: nextPortfolio,
 				stockInvestedThisMonth: 0,
 				stockInvestedLastMonth,
+				totalGasPaid,
+				totalUtilitiesPaid,
+				maxMonthlyLuxuryEventSpend,
 				achievementsUnlocked,
 				achievementHistory: achievementHistory.slice(0, 40),
 				rewardTokens,
@@ -1775,7 +1796,7 @@ function reducer(state: State, action: any) {
 		}
 		case 'SPIN_REWARD_WHEEL': {
 			if (Number(state.rewardTokens || 0) <= 0) return state
-			const prize = spinRewardPrize(state)
+			const prize = spinRewardPrize(state, action.payload?.forcedPrize)
 			let check = Number(state.check || 0)
 			let portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
 			let garage = Array.isArray(state.garage) ? [...state.garage] : []
@@ -2248,6 +2269,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			},
 			stockInvestedThisMonth: 0,
 			stockInvestedLastMonth: 0,
+			totalGasPaid: 0,
+			totalUtilitiesPaid: 0,
+			maxMonthlyLuxuryEventSpend: 0,
 			achievementsUnlocked: [],
 			achievementHistory: [],
 			rewardTokens: 0,
@@ -2291,6 +2315,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 					autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 					stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 					stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+					totalGasPaid: Number(data.totalGasPaid ?? 0),
+					totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+					maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
 					achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
 					achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
 					rewardTokens: Number(data.rewardTokens ?? 0),
@@ -2312,7 +2339,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
 
-	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'rainbow') {
+	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow') {
 		dispatch({ type: 'TRIGGER_CELEBRATION', payload: event })
 		// Auto-clear after animation
 		setTimeout(() => {

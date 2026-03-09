@@ -92,9 +92,9 @@ export default function Careers() {
   // Handle negotiation button click
   const handleNegotiatePay = () => {
     const compatibilityScore = calculateJobCompatibilityScore(state.job, state.credentials, state.transit.level)
-    let successChance = 0.30 // Base 30% chance
-    successChance += (state.credit / 850) * 0.2 // Up to +20% based on credit score
-    successChance += Math.min(state.tenure / 60, 1) * 0.22 // Up to +22% based on tenure (maxes out at 5 years)
+    let successChance = 0.15 // Base 15% chance
+    successChance += (state.credit / 850) * 0.1 // Up to +10% based on credit score
+    successChance += Math.min(state.tenure / 60, 1) * 0.15 // Up to +15% based on tenure (maxes out at 5 years)
     successChance += (compatibilityScore / 100) * 0.05 // Up to +5% based on job fit
     const result = calculatePayNegotiationModifier(state.credit, state.tenure, compatibilityScore)
     setNegotiationModifier(result.modifier)

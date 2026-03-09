@@ -142,3 +142,59 @@ button {
 button:disabled {
 	cursor: default;
 }
+
+.roulette-stage {
+	position: relative;
+	width: 260px;
+	height: 260px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.roulette-wheel {
+	width: 240px;
+	height: 240px;
+	border-radius: 999px;
+	border: 10px solid #0f172a;
+	box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+	transition: transform 4.2s cubic-bezier(0.08, 0.86, 0.18, 1);
+	position: relative;
+}
+
+.roulette-wheel-spinning {
+	filter: saturate(1.12);
+}
+
+.roulette-pointer {
+	position: absolute;
+	top: -2px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 0;
+	height: 0;
+	border-left: 12px solid transparent;
+	border-right: 12px solid transparent;
+	border-top: 24px solid #111827;
+	z-index: 3;
+}
+
+.roulette-center-dot {
+	position: absolute;
+	width: 28px;
+	height: 28px;
+	border-radius: 999px;
+	background: #111827;
+	border: 4px solid #f8fafc;
+	box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.25);
+	z-index: 2;
+}
+
+.coin-dot {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(15, 23, 42, 0.25);
+}

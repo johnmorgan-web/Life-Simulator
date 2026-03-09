@@ -162,7 +162,9 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
   const [eventPopup, setEventPopup] = useState<any | null>(null)
+  const [achievementToast, setAchievementToast] = useState<{ title: string; category: string } | null>(null)
   const previousEventCountRef = useRef(Array.isArray(state.eventHistory) ? state.eventHistory.length : 0)
+  const previousAchievementCountRef = useRef(Array.isArray(state.achievementHistory) ? state.achievementHistory.length : 0)
   
   // Calculate dynamic APR based on credit score
   const calculateDynamicAPR = (creditScore: number): number => {
@@ -192,6 +194,23 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     }
     previousEventCountRef.current = history.length
   }, [state.eventHistory, state.showSettlement])
+
+  useEffect(() => {
+    const history = Array.isArray(state.achievementHistory) ? state.achievementHistory : []
+    if (history.length > previousAchievementCountRef.current && !state.showSettlement) {
+      const latest = history[0] as { title?: string; category?: string } | undefined
+      if (latest?.title) {
+        setAchievementToast({ title: latest.title, category: String(latest.category || 'general') })
+      }
+    }
+    previousAchievementCountRef.current = history.length
+  }, [state.achievementHistory, state.showSettlement])
+
+  useEffect(() => {
+    if (!achievementToast) return
+    const timeout = window.setTimeout(() => setAchievementToast(null), 4500)
+    return () => window.clearTimeout(timeout)
+  }, [achievementToast])
   
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
@@ -292,6 +311,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
         event={state.celebration} 
         onComplete={handleCelebrationComplete} 
       />
+      {achievementToast && (
+        <div className="fixed top-5 right-5 z-50 max-w-sm bg-white border border-emerald-200 shadow-xl rounded-2xl px-4 py-3">
+          <p className="text-[10px] uppercase font-bold tracking-wide text-emerald-600">Achievement Unlocked</p>
+          <p className="text-sm font-bold text-slate-900">{achievementToast.title}</p>
+          <p className="text-xs text-slate-500 mt-1">Category: {achievementToast.category} • Reward spin added</p>
+        </div>
+      )}
       <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
       <main className="flex-1 overflow-hidden p-6 max-w-7xl mx-auto w-full grid grid-cols-12 gap-6">
         <Nav tab={tab} setTab={setTab} />
