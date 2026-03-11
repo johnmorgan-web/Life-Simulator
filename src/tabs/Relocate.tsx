@@ -1,8 +1,47 @@
 import { useGame } from '../context/GameContext'
 import type { City } from '../types/models.types'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import countries from '../constants/countries.constants'
 //import countryBoundaries from '../constants/countryBoundaries.constants'
+
+function getCityUserCounts(currentUser?: string | null, currentCityName?: string | null) {
+  const counts: Record<string, number> = {}
+  let savedCityName: string | null = null
+
+  try {
+    const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
+    if (Array.isArray(users)) {
+      for (const user of users) {
+        const snapshot = JSON.parse(localStorage.getItem(`life-sim:${user}:__autosave__`) || 'null')
+        const cityName = snapshot?.city?.name
+        if (cityName) counts[cityName] = (counts[cityName] || 0) + 1
+        if (currentUser && user === currentUser) savedCityName = cityName || null
+      }
+    }
+  } catch {
+    return currentCityName ? { [currentCityName]: 1 } : {}
+  }
+
+  if (currentUser && currentCityName) {
+    if (savedCityName && savedCityName !== currentCityName && counts[savedCityName]) {
+      counts[savedCityName] -= 1
+      if (counts[savedCityName] <= 0) delete counts[savedCityName]
+    }
+    counts[currentCityName] = Math.max(1, Number(counts[currentCityName] || 0) + (savedCityName === currentCityName ? 0 : 1))
+  }
+
+  return counts
+}
+
+function getSupplyPressure(usersInCity: number, city: any) {
+  const demandBase = 1 + Math.min(0.45, (Math.max(1, usersInCity) - 1) * 0.07)
+  const multiplier = Math.max(0.75, Math.min(1.9, demandBase * (0.9 + (Number(city?.p || 1) - 1) * 0.6)))
+  let label = 'Loose'
+  if (multiplier >= 1.35) label = 'Tight'
+  else if (multiplier >= 1.1) label = 'Active'
+  else if (multiplier >= 0.95) label = 'Balanced'
+  return { multiplier, label }
+}
 
 export default function Relocate() {
   const { state, dispatch, cityData, calculateRelocationCost } = useGame()
@@ -15,6 +54,13 @@ export default function Relocate() {
   const [selectedTransit, setSelectedTransit] = useState<'public' | 'personal' | 'luxury'>('public')
 
   const cities = (cityData as City[])
+  const cityUserCounts = useMemo(() => getCityUserCounts(state.currentUser, state.city?.name || null), [state.currentUser, state.city?.name])
+  const selectedCityInsights = useMemo(() => {
+    if (!selected) return null
+    const usersInCity = Math.max(0, Number(cityUserCounts[selected.name] || 0))
+    const pressure = getSupplyPressure(usersInCity, selected)
+    return { usersInCity, pressureLabel: pressure.label, pressureMultiplier: pressure.multiplier }
+  }, [cityUserCounts, selected])
   
   const hasVehicle = state.garage && state.garage.length > 0
   const primaryVehicle = state.ownsVehicle || (hasVehicle ? state.garage[0] : null)
@@ -266,6 +312,7 @@ export default function Relocate() {
             <div className="my-3">
               <div className="text-lg font-bold">{selected.icon} {selected.name}</div>
               <div className="text-sm text-slate-400">Rent: {selected.r}x • Pay: {selected.p}x</div>
+              <div className="text-sm text-slate-400">Users in city: {selectedCityInsights?.usersInCity ?? 0} • Supply pressure: {selectedCityInsights?.pressureLabel ?? 'Balanced'} ({selectedCityInsights?.pressureMultiplier?.toFixed(2) ?? '1.00'}x)</div>
             </div>
             <div className="mb-3 text-sm">
               <div>Plan relocation date: <strong>{state.month}/{state.year} → in 12 months</strong></div>

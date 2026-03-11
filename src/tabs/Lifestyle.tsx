@@ -72,10 +72,18 @@ export default function Lifestyle() {
       return sum + (shares * price)
     }, 0)
     : 0
+  const realEstateEquity = Array.isArray(state.investmentProperties)
+    ? state.investmentProperties.reduce((sum: number, property: any) => {
+      const value = Number(property?.propertyValue || 0)
+      const loan = Number(property?.loanBalance || 0)
+      return sum + Math.max(0, value - loan)
+    }, 0)
+    : 0
   const netWorth = Number(state.check || 0)
     + Number(state.save || 0)
     + Number(state.house?.value || 0)
     + portfolioMarketValue
+    + realEstateEquity
     - Number(state.debt || 0)
   const getMaxEntertainmentBudget = () => Math.round(netSalary * 0.15)
   const maxEntertainmentBudget = Math.min(150000, getMaxEntertainmentBudget())

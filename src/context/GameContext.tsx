@@ -8,6 +8,7 @@ import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
+import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
 import type { Job, Application, LifeEvent } from '../types/models.types'
 
@@ -302,6 +303,302 @@ function normalizeMarketPrices(prices: any) {
 	return base
 }
 
+function cityRealEstateTier(city: any) {
+	const priceFactor = Number(city?.p || 1)
+	if (priceFactor >= 1.3) return 'highCost'
+	if (priceFactor <= 0.95) return 'growth'
+	return 'balanced'
+}
+
+function cityPressureMultiplier(registeredUsers: number, city: any) {
+	const users = Math.max(1, Number(registeredUsers || 1))
+	const demandBase = 1 + Math.min(0.45, (users - 1) * 0.07)
+	const cityAmplifier = 0.9 + (Number(city?.p || 1) - 1) * 0.6
+	return round2(Math.max(0.75, Math.min(1.9, demandBase * cityAmplifier)))
+}
+
+const SHARED_REAL_ESTATE_MARKET_KEY = 'life-sim:shared-real-estate-market:v1'
+const SHARED_REAL_ESTATE_MARKET_META_KEY = 'life-sim:shared-real-estate-market-meta:v1'
+
+function initialListingsForCity(userCount: number) {
+	const users = Math.max(0, Number(userCount || 0))
+	if (users <= 0) return 0
+	return 10 + Math.max(0, users - 1) * 2
+}
+
+function buildRealEstateListing(city: any, template: any, sequence: number, pressure: number, customId?: string) {
+	const seed = hashString(`${city.name}-${template.id}-${sequence}`)
+	const rnd = mulberry32(seed)
+	const quality = 0.86 + rnd() * 0.32
+	const dom = Math.max(0, Math.floor(rnd() * 7))
+	const amenities = [...template.amenityOptions].sort(() => rnd() - 0.5).slice(0, Math.max(1, Math.min(3, Math.floor(rnd() * 4))))
+	const askingPrice = round2(template.basePrice * Number(city.p || 1) * quality * (0.93 + (pressure - 1) * 0.35))
+	const askingRentPerUnit = round2(template.baseRentPerUnit * Number(city.r || 1) * quality * (0.95 + (pressure - 1) * 0.25))
+	return {
+		id: customId || `re-${city.name}-${template.id}-${sequence}-${Date.now()}`,
+		cityName: city.name,
+		templateId: template.id,
+		templateName: template.name,
+		assetClass: template.assetClass,
+		incomeLabel: template.incomeLabel,
+		units: template.units,
+		askingPrice,
+		askingRentPerUnit,
+		amenities,
+		dom,
+		condition: Math.round(65 + rnd() * 30),
+		ownershipCount: 0,
+		foreclosure: false,
+		listedByUser: null
+	}
+}
+
+function readSharedRealEstateMeta() {
+	try {
+		const raw = localStorage.getItem(SHARED_REAL_ESTATE_MARKET_META_KEY)
+		if (!raw) return null
+		const parsed = JSON.parse(raw)
+		return parsed && typeof parsed === 'object' ? parsed : null
+	} catch {
+		return null
+	}
+}
+
+function readSharedRealEstateMarket() {
+	try {
+		const raw = localStorage.getItem(SHARED_REAL_ESTATE_MARKET_KEY)
+		if (!raw) return null
+		const parsed = JSON.parse(raw)
+		return parsed && typeof parsed === 'object' ? parsed : null
+	} catch {
+		return null
+	}
+}
+
+function writeSharedRealEstateMeta(meta: any) {
+	try {
+		localStorage.setItem(SHARED_REAL_ESTATE_MARKET_META_KEY, JSON.stringify(meta))
+		return true
+	} catch {
+		return false
+	}
+}
+
+function writeSharedRealEstateMarket(market: Record<string, any[]>) {
+	try {
+		localStorage.setItem(SHARED_REAL_ESTATE_MARKET_KEY, JSON.stringify(market))
+		return true
+	} catch {
+		return false
+	}
+}
+
+function getUserCityCounts(liveSnapshot?: any) {
+	const userCityMap = new Map<string, string>()
+	for (const user of listSavedUsers()) {
+		const snapshot = loadStateForUser(user)
+		const cityName = snapshot?.city?.name
+		if (cityName) userCityMap.set(user, cityName)
+	}
+	if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
+		userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name))
+	}
+	const counts: Record<string, number> = {}
+	for (const cityName of userCityMap.values()) {
+		counts[cityName] = (counts[cityName] || 0) + 1
+	}
+	return counts
+}
+
+function defaultRealEstateMeta() {
+	const seededUsersByCity: Record<string, number> = {}
+	const pendingListingTimersByCity: Record<string, number[]> = {}
+	const nextSequenceByCity: Record<string, number> = {}
+	for (const city of cityData) {
+		seededUsersByCity[city.name] = 0
+		pendingListingTimersByCity[city.name] = []
+		nextSequenceByCity[city.name] = 0
+	}
+	return { seededUsersByCity, pendingListingTimersByCity, nextSequenceByCity }
+}
+
+function initializeRealEstateMarket(liveSnapshot?: any) {
+	const market: Record<string, any[]> = {}
+	const counts = getUserCityCounts(liveSnapshot)
+	const meta = defaultRealEstateMeta()
+	const users = getRegisteredUserCount()
+	for (const city of cityData) {
+		const listings: any[] = []
+		const cityUserCount = Number(counts[city.name] || 0)
+		const initialCount = initialListingsForCity(cityUserCount)
+		const pressure = cityPressureMultiplier(users, city)
+		for (let i = 0; i < initialCount; i++) {
+			const template = realEstateTemplates[i % realEstateTemplates.length]
+			listings.push(buildRealEstateListing(city, template, i, pressure, `re-${city.name}-${template.id}-${i}`))
+		}
+		meta.seededUsersByCity[city.name] = cityUserCount
+		meta.nextSequenceByCity[city.name] = initialCount
+		market[city.name] = listings.sort((a, b) => a.askingPrice - b.askingPrice)
+	}
+	return { market, meta }
+}
+
+function syncSharedRealEstateMarket(liveSnapshot?: any, advanceOneMonth = false) {
+	let market = readSharedRealEstateMarket()
+	let meta = readSharedRealEstateMeta()
+	if (!market || !meta) {
+		const initialized = initializeRealEstateMarket(liveSnapshot)
+		market = initialized.market
+		meta = initialized.meta
+	}
+
+	market = { ...(market || {}) }
+	meta = {
+		...defaultRealEstateMeta(),
+		...(meta || {}),
+		seededUsersByCity: { ...defaultRealEstateMeta().seededUsersByCity, ...(meta?.seededUsersByCity || {}) },
+		pendingListingTimersByCity: { ...defaultRealEstateMeta().pendingListingTimersByCity, ...(meta?.pendingListingTimersByCity || {}) },
+		nextSequenceByCity: { ...defaultRealEstateMeta().nextSequenceByCity, ...(meta?.nextSequenceByCity || {}) }
+	}
+
+	const cityUserCounts = getUserCityCounts(liveSnapshot)
+	const users = getRegisteredUserCount()
+	for (const city of cityData) {
+		const cityName = city.name
+		const currentUsers = Number(cityUserCounts[cityName] || 0)
+		const seededUsers = Number(meta.seededUsersByCity?.[cityName] || 0)
+		const pressure = cityPressureMultiplier(users, city)
+		const existing = Array.isArray(market[cityName]) ? [...market[cityName]] : []
+
+		let additions = 0
+		if (seededUsers === 0 && currentUsers > 0 && existing.length === 0) {
+			additions = initialListingsForCity(currentUsers)
+		} else if (currentUsers > seededUsers) {
+			additions = (currentUsers - seededUsers) * 2
+		}
+
+		let nextSequence = Number(meta.nextSequenceByCity?.[cityName] || existing.length)
+		for (let i = 0; i < additions; i++) {
+			const template = realEstateTemplates[nextSequence % realEstateTemplates.length]
+			existing.push(buildRealEstateListing(city, template, nextSequence, pressure, `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-${i}`))
+			nextSequence += 1
+		}
+
+		if (advanceOneMonth) {
+			const timers = Array.isArray(meta.pendingListingTimersByCity?.[cityName]) ? [...meta.pendingListingTimersByCity[cityName]] : []
+			const maturedCount = timers.filter((months: number) => Number(months || 0) <= 1).length
+			meta.pendingListingTimersByCity[cityName] = timers
+				.map((months: number) => Math.max(0, Number(months || 0) - 1))
+				.filter((months: number) => months > 0)
+
+			for (let i = 0; i < maturedCount; i++) {
+				const template = realEstateTemplates[nextSequence % realEstateTemplates.length]
+				existing.push(buildRealEstateListing(city, template, nextSequence, pressure, `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-restock-${i}`))
+				nextSequence += 1
+			}
+		}
+
+		meta.seededUsersByCity[cityName] = Math.max(seededUsers, currentUsers)
+		meta.nextSequenceByCity[cityName] = nextSequence
+		market[cityName] = existing.sort((a: any, b: any) => Number(a.askingPrice || 0) - Number(b.askingPrice || 0))
+	}
+
+	writeSharedRealEstateMarket(market)
+	writeSharedRealEstateMeta(meta)
+	return { market, meta }
+}
+
+function getSharedRealEstateMarket(liveSnapshot?: any) {
+	return syncSharedRealEstateMarket(liveSnapshot, false).market
+}
+
+function realEstateAmenityScore(amenities: string[]) {
+	return (Array.isArray(amenities) ? amenities : []).reduce((sum, a) => {
+		const impact = amenityImpact[a]
+		return sum + Number(impact?.occupancyBoost || 0)
+	}, 0)
+}
+
+function realEstateAmenityRentBoostRate(amenities: string[]) {
+	return (Array.isArray(amenities) ? amenities : []).reduce((sum, a) => {
+		const impact = amenityImpact[a]
+		return sum + Number(impact?.rentBoost || 0)
+	}, 0)
+}
+
+function realEstateAmenityUpkeepRate(amenities: string[]) {
+	return (Array.isArray(amenities) ? amenities : []).reduce((sum, a) => {
+		const impact = amenityImpact[a]
+		return sum + Number(impact?.upkeepRate || 0)
+	}, 0)
+}
+
+function realEstateEquityValue(snapshot: any) {
+	const properties = Array.isArray(snapshot?.investmentProperties) ? snapshot.investmentProperties : []
+	return round2(properties.reduce((sum: number, p: any) => {
+		const value = Number(p?.propertyValue || 0)
+		const loan = Number(p?.loanBalance || 0)
+		return sum + Math.max(0, value - loan)
+	}, 0))
+}
+
+function normalizeRealEstateState(data: any) {
+	const shared = syncSharedRealEstateMarket(data, false)
+	const market = shared.market
+	const fallbackMarket = market
+	const normalizedMarket: Record<string, any[]> = {}
+	for (const city of cityData) {
+		const key = city.name
+		const listings = Array.isArray(market[key]) ? market[key] : fallbackMarket[key]
+		normalizedMarket[key] = listings.map((l: any, idx: number) => ({
+			id: l?.id || `re-${key}-${idx}`,
+			cityName: l?.cityName || key,
+			templateId: l?.templateId || realEstateTemplates[0].id,
+			templateName: l?.templateName || realEstateTemplates[0].name,
+			assetClass: l?.assetClass || (realEstateTemplates.find((t) => t.id === l?.templateId)?.assetClass || 'Residential'),
+			incomeLabel: l?.incomeLabel || (realEstateTemplates.find((t) => t.id === l?.templateId)?.incomeLabel || 'Monthly Rent'),
+			units: Math.max(1, Number(l?.units || 1)),
+			askingPrice: Math.max(50000, Number(l?.askingPrice || 250000)),
+			askingRentPerUnit: Math.max(400, Number(l?.askingRentPerUnit || 1500)),
+			amenities: Array.isArray(l?.amenities) ? l.amenities : [],
+			dom: Math.max(0, Math.floor(Number(l?.dom || 0))),
+			condition: Math.max(20, Math.min(100, Math.round(Number(l?.condition || 75)))),
+			ownershipCount: Math.max(0, Math.floor(Number(l?.ownershipCount || 0))),
+			foreclosure: !!l?.foreclosure,
+			listedByUser: l?.listedByUser || null
+		}))
+	}
+	writeSharedRealEstateMarket(normalizedMarket)
+	writeSharedRealEstateMeta(shared.meta)
+
+	return {
+		realEstateMarket: normalizedMarket,
+		realEstateMarketMeta: shared.meta,
+		investmentProperties: Array.isArray(data?.investmentProperties) ? data.investmentProperties.map((p: any) => ({
+			...p,
+			assetClass: p?.assetClass || (realEstateTemplates.find((t) => t.id === p?.templateId)?.assetClass || 'Residential'),
+			incomeLabel: p?.incomeLabel || (realEstateTemplates.find((t) => t.id === p?.templateId)?.incomeLabel || 'Monthly Rent'),
+			ownershipCount: Math.max(0, Math.floor(Number(p?.ownershipCount || 0))),
+			mortgageTermMonths: Number(p?.mortgageTermMonths || 0),
+			purchaseMode: p?.purchaseMode || (Number(p?.loanBalance || 0) > 0 ? 'mortgage' : 'cash')
+		})) : [],
+		pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
+		realEstateLastMonthIncome: Number(data?.realEstateLastMonthIncome || 0),
+		realEstateLastMonthExpenses: Number(data?.realEstateLastMonthExpenses || 0),
+		realEstateLastMonthPropertyBreakdown: Array.isArray(data?.realEstateLastMonthPropertyBreakdown)
+			? data.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
+				propertyId: String(entry?.propertyId || ''),
+				propertyName: String(entry?.propertyName || 'Property'),
+				cityName: String(entry?.cityName || ''),
+				grossIncome: Number(entry?.grossIncome || 0),
+				operatingCosts: Number(entry?.operatingCosts || 0),
+				debtService: Number(entry?.debtService || 0),
+				netCashflow: Number(entry?.netCashflow || 0)
+			}))
+			: []
+	}
+}
+
 function advanceMarketPrices(currentPrices: any, year: number, month: number) {
 	const base = normalizeMarketPrices(currentPrices)
 	const next: Record<string, number> = {}
@@ -376,7 +673,14 @@ function achievementMetricValue(rule: any, snapshot: any) {
 	const marketValue = portfolioMarketValue(snapshot.portfolio || [], prices)
 	const costBasis = portfolioCostBasis(snapshot.portfolio || [])
 	const unrealized = round2(marketValue - costBasis)
-	const netWorth = round2(Number(snapshot.check || 0) + Number(snapshot.save || 0) + Number(snapshot.house?.value || 0) + marketValue - Number(snapshot.debt || 0))
+	const netWorth = round2(
+		Number(snapshot.check || 0)
+		+ Number(snapshot.save || 0)
+		+ Number(snapshot.house?.value || 0)
+		+ marketValue
+		+ realEstateEquityValue(snapshot)
+		- Number(snapshot.debt || 0)
+	)
 	const portfolio = Array.isArray(snapshot.portfolio) ? snapshot.portfolio : []
 
 	switch (metric) {
@@ -647,8 +951,15 @@ function comfortableEntertainmentDefaults(job: any, city: any) {
 	}
 }
 
-function calculateLuxuryServiceMonthlyPay(serviceId: string, netMonthlyIncome: number) {
+function totalMonthlyIncomeForLuxuryPricing(snapshot: any) {
+	const salaryIncome = Math.max(0, Number(snapshot?.job?.base || 0) * Number(snapshot?.city?.p || 1) * 0.8)
+	const rentalIncome = Math.max(0, Number(snapshot?.realEstateLastMonthIncome || 0))
+	return round2(salaryIncome + rentalIncome)
+}
+
+function calculateLuxuryServiceMonthlyPay(serviceId: string, netMonthlyIncome: number, options?: { propertyCount?: number }) {
 	const income = Math.max(0, Number(netMonthlyIncome || 0))
+	const propertyCount = Math.max(0, Math.floor(Number(options?.propertyCount || 0)))
 	const rules: Record<string, { base: number; pct: number; min: number; max: number }> = {
 		chef: { base: 2200, pct: 0.08, min: 3000, max: 20000 },
 		housekeeper: { base: 1200, pct: 0.03, min: 1600, max: 9000 },
@@ -663,15 +974,27 @@ function calculateLuxuryServiceMonthlyPay(serviceId: string, netMonthlyIncome: n
 	if (!rule) return 0
 
 	const raw = rule.base + (income * rule.pct)
-	return round2(Math.min(rule.max, Math.max(rule.min, raw)))
+	const baseline = round2(Math.min(rule.max, Math.max(rule.min, raw)))
+	const propertySurcharge = serviceId === 'housekeeper' ? propertyCount * 450 : 0
+	let adjusted = round2(baseline + propertySurcharge)
+	if (income <= 0) return adjusted
+
+	// Keep the current rule output as the minimum, but increase pricing again when the service becomes too cheap relative to income.
+	if (adjusted / income < 0.15) {
+		const targetPremium = (income * 0.15) - adjusted
+		adjusted = round2(adjusted + (targetPremium * 0.28))
+	}
+
+	return adjusted
 }
 
 function totalLuxuryServiceDiscretionary(state: any) {
-	const netMonthlyIncome = Math.max(0, Number(state?.job?.base || 0) * Number(state?.city?.p || 1) * 0.8)
+	const netMonthlyIncome = totalMonthlyIncomeForLuxuryPricing(state)
+	const propertyCount = Array.isArray(state?.investmentProperties) ? state.investmentProperties.length : 0
 	const services = state?.luxuryServices || {}
 	return round2(Object.entries(services).reduce((sum, [serviceId, active]) => {
 		if (!active) return sum
-		return sum + calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome)
+		return sum + calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome, { propertyCount })
 	}, 0))
 }
 
@@ -781,12 +1104,21 @@ const initialState: State = {
 	// Housing & inventory
 	house: { model: null, level: 0, value: 0 },
 	inventory: [] as any[],
+	realEstateMarket: getSharedRealEstateMarket(),
+	realEstateMarketMeta: readSharedRealEstateMeta() || defaultRealEstateMeta(),
+	investmentProperties: [] as any[],
+	pendingRealEstateDeals: [] as any[],
+	realEstateLastMonthIncome: 0,
+	realEstateLastMonthExpenses: 0,
+	realEstateLastMonthPropertyBreakdown: [] as any[],
 	// Stock market
 	marketPrices: initializeMarketPrices(),
 	marketPricesPrevious: initializeMarketPrices(),
 	portfolio: [] as any[],
 	marketLearningLevel: 'adult',
 	marketUsePlainLanguage: false,
+	realEstateLearningLevel: 'adult',
+	realEstateUsePlainLanguage: false,
 	autoInvest: {
 		enabled: false,
 		monthlyAmount: 0,
@@ -1263,6 +1595,11 @@ function reducer(state: State, action: any) {
 			let logs = [...state.logs]
 			const garage = state.garage || []
 			let updatedGarage = garage.map((g: any) => ({ ...g }))
+			const sharedRealEstate = syncSharedRealEstateMarket(state, true)
+			let realEstateMarket = sharedRealEstate.market
+			let realEstateMarketMeta = sharedRealEstate.meta
+			let investmentProperties = Array.isArray(state.investmentProperties) ? state.investmentProperties.map((p: any) => ({ ...p })) : []
+			let pendingRealEstateDeals = Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals.map((d: any) => ({ ...d })) : []
 
 			// Iterate over all vehicles in garage to compute costs and update status
 			for (let i = 0; i < updatedGarage.length; i++) {
@@ -1664,6 +2001,301 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: '💪 Personal trainer kept your consistency high this month.' })
 			}
 
+			const registeredUsers = getRegisteredUserCount()
+			for (const city of cityData) {
+				const cityName = city.name
+				const pressure = cityPressureMultiplier(registeredUsers, city)
+				const listings = Array.isArray(realEstateMarket[cityName]) ? realEstateMarket[cityName] : []
+				realEstateMarket[cityName] = listings.map((listing: any, idx: number) => {
+					const dom = Math.max(0, Number(listing?.dom || 0) + 1)
+					const seed = hashString(`${listing.id || `${cityName}-${idx}`}-${nextYear}-${nextMonth}`)
+					const rnd = mulberry32(seed)()
+					const domDiscount = Math.min(0.025, dom * 0.0012)
+					const pressureDrift = (pressure - 1) * 0.008
+					const noise = (rnd - 0.5) * 0.016
+					const nextPrice = round2(Math.max(50000, Number(listing.askingPrice || 0) * (1 + pressureDrift - domDiscount + noise)))
+					const nextRent = round2(Math.max(450, Number(listing.askingRentPerUnit || 0) * (1 + pressureDrift * 0.7 - domDiscount * 0.4 + noise * 0.8)))
+					const conditionDrift = Math.round((rnd - 0.45) * 2)
+					return {
+						...listing,
+						dom,
+						askingPrice: nextPrice,
+						askingRentPerUnit: nextRent,
+						condition: Math.max(20, Math.min(100, Number(listing.condition || 75) + conditionDrift))
+					}
+				})
+			}
+
+			const survivingDeals: any[] = []
+			for (const deal of pendingRealEstateDeals) {
+				const monthsInPipeline = Number(deal?.monthsInPipeline || 0) + 1
+				const approvalMonthsRequired = Math.max(1, Number(deal?.approvalMonthsRequired || 2))
+				if (monthsInPipeline < approvalMonthsRequired) {
+					survivingDeals.push({ ...deal, monthsInPipeline })
+					continue
+				}
+
+				const downPaymentPct = Math.max(0.1, Math.min(0.6, Number(deal?.downPaymentPct || 0.25)))
+				const baseApproval = 0.48 + ((credit - 600) / 1000) + ((downPaymentPct - 0.2) * 0.7)
+				const certBonus = (Array.isArray(credentials) && (credentials.includes('Real Estate') || credentials.includes('Real Estate Broker'))) ? 0.08 : 0
+				const approvalChance = Math.max(0.15, Math.min(0.96, baseApproval + certBonus))
+				const approvalRoll = mulberry32(hashString(`${deal.id}-${nextMonth}-${nextYear}-${credit}`))()
+
+				if (approvalRoll > approvalChance) {
+					if (deal?.listing?.cityName) {
+						realEstateMarket[deal.listing.cityName] = [...(realEstateMarket[deal.listing.cityName] || []), deal.listing]
+					}
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏦 Property offer declined by underwriting: ${deal?.listing?.templateName || 'Listing'}` })
+					continue
+				}
+
+				const listing = deal?.listing || null
+				if (!listing) continue
+				const purchasePrice = Number(listing.askingPrice || 0)
+				const purchaseMode = deal?.purchaseMode === 'cash' ? 'cash' : 'mortgage'
+				const mortgageTermYears = Number(deal?.mortgageTermYears || 30) === 15 ? 15 : 30
+				const negotiatedPrice = purchaseMode === 'cash' ? round2(purchasePrice * 0.97) : purchasePrice
+				const downPayment = purchaseMode === 'cash' ? negotiatedPrice : round2(negotiatedPrice * downPaymentPct)
+				const closingCosts = round2(negotiatedPrice * (purchaseMode === 'cash' ? 0.015 : 0.025))
+				const cashToClose = round2(downPayment + closingCosts)
+				if (resultingCheck < cashToClose) {
+					if (listing?.cityName) {
+						realEstateMarket[listing.cityName] = [...(realEstateMarket[listing.cityName] || []), listing]
+					}
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏚️ Deal canceled at closing (insufficient cash): needed $${cashToClose.toLocaleString()}` })
+					continue
+				}
+
+				resultingCheck = round2(resultingCheck - cashToClose)
+				const loanBalance = round2(Math.max(0, negotiatedPrice - downPayment))
+				const mortgageAPR = Math.max(0.035, calculateDynamicAPR(credit) + 0.01)
+				const mortgageTermMonths = purchaseMode === 'cash' ? 0 : (mortgageTermYears * 12)
+				const monthlyDebtService = purchaseMode === 'cash' ? 0 : round2(calculateMonthlyPayment(loanBalance, mortgageAPR, mortgageTermMonths))
+				const tier = cityRealEstateTier(cityData.find((c) => c.name === listing.cityName) || { p: 1 }) as keyof typeof rentControlByCityType
+				const rentControlCap = Number(rentControlByCityType[tier] || 0.045)
+				const amenities = Array.isArray(listing.amenities) ? listing.amenities : []
+				const units = Math.max(1, Number(listing.units || 1))
+				const occupiedUnits = Math.max(0, Math.min(units, Math.round(units * 0.75)))
+				const ownershipCount = Math.max(0, Math.floor(Number(listing.ownershipCount || 0))) + 1
+				const propertyId = `prop-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+				investmentProperties.push({
+					id: propertyId,
+					cityName: listing.cityName,
+					templateName: listing.templateName,
+					templateId: listing.templateId,
+					assetClass: listing.assetClass || (realEstateTemplates.find((t) => t.id === listing.templateId)?.assetClass || 'Residential'),
+					incomeLabel: listing.incomeLabel || (realEstateTemplates.find((t) => t.id === listing.templateId)?.incomeLabel || 'Monthly Rent'),
+					ownershipCount,
+					units,
+					occupiedUnits,
+					vacancyMonths: occupiedUnits < units ? 1 : 0,
+					propertyValue: negotiatedPrice,
+					loanBalance,
+					monthlyDebtService,
+					mortgageTermMonths,
+					purchaseMode,
+					rentPerUnit: Number(listing.askingRentPerUnit || 0),
+					marketRentPerUnit: Number(listing.askingRentPerUnit || 0),
+					amenities,
+					condition: Math.max(40, Math.min(100, Number(listing.condition || 75))),
+					maintenanceIntensity: 1,
+					neglectScore: 0,
+					rentControlCap,
+					renovationMonthsRemaining: 0,
+					renovationBudgetRemaining: 0,
+					lastNetCashflow: 0,
+					acquiredMonth: nextMonth,
+					acquiredYear: nextYear
+				})
+
+				realEstateMarket[listing.cityName] = (realEstateMarket[listing.cityName] || []).filter((l: any) => l.id !== listing.id)
+				const restockDelay = 5 + Math.floor(Math.random() * 3)
+				realEstateMarketMeta.pendingListingTimersByCity[listing.cityName] = [
+					...(Array.isArray(realEstateMarketMeta.pendingListingTimersByCity?.[listing.cityName]) ? realEstateMarketMeta.pendingListingTimersByCity[listing.cityName] : []),
+					restockDelay
+				]
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏠 Closed on ${listing.templateName} in ${listing.cityName} for $${negotiatedPrice.toLocaleString()} (${purchaseMode === 'cash' ? 'cash purchase' : `${mortgageTermYears}-year mortgage`})` })
+			}
+			pendingRealEstateDeals = survivingDeals
+
+			let realEstateIncome = 0
+			let realEstateExpenses = 0
+			const realEstatePropertyBreakdown: any[] = []
+			const propertyEvents: string[] = []
+			investmentProperties = investmentProperties.map((property: any) => {
+				const city = cityData.find((c) => c.name === property.cityName) || { p: 1, r: 1, name: property.cityName }
+				const pressure = cityPressureMultiplier(registeredUsers, city)
+				const amenityScore = realEstateAmenityScore(property.amenities || [])
+				const amenityRentBoostRate = realEstateAmenityRentBoostRate(property.amenities || [])
+				const amenityUpkeepRate = realEstateAmenityUpkeepRate(property.amenities || [])
+				const units = Math.max(1, Number(property.units || 1))
+				let occupiedUnits = Math.max(0, Math.min(units, Number(property.occupiedUnits || 0)))
+				let vacancyMonths = Number(property.vacancyMonths || 0)
+				let condition = Math.max(20, Math.min(100, Number(property.condition || 75)))
+				let maintenanceIntensity = Math.max(0.5, Math.min(1.5, Number(property.maintenanceIntensity || 1)))
+				let propertyValue = Math.max(60000, Number(property.propertyValue || 0))
+				let loanBalance = Math.max(0, Number(property.loanBalance || 0))
+				const debtService = Math.max(0, Number(property.monthlyDebtService || 0))
+				let rentPerUnit = Math.max(450, Number(property.rentPerUnit || 0))
+				let marketRentPerUnit = Math.max(450, Number(property.marketRentPerUnit || rentPerUnit))
+				let neglectScore = Math.max(0, Number(property.neglectScore || 0))
+				let renovationMonthsRemaining = Math.max(0, Number(property.renovationMonthsRemaining || 0))
+				let renovationBudgetRemaining = Math.max(0, Number(property.renovationBudgetRemaining || 0))
+				const renovationValueRecovery = Math.max(0.72, Number(property.renovationValueRecovery || 0.9))
+				const acquiredMonth = Number(property.acquiredMonth || nextMonth)
+				const acquiredYear = Number(property.acquiredYear || nextYear)
+				const propertyAgeMonths = Math.max(0, ((nextYear - acquiredYear) * 12) + (nextMonth - acquiredMonth))
+
+				const valueDrift = ((pressure - 1) * 0.012) + ((condition - 70) * 0.00035) - (neglectScore * 0.0009)
+				propertyValue = round2(Math.max(60000, propertyValue * (1 + valueDrift)))
+				marketRentPerUnit = round2(Math.max(450, marketRentPerUnit * (1 + ((pressure - 1) * 0.01) + ((condition - 70) * 0.0002) + (amenityRentBoostRate * 0.08))))
+
+				const maxRentStep = Math.max(0, Number(property.rentControlCap || 0.045) / 12)
+				const targetRent = Math.min(marketRentPerUnit * 1.1, rentPerUnit * (1 + maxRentStep))
+				rentPerUnit = round2(Math.max(450, targetRent))
+
+				// Buildings naturally wear down over time. Maintenance only slows decay; it does not fully renovate by itself.
+				const ageDecay = 0.18 + Math.min(0.42, propertyAgeMonths * 0.008)
+				const neglectPenalty = neglectScore * 0.035
+				const maintenanceReduction = Math.max(0, (maintenanceIntensity - 0.75) * 0.42)
+				const monthlyConditionDecay = Math.max(0.04, ageDecay + neglectPenalty - maintenanceReduction)
+				condition = Math.max(20, condition - monthlyConditionDecay)
+
+				if (maintenanceIntensity < 0.95) {
+					neglectScore = Math.min(12, neglectScore + (1.05 - maintenanceIntensity) * 0.9)
+				} else {
+					neglectScore = Math.max(0, neglectScore - Math.min(0.45, (maintenanceIntensity - 0.95) * 0.9))
+				}
+
+				if (renovationMonthsRemaining > 0 && renovationBudgetRemaining > 0) {
+					const monthlyRenovationSpend = round2(Math.min(renovationBudgetRemaining, renovationBudgetRemaining / renovationMonthsRemaining))
+					renovationBudgetRemaining = round2(Math.max(0, renovationBudgetRemaining - monthlyRenovationSpend))
+					renovationMonthsRemaining = Math.max(0, renovationMonthsRemaining - 1)
+					realEstateExpenses = round2(realEstateExpenses + monthlyRenovationSpend)
+					// Renovation improves condition gradually each month rather than instantly.
+					const renovationLift = 0.9 + Math.min(1.15, Math.max(0.35, monthlyRenovationSpend / 40000))
+					condition = Math.min(100, condition + renovationLift)
+					neglectScore = Math.max(0, neglectScore - 0.55)
+					propertyValue = round2(propertyValue + (monthlyRenovationSpend * renovationValueRecovery))
+				}
+
+				const rentPressure = marketRentPerUnit > 0 ? rentPerUnit / marketRentPerUnit : 1
+				const churnChance = Math.max(0.02, Math.min(0.4, 0.04 + Math.max(0, rentPressure - 1) * 0.18 + ((70 - condition) * 0.002) - amenityScore * 0.2))
+				if (occupiedUnits > 0) {
+					const churnSeed = hashString(`${property.id}-${nextYear}-${nextMonth}-churn`)
+					if (mulberry32(churnSeed)() < churnChance) {
+						occupiedUnits = Math.max(0, occupiedUnits - 1)
+						vacancyMonths = 1
+						propertyEvents.push(`Tenant moved out at ${property.templateName} (${property.cityName})`)
+					}
+				}
+
+				if (occupiedUnits < units) {
+					let vacantUnits = units - occupiedUnits
+					for (let i = 0; i < vacantUnits; i++) {
+						const leaseChance = Math.max(0.08, Math.min(0.9, 0.32 + ((pressure - 1) * 0.28) + amenityScore + Math.max(0, 1 - rentPressure) * 0.22 + ((condition - 65) * 0.004) - (vacancyMonths * 0.02)))
+						const leaseSeed = hashString(`${property.id}-${nextYear}-${nextMonth}-lease-${i}`)
+						if (mulberry32(leaseSeed)() < leaseChance) {
+							occupiedUnits += 1
+							propertyEvents.push(`New tenant signed at ${property.templateName} (${property.cityName})`)
+						}
+					}
+					vacancyMonths = occupiedUnits < units ? vacancyMonths + 1 : 0
+				}
+
+				const annualTaxRate = 0.009 + Number(city.p || 1) * 0.003
+				const annualInsuranceRate = 0.0035 + Number(city.r || 1) * 0.001
+				const annualMaintenanceRate = 0.014 + (Math.max(0, 85 - condition) * 0.00025) + amenityUpkeepRate
+				const monthlyOperating = round2(propertyValue * (annualTaxRate + annualInsuranceRate + annualMaintenanceRate) / 12)
+				const grossRent = round2(occupiedUnits * rentPerUnit)
+				const netCashflow = round2(grossRent - monthlyOperating - debtService)
+
+				realEstateIncome = round2(realEstateIncome + grossRent)
+				realEstateExpenses = round2(realEstateExpenses + monthlyOperating + debtService)
+				realEstatePropertyBreakdown.push({
+					propertyId: String(property.id || ''),
+					propertyName: String(property.templateName || property.incomeLabel || 'Property'),
+					cityName: String(property.cityName || ''),
+					grossIncome: grossRent,
+					operatingCosts: monthlyOperating,
+					debtService,
+					netCashflow
+				})
+
+				if (loanBalance > 0 && debtService > 0) {
+					const loanInterest = round2(loanBalance * ((Math.max(0.035, calculateDynamicAPR(credit) + 0.01)) / 12))
+					const principalPaid = Math.max(0, round2(debtService - loanInterest))
+					loanBalance = round2(Math.max(0, loanBalance - principalPaid))
+				}
+
+				return {
+					...property,
+					occupiedUnits,
+					vacancyMonths,
+					condition: round2(condition),
+					maintenanceIntensity,
+					propertyValue,
+					loanBalance,
+					rentPerUnit,
+					marketRentPerUnit,
+					neglectScore: round2(neglectScore),
+					renovationMonthsRemaining,
+					renovationBudgetRemaining,
+					renovationValueRecovery,
+					lastNetCashflow: netCashflow
+				}
+			})
+
+			const realEstateNet = round2(realEstateIncome - realEstateExpenses)
+			if (investmentProperties.length > 0) {
+				resultingCheck = round2(resultingCheck + realEstateNet)
+				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏘️ Rental portfolio cashflow: ${realEstateNet >= 0 ? '+' : '-'}$${Math.abs(realEstateNet).toLocaleString()} (income $${realEstateIncome.toLocaleString()} | expenses $${realEstateExpenses.toLocaleString()})` })
+			}
+
+			if (resultingCheck < 0 && investmentProperties.length > 0) {
+				const ranked = [...investmentProperties].sort((a: any, b: any) => (Number(a.propertyValue || 0) - Number(a.loanBalance || 0)) - (Number(b.propertyValue || 0) - Number(b.loanBalance || 0)) )
+				const foreclosed = ranked[0]
+				if (foreclosed) {
+					const foreclosurePrice = round2(Math.max(50000, Number(foreclosed.propertyValue || 0) * 0.78))
+					const deficiency = round2(Math.max(0, Number(foreclosed.loanBalance || 0) - foreclosurePrice))
+					const surplus = round2(Math.max(0, foreclosurePrice - Number(foreclosed.loanBalance || 0)))
+
+					if (deficiency > 0) {
+						newDebt = round2(newDebt + deficiency)
+					}
+					resultingCheck = round2(Math.max(0, resultingCheck + surplus))
+
+					investmentProperties = investmentProperties.filter((p: any) => p.id !== foreclosed.id)
+					const foreclosureListing = {
+						id: `re-foreclosure-${foreclosed.id}-${nextYear}-${nextMonth}`,
+						cityName: foreclosed.cityName,
+						templateId: foreclosed.templateId,
+						templateName: foreclosed.templateName,
+						assetClass: foreclosed.assetClass || 'Residential',
+						incomeLabel: foreclosed.incomeLabel || 'Monthly Rent',
+						units: Math.max(1, Number(foreclosed.units || 1)),
+						askingPrice: foreclosurePrice,
+						askingRentPerUnit: round2(Math.max(300, Number(foreclosed.rentPerUnit || foreclosed.marketRentPerUnit || 1200) * 0.96)),
+						amenities: Array.isArray(foreclosed.amenities) ? foreclosed.amenities : [],
+						dom: 0,
+						condition: Math.max(20, Math.min(100, Math.round(Number(foreclosed.condition || 60) - 6))),
+						ownershipCount: Math.max(0, Math.floor(Number(foreclosed.ownershipCount || 0))),
+						foreclosure: true,
+						listedByUser: null
+					}
+					realEstateMarket[foreclosed.cityName] = [...(realEstateMarket[foreclosed.cityName] || []), foreclosureListing]
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Foreclosure executed on ${foreclosed.templateName}. Relisted at $${foreclosurePrice.toLocaleString()}${deficiency > 0 ? ` with $${deficiency.toLocaleString()} deficiency debt.` : '.'}` })
+				}
+			}
+			if (propertyEvents.length > 0) {
+				for (const evt of propertyEvents.slice(0, 4)) {
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏢 ${evt}` })
+				}
+			}
+
+			writeSharedRealEstateMarket(realEstateMarket)
+			writeSharedRealEstateMeta(realEstateMarketMeta)
+
 			if (state.luxuryServices?.therapist) {
 				const rainbowSeed = hashString(`${nextYear}-${nextMonth}-${updatedJob.title}-${city.name}-rainbow`)
 				if (mulberry32(rainbowSeed)() < 0.35) {
@@ -1686,6 +2318,46 @@ function reducer(state: State, action: any) {
 			resultingCheck = autoInvestResult.checkBalance
 			const nextPortfolio = autoInvestResult.portfolio
 			logs = autoInvestResult.logs
+
+			let totalDividendsPaid = 0
+			const dividendBreakdown: string[] = []
+			for (const holding of Array.isArray(nextPortfolio) ? nextPortfolio : []) {
+				const ticker = String(holding?.ticker || '')
+				const shares = Number(holding?.shares || 0)
+				if (!ticker || shares <= 0) continue
+
+				const asset = stockMarketAssets.find((a) => a.ticker === ticker)
+				const annualYield = Number((asset as any)?.dividendYield || 0)
+				if (!asset || annualYield <= 0) continue
+
+				const referencePrice = Number(previousMarketPrices[ticker] || asset.basePrice || 0)
+				if (referencePrice <= 0) continue
+
+				const monthlyDividend = round2(shares * referencePrice * (annualYield / 12))
+				if (monthlyDividend <= 0) continue
+
+				totalDividendsPaid = round2(totalDividendsPaid + monthlyDividend)
+				dividendBreakdown.push(`${ticker}: +$${monthlyDividend.toFixed(2)}`)
+			}
+
+			if (totalDividendsPaid > 0) {
+				resultingCheck = round2(resultingCheck + totalDividendsPaid)
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `💰 Dividend payout received: +$${totalDividendsPaid.toFixed(2)} (${dividendBreakdown.join(', ')})`
+				})
+				eventHistory.push({
+					id: `div-${nextYear}-${nextMonth}`,
+					title: 'Dividend Payout',
+					amount: totalDividendsPaid,
+					type: 'in',
+					icon: '💰',
+					desc: dividendBreakdown.join(' | '),
+					trigger: 'stocks',
+					month: nextMonth,
+					year: nextYear
+				})
+			}
 			const stockInvestedLastMonth = round2(Number(state.stockInvestedThisMonth || 0) + Number(autoInvestResult.investedAmount || 0))
 			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
 
@@ -1697,6 +2369,7 @@ function reducer(state: State, action: any) {
 				tenure,
 				credentials,
 				garage: updatedGarage,
+				investmentProperties,
 				portfolio: nextPortfolio,
 				marketPrices: nextMarketPrices,
 				logs,
@@ -1763,6 +2436,13 @@ function reducer(state: State, action: any) {
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
 				portfolio: nextPortfolio,
+				investmentProperties,
+				pendingRealEstateDeals,
+				realEstateMarket,
+				realEstateMarketMeta,
+				realEstateLastMonthIncome: realEstateIncome,
+				realEstateLastMonthExpenses: realEstateExpenses,
+				realEstateLastMonthPropertyBreakdown: realEstatePropertyBreakdown,
 				stockInvestedThisMonth: 0,
 				stockInvestedLastMonth,
 				totalGasPaid,
@@ -2004,6 +2684,51 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// INCOME
 		bal = fix(bal + netSalary)
 		ledger.push({ id: id++, desc: `Net Salary: ${job.title}${workPenaltyPercent > 0 ? ` (${(workPenaltyPercent * 100).toFixed(1)}% attendance impact)` : ''}`, amt: netSalary, type: 'inc', bal, done: false })
+
+		const realEstateIncome = Math.max(0, Number(state.realEstateLastMonthIncome || 0))
+		const realEstateExpenses = Math.max(0, Number(state.realEstateLastMonthExpenses || 0))
+		const realEstatePropertyBreakdown = Array.isArray(state.realEstateLastMonthPropertyBreakdown)
+			? state.realEstateLastMonthPropertyBreakdown
+			: []
+		if (realEstateIncome > 0) {
+			if (state.luxuryServices?.housekeeper) {
+				bal = fix(bal + realEstateIncome)
+				ledger.push({
+					id: id++,
+					desc: 'Rental Income (Managed Portfolio)',
+					amt: realEstateIncome,
+					type: 'inc',
+					bal,
+					done: false,
+					details: realEstatePropertyBreakdown
+						.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
+						.map((entry: any) => `${entry.propertyName} (${entry.cityName}): $${Math.round(Number(entry.grossIncome || 0)).toLocaleString()}`)
+				})
+			} else {
+				const incomeRows = realEstatePropertyBreakdown.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
+				if (incomeRows.length > 0) {
+					for (const entry of incomeRows) {
+						const grossIncome = Math.max(0, Number(entry.grossIncome || 0))
+						bal = fix(bal + grossIncome)
+						ledger.push({
+							id: id++,
+							desc: `Rental Income: ${entry.propertyName} (${entry.cityName})`,
+							amt: grossIncome,
+							type: 'inc',
+							bal,
+							done: false
+						})
+					}
+				} else {
+					bal = fix(bal + realEstateIncome)
+					ledger.push({ id: id++, desc: 'Rental Income (Last Month)', amt: realEstateIncome, type: 'inc', bal, done: false })
+				}
+			}
+		}
+		if (realEstateExpenses > 0) {
+			bal = fix(bal - realEstateExpenses)
+			ledger.push({ id: id++, desc: 'Rental Operating Costs (Last Month)', amt: realEstateExpenses, type: 'out', bal, done: false })
+		}
 		
 		// HOUSING - Dynamic rent based on 30% of salary
 		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
@@ -2131,7 +2856,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		let luxuryCosts = 0
 		const luxuryServicesList: string[] = []
 		const luxuryLineItems: Array<{ desc: string; amt: number }> = []
-		const netMonthlyIncome = Math.max(0, (job?.base || 0) * (state.city?.p || 1) * 0.8)
+		const netMonthlyIncome = totalMonthlyIncomeForLuxuryPricing(state)
+		const propertyCount = Array.isArray(state.investmentProperties) ? state.investmentProperties.length : 0
 		const luxuryServiceConfigs = [
 			{ id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
 			{ id: 'housekeeper', label: 'Housekeeper', varianceKey: 'luxury-housekeeper' },
@@ -2144,7 +2870,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		for (const cfg of luxuryServiceConfigs) {
 			if (!(state.luxuryServices as any)?.[cfg.id]) continue
-			const baseCost = calculateLuxuryServiceMonthlyPay(cfg.id, netMonthlyIncome)
+			const baseCost = calculateLuxuryServiceMonthlyPay(cfg.id, netMonthlyIncome, { propertyCount })
 			const adjustedCost = applyLedgerDecimalVariance(baseCost, cfg.varianceKey)
 			luxuryCosts += adjustedCost
 			luxuryServicesList.push(`${cfg.label}: $${adjustedCost}`)
@@ -2323,10 +3049,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (!data) return false
 		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
 		const marketPrices = normalizeMarketPrices(data.marketPrices)
+		const realEstateState = normalizeRealEstateState(data)
 		dispatch({
 			type: 'SET_STATE',
 			payload: {
 				...data,
+				...realEstateState,
 				currentUser: u,
 				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
 				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
@@ -2340,6 +3068,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
 				marketLearningLevel: data.marketLearningLevel ?? 'adult',
 				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
 				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -2445,6 +3175,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			portfolio: [],
 			marketLearningLevel: 'adult',
 			marketUsePlainLanguage: false,
+			realEstateLearningLevel: 'adult',
+			realEstateUsePlainLanguage: false,
 			autoInvest: {
 				enabled: false,
 				monthlyAmount: 0,
@@ -2452,6 +3184,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			},
 			stockInvestedThisMonth: 0,
 			stockInvestedLastMonth: 0,
+			house: { model: null, level: 0, value: 0 },
+			inventory: [],
+			realEstateMarket: {},
+			realEstateMarketMeta: defaultRealEstateMeta(),
+			investmentProperties: [],
+			pendingRealEstateDeals: [],
+			realEstateLastMonthIncome: 0,
+			realEstateLastMonthExpenses: 0,
+			realEstateLastMonthPropertyBreakdown: [],
 			totalGasPaid: 0,
 			totalUtilitiesPaid: 0,
 			maxMonthlyLuxuryEventSpend: 0,
@@ -2463,6 +3204,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			activeTheme: 'default',
 			rewardHistory: []
 		}
+		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
+		freshState.realEstateMarket = seededSharedMarket.market
+		freshState.realEstateMarketMeta = seededSharedMarket.meta
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
 		// Build the initial month's ledger
@@ -2478,10 +3222,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (data) {
 			const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
 			const marketPrices = normalizeMarketPrices(data.marketPrices)
+			const realEstateState = normalizeRealEstateState(data)
 			dispatch({
 				type: 'SET_STATE',
 				payload: {
 					...data,
+					...realEstateState,
 					currentUser: user,
 					entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
 					subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
@@ -2495,6 +3241,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 					portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
 					marketLearningLevel: data.marketLearningLevel ?? 'adult',
 					marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+					realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+					realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
 					autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 					stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 					stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -2513,8 +3261,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			return true
 		}
 		// No save yet, create a new slot with current initial-like state but set currentUser
-		dispatch({ type: 'SET_STATE', payload: { ...state, currentUser: user } })
-		saveStateForUser(user, { ...state, currentUser: user })
+		const firstSnapshot = { ...state, currentUser: user }
+		saveStateForUser(user, firstSnapshot)
+		const seededSharedMarket = syncSharedRealEstateMarket(firstSnapshot, false)
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				...firstSnapshot,
+				realEstateMarket: seededSharedMarket.market,
+				realEstateMarketMeta: seededSharedMarket.meta
+			}
+		})
 		return true
 	}
 
@@ -2635,13 +3392,139 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		dispatch({ type: 'APPLY_JOB', payload: app })
 	}
 
+	function refreshRealEstateMarket() {
+		const latest = syncSharedRealEstateMarket(state, false)
+		dispatch({ type: 'SET_STATE', payload: { realEstateMarket: latest.market, realEstateMarketMeta: latest.meta } })
+		return latest.market
+	}
+
+	function submitRealEstateOffer(listing: any, options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 }) {
+		if (!listing?.id || !listing?.cityName) return { ok: false, reason: 'invalid-listing' }
+		const shared = syncSharedRealEstateMarket(state, false)
+		const market = shared.market
+		const meta = shared.meta
+		const cityListings = Array.isArray(market[listing.cityName]) ? market[listing.cityName] : []
+		const stillAvailable = cityListings.some((l: any) => l.id === listing.id)
+		if (!stillAvailable) {
+			dispatch({ type: 'SET_STATE', payload: { realEstateMarket: market, realEstateMarketMeta: meta } })
+			return { ok: false, reason: 'listing-unavailable' }
+		}
+
+		const nextCityListings = cityListings.filter((l: any) => l.id !== listing.id)
+		const nextMarket = { ...market, [listing.cityName]: nextCityListings }
+		const nextMeta = meta
+		writeSharedRealEstateMarket(nextMarket)
+		writeSharedRealEstateMeta(nextMeta)
+
+		const credit = Number(state.credit || 600)
+		const approvalMonthsRequired = Math.max(1, Math.round(4 - Math.min(1.5, (credit - 580) / 220)))
+		const downPaymentPct = Math.max(0.1, Math.min(0.5, Number(options?.downPaymentPct || 0.25)))
+		const purchaseMode = options?.purchaseMode === 'cash' ? 'cash' : 'mortgage'
+		const mortgageTermYears = options?.mortgageTermYears === 15 ? 15 : 30
+
+		const nextDeals = [
+			...(Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals : []),
+			{
+				id: `offer-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+				createdMonth: state.month,
+				createdYear: state.year,
+				monthsInPipeline: 0,
+				approvalMonthsRequired,
+				downPaymentPct,
+				purchaseMode,
+				mortgageTermYears,
+				listing
+			}
+		]
+
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				realEstateMarket: nextMarket,
+				realEstateMarketMeta: nextMeta,
+				pendingRealEstateDeals: nextDeals,
+				logs: [
+					...(Array.isArray(state.logs) ? state.logs : []),
+					{
+						date: `${state.month}/${state.year}`,
+						msg: `📝 Offer submitted: ${listing.templateName} in ${listing.cityName} (${purchaseMode === 'cash' ? 'cash offer' : `${Math.round(downPaymentPct * 100)}% down, ${mortgageTermYears}y`})`
+					}
+				]
+			}
+		})
+
+		return { ok: true }
+	}
+
+	function sellInvestmentProperty(propertyId: string) {
+		const properties = Array.isArray(state.investmentProperties) ? state.investmentProperties : []
+		const property = properties.find((p: any) => p.id === propertyId)
+		if (!property) return { ok: false, reason: 'not-found' }
+
+		const salePrice = round2(Math.max(50000, Number(property.propertyValue || 0) * 0.98))
+		const transactionCosts = round2(salePrice * 0.04)
+		const loanBalance = Math.max(0, Number(property.loanBalance || 0))
+		const netAfterLoan = round2(salePrice - transactionCosts - loanBalance)
+
+		let check = Number(state.check || 0)
+		let debt = Number(state.debt || 0)
+		if (netAfterLoan >= 0) check = round2(check + netAfterLoan)
+		else debt = round2(debt + Math.abs(netAfterLoan))
+
+		const listing = {
+			id: `re-resale-${property.id}-${Date.now()}`,
+			cityName: property.cityName,
+			templateId: property.templateId,
+			templateName: property.templateName,
+			assetClass: property.assetClass || 'Residential',
+			incomeLabel: property.incomeLabel || 'Monthly Rent',
+			units: Math.max(1, Number(property.units || 1)),
+			askingPrice: salePrice,
+			askingRentPerUnit: round2(Math.max(300, Number(property.rentPerUnit || property.marketRentPerUnit || 1200))),
+			amenities: Array.isArray(property.amenities) ? property.amenities : [],
+			dom: 0,
+			condition: Math.max(25, Math.min(100, Math.round(Number(property.condition || 70)))),
+			ownershipCount: Math.max(0, Math.floor(Number(property.ownershipCount || 0))),
+			foreclosure: false,
+			listedByUser: state.currentUser || null
+		}
+
+		const shared = syncSharedRealEstateMarket(state, false)
+		const market = shared.market
+		const meta = shared.meta
+		market[property.cityName] = [...(Array.isArray(market[property.cityName]) ? market[property.cityName] : []), listing]
+		writeSharedRealEstateMarket(market)
+		writeSharedRealEstateMeta(meta)
+
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				check,
+				debt,
+				investmentProperties: properties.filter((p: any) => p.id !== propertyId),
+				realEstateMarket: market,
+				realEstateMarketMeta: meta,
+				logs: [
+					...(Array.isArray(state.logs) ? state.logs : []),
+					{
+						date: `${state.month}/${state.year}`,
+						msg: `🏷️ Sold ${property.templateName} for $${salePrice.toLocaleString()} and relisted to market.${netAfterLoan >= 0 ? ` Net proceeds +$${netAfterLoan.toLocaleString()}.` : ` Shortfall added to debt: $${Math.abs(netAfterLoan).toLocaleString()}.`}`
+					}
+				]
+			}
+		})
+
+		return { ok: true }
+	}
+
 	function getLuxuryServiceMonthlyPay(serviceId: string) {
-		const netMonthlyIncome = Math.max(0, (state.job?.base || 0) * (state.city?.p || 1) * 0.8)
-		return calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome)
+		const netMonthlyIncome = totalMonthlyIncomeForLuxuryPricing(state)
+		const propertyCount = Array.isArray(state.investmentProperties) ? state.investmentProperties.length : 0
+		return calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome, { propertyCount })
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty }}>
 			{children}
 		</GameContext.Provider>
 	)

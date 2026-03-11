@@ -2,6 +2,23 @@ import { useGame } from '../context/GameContext'
 import type { TransitOption } from '../types/models.types'
 import { useState } from 'react'
 
+const discoveredVehicleImages = import.meta.glob('../assets/vehicles/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' }) as Record<string, string>
+
+const normalizeVehicleImageKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\.(png|jpe?g|webp)$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+const discoveredVehicleImageIndex = Object.entries(discoveredVehicleImages).reduce((acc: Record<string, string>, [path, src]) => {
+  const fileName = path.split('/').pop() || ''
+  const key = normalizeVehicleImageKey(fileName)
+  if (key) acc[key] = src
+  return acc
+}, {})
+
 export default function Transit() {
   const { state, dispatch, transitOptions, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost } = useGame()
   const garage = state.garage || []
@@ -9,6 +26,7 @@ export default function Transit() {
   const [selectedCondition, setSelectedCondition] = useState<'new' | 'used' | 'lease'>('new')
   const [financingModal, setFinancingModal] = useState<any>(null)
   const [transitConfirm, setTransitConfirm] = useState<any>(null)
+  const [vehicleImageLoadErrors, setVehicleImageLoadErrors] = useState<Record<string, boolean>>({})
   const FINANCE_DOWN_PAYMENT_RATE = 0.1
   const FINANCE_MIN_DOWN_PAYMENT = 300
 
@@ -48,6 +66,35 @@ export default function Transit() {
   const createGarageEntryId = (vehicleId: string, condition: string) => {
     const nonce = Math.random().toString(36).slice(2, 8)
     return `${vehicleId}-${condition}-${state.month}-${state.year}-${Date.now()}-${nonce}`
+  }
+
+  const vehicleImagePath = (vehicle: any) => {
+    const idKey = normalizeVehicleImageKey(String(vehicle?.id || ''))
+    const nameKey = normalizeVehicleImageKey(String(vehicle?.name || ''))
+    const idNoYear = idKey.replace(/-20\d\d$/, '')
+    const nameNoYear = nameKey.replace(/-20\d\d$/, '')
+
+    return discoveredVehicleImageIndex[idKey]
+      || discoveredVehicleImageIndex[nameKey]
+      || discoveredVehicleImageIndex[idNoYear]
+      || discoveredVehicleImageIndex[nameNoYear]
+      || `/vehicles/${vehicle?.id}.png`
+  }
+
+  const renderVehicleVisual = (vehicle: any, sizeClass = 'w-16 h-10') => {
+    const hideImage = !!vehicleImageLoadErrors[vehicle.id]
+    if (!hideImage) {
+      return (
+        <img
+          src={vehicleImagePath(vehicle)}
+          alt={vehicle.name}
+          className={`${sizeClass} object-contain rounded`}
+          loading="lazy"
+          onError={() => setVehicleImageLoadErrors((prev) => ({ ...prev, [vehicle.id]: true }))}
+        />
+      )
+    }
+    return <p className="text-2xl mb-1">{vehicle.icon}</p>
   }
 
   // Get APR based on credit score
@@ -309,6 +356,18 @@ export default function Transit() {
     acc[key] = (acc[key] || 0) + 1
     return acc
   }, {})
+  const activeGarageCountsByVehicleId = garage.reduce((acc: Record<string, number>, g: any) => {
+    if (g.for_sale) return acc
+    const key = String(g.vehicleId || '')
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+  const listedGarageCountsByVehicleId = garage.reduce((acc: Record<string, number>, g: any) => {
+    if (!g.for_sale) return acc
+    const key = String(g.vehicleId || '')
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
 
   return (
     <div className="space-y-6">
@@ -378,12 +437,20 @@ export default function Transit() {
                     .map((vehicle: any) => {
                       const price = selectedCondition === 'new' ? vehicle.newPrice : selectedCondition === 'used' ? vehicle.usedPrice : 0
                       const monthlyPayment = selectedCondition === 'lease' ? vehicle.leasePrice : calculateMonthlyPayment(price, getAPR(), 60)
+                      const totalOwnedCount = garageCountsByVehicleId[vehicle.id] || 0
+                      const activeOwnedCount = activeGarageCountsByVehicleId[vehicle.id] || 0
+                      const listedCount = listedGarageCountsByVehicleId[vehicle.id] || 0
                       
                       return (
                         <div key={vehicle.id} className="glass p-3">
-                          <p className="text-2xl mb-1">{vehicle.icon}</p>
+                          <div className="mb-1">{renderVehicleVisual(vehicle)}</div>
                           <p className="font-bold text-sm">{vehicle.name}</p>
                           <p className="text-xs text-slate-600">{vehicle.body}</p>
+                              <p className="text-[11px] text-slate-500 mt-1">
+                                Owned: <span className="font-bold text-slate-700">{totalOwnedCount}</span>
+                                {' '}| In garage: <span className="font-bold text-slate-700">{activeOwnedCount}</span>
+                                {' '}| Listed: <span className="font-bold text-slate-700">{listedCount}</span>
+                              </p>
                               <div className="border-t border-slate-200 pt-2 mt-2">
                                 {selectedCondition === 'lease' ? (
                                   <p className="text-sm font-bold text-emerald-600">${monthlyPayment}/mo (36 mo)</p>
@@ -398,7 +465,7 @@ export default function Transit() {
                                   if (financingEntry) {
                                     return <button onClick={() => showFinancingModal(vehicle, selectedCondition)} className="w-full mt-2 py-1 rounded bg-amber-600 text-white text-xs font-bold">Buy Another (Also Financed)</button>
                                   }
-                                  return <button onClick={() => showFinancingModal(vehicle, selectedCondition)} className="w-full mt-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold">Buy Now</button>
+                                  return <button onClick={() => showFinancingModal(vehicle, selectedCondition)} className="w-full mt-2 py-1 rounded bg-emerald-600 text-white text-xs font-bold">{totalOwnedCount > 0 ? 'Buy Another' : 'Buy Now'}</button>
                                 })()}
                               </div>
                         </div>
@@ -471,6 +538,16 @@ export default function Transit() {
 
               <div>
                 <h4 className="font-bold mb-2">Garage</h4>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {Object.entries(garageCountsByVehicleId).map(([vehicleId, count]) => {
+                    const model = vehicleDatabase.vehicles.find((v: any) => v.id === vehicleId)
+                    return (
+                      <span key={`count-${vehicleId}`} className="inline-flex items-center gap-2 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+                        {model?.icon || '🚗'} {model?.name || vehicleId} x{count}
+                      </span>
+                    )
+                  })}
+                </div>
                 <div className="grid grid-cols-1 gap-3">
                   {garage.map((g: any) => (
                     <div key={g.id} className="glass p-3 flex justify-between items-center">

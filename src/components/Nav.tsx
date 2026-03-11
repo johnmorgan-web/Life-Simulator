@@ -4,21 +4,23 @@ import { useGame } from '../context/GameContext'
 export default function Nav({ tab, setTab }: any) {
   const { state } = useGame()
   const vehicleCount = Array.isArray(state.garage) ? state.garage.length : 0
+  const propertyCount = Array.isArray(state.investmentProperties) ? state.investmentProperties.length : 0
   const rewardTokens = Number(state.rewardTokens || 0)
   const garageIconStrip = vehicleCount > 0 ? `${'🚘'.repeat(Math.min(vehicleCount, 3))}${vehicleCount > 3 ? '+' : ''}` : 'No vehicles'
 
   const tabs = [
-    { id: 'ledger', label: '📓 Journal' },
-    { id: 'careers', label: '💼 Careers' },
     { id: 'academy', label: '🏛️ Academy' },
-    { id: 'transit', label: `🚗 Transit (${vehicleCount})` },
-    { id: 'relocate', label: '✈️ Relocate' },
-    { id: 'resume', label: '📄 Resume' },
+    { id: 'bank', label: '🏦 Bank' },
+    { id: 'careers', label: '💼 Careers' },
+    { id: 'ledger', label: '📓 Journal' },
     { id: 'lifestyle', label: '💎 Lifestyle' },
     { id: 'loans', label: '💳 Loans' },
-    { id: 'bank', label: '🏦 Bank' },
+    { id: 'real-estate', label: `🏘️ Real Estate (${propertyCount})` },
+    { id: 'relocate', label: '✈️ Relocate' },
+    { id: 'resume', label: '📄 Resume' },
+    { id: 'rewards', label: '🎁 Rewards' },
     { id: 'stocks', label: '📈 Stocks' },
-    { id: 'rewards', label: '🎁 Rewards' }
+    { id: 'transit', label: `🚗 Transit (${vehicleCount})` }
   ]
   return (
     <nav className="col-span-2">

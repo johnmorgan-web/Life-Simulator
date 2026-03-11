@@ -15,7 +15,9 @@ import Loans from './tabs/Loans'
 import Bank from './tabs/Bank'
 import StockMarket from './tabs/StockMarket'
 import Rewards from './tabs/Rewards'
+import RealEstate from './tabs/RealEstate'
 import { cosmeticThemes } from './constants/achievements.constants'
+import { stockMarketAssets } from './constants/stockMarket.constants'
 
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
@@ -31,6 +33,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'loans') return <Loans />
   if (tab === 'bank') return <Bank />
   if (tab === 'stocks') return <StockMarket />
+  if (tab === 'real-estate') return <RealEstate />
   if (tab === 'rewards') return <Rewards />
   return <div className="p-6">Unknown tab</div>
 }
@@ -87,6 +90,7 @@ function eventDialogCopy(event: any) {
     hazard: 'Worksite update',
     stress: 'Stress update',
     burnout: 'Stress update',
+    stocks: 'Portfolio update',
     job: 'Career update',
     all: 'Life update',
     none: 'Life update',
@@ -126,6 +130,10 @@ function eventDialogCopy(event: any) {
       in: 'Your recovery efforts gave you a boost this month.',
       out: 'Stress-management costs showed up this month.'
     },
+    stocks: {
+      in: 'Your portfolio generated income this month.',
+      out: 'A market-related cost impacted your finances this month.'
+    },
     job: {
       in: 'Your work track delivered an upside surprise.',
       out: 'A job-related obligation impacted your finances.'
@@ -155,11 +163,13 @@ function eventDialogCopy(event: any) {
 }
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses } = useGame()
   const activeTheme = cosmeticThemes[state.activeTheme || 'default'] || cosmeticThemes.default
   const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
+  const [showMonthPreview, setShowMonthPreview] = useState(false)
+  const [monthPreview, setMonthPreview] = useState<any | null>(null)
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
   const [eventPopup, setEventPopup] = useState<any | null>(null)
   const [achievementToast, setAchievementToast] = useState<{ title: string; category: string } | null>(null)
@@ -241,11 +251,118 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       const loanNeeded = Math.abs(state.check - totalPayment)
       setAutoLoanAmount(loanNeeded)
       setPendingPayments({ savings, debt: debtPayment, skipped: false })
-      setShowAutoLoanConfirm(true)
+      setMonthPreview(buildMonthPreview(savings, debtPayment, false, loanNeeded))
+      setShowMonthPreview(true)
     } else {
-      // No loan needed, process normally
-      processMonth(savings, debtPayment, false)
+      setPendingPayments({ savings, debt: debtPayment, skipped: false })
+      setMonthPreview(buildMonthPreview(savings, debtPayment, false, 0))
+      setShowMonthPreview(true)
     }
+  }
+
+  const estimateDebtPayoffMonths = (debtBalance: number, monthlyPayment: number, annualAPR: number) => {
+    if (debtBalance <= 0) return 0
+    if (monthlyPayment <= 0) return Number.POSITIVE_INFINITY
+    const monthlyRate = annualAPR / 12
+    const firstInterest = debtBalance * monthlyRate
+    if (monthlyPayment <= firstInterest) return Number.POSITIVE_INFINITY
+
+    let bal = debtBalance
+    let months = 0
+    while (bal > 0 && months < 1200) {
+      bal = bal + (bal * monthlyRate) - monthlyPayment
+      months += 1
+    }
+    return bal <= 0 ? months : Number.POSITIVE_INFINITY
+  }
+
+  const formatMonths = (months: number) => {
+    if (!Number.isFinite(months)) return 'Not paying down at current rate'
+    if (months <= 0) return 'Paid off now'
+    const years = Math.floor(months / 12)
+    const rem = months % 12
+    if (years <= 0) return `${months} month${months === 1 ? '' : 's'}`
+    if (rem === 0) return `${years} year${years === 1 ? '' : 's'}`
+    return `${years}y ${rem}m`
+  }
+
+  const buildMonthPreview = (savings: number, debtPayment: number, skippedPayment: boolean, autoLoanNeeded: number) => {
+    const monthlyIncome = Math.round((state.job.base || 0) * (state.city.p || 1) * 0.8)
+    const baselineOut = Array.isArray(state.ledger)
+      ? state.ledger.reduce((sum: number, row: any) => {
+          if (row?.type !== 'out') return sum
+          const desc = String(row?.desc || '').toLowerCase()
+          if (desc.includes('previous balance')) return sum
+          return sum + Number(row?.amt || 0)
+        }, 0)
+      : 0
+
+    const debtAfterPayment = Math.max(0, Number(state.debt || 0) - (skippedPayment ? 0 : debtPayment))
+    const projectedDebtInterest = debtAfterPayment > 0 ? debtAfterPayment * (dynamicAPR / 12) : 0
+    const projectedSavingsBase = Math.max(0, Number(state.save || 0) + savings)
+    const projectedSavingsInterest = projectedSavingsBase > 0 ? projectedSavingsBase * (gameValues.hysaAPR / 12) : 0
+    const projectedDebtPayoffMonths = estimateDebtPayoffMonths(debtAfterPayment, skippedPayment ? 0 : debtPayment, dynamicAPR)
+    const projectedDividendIncome = Math.round(((Array.isArray(state.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
+      const ticker = String(holding?.ticker || '')
+      const shares = Number(holding?.shares || 0)
+      if (!ticker || shares <= 0) return sum
+      const asset = stockMarketAssets.find((a: any) => a.ticker === ticker)
+      const annualYield = Number((asset as any)?.dividendYield || 0)
+      if (!asset || annualYield <= 0) return sum
+      const price = Number((state.marketPrices || {})[ticker] || asset.basePrice || 0)
+      if (price <= 0) return sum
+      return sum + (shares * price * (annualYield / 12))
+    }, 0)) * 100) / 100
+
+    const activeEduName = String(state.activeEdu || '')
+    const activeCourse = Array.isArray(academyCourses)
+      ? academyCourses.find((c: any) => c.n === activeEduName)
+      : null
+    const eduDone = Number((state.eduProgress || {})[activeEduName] || 0)
+    const eduNeeded = Number(activeCourse?.m || 0)
+    const eduRemaining = activeCourse ? Math.max(0, eduNeeded - eduDone) : 0
+
+    const openVehicleLoans = (Array.isArray(state.garage) ? state.garage : []).filter((g: any) => Number(g?.monthsRemaining || 0) > 0)
+    const nearestVehiclePayoff = openVehicleLoans.length
+      ? Math.min(...openVehicleLoans.map((g: any) => Number(g.monthsRemaining || 0)))
+      : 0
+
+    return {
+      monthlyIncome,
+      baselineOut,
+      plannedSavings: savings,
+      plannedDebtPayment: skippedPayment ? 0 : debtPayment,
+      skippedPayment,
+      autoLoanNeeded,
+      projectedDebtInterest,
+      projectedSavingsInterest,
+      projectedDividendIncome,
+      projectedDebtPayoffMonths,
+      activeEduName,
+      eduRemaining,
+      hasEducation: !!activeCourse,
+      openVehicleLoanCount: openVehicleLoans.length,
+      nearestVehiclePayoff,
+      nextMonthLabel: new Date(state.year + (state.month === 12 ? 1 : 0), state.month === 12 ? 0 : state.month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    }
+  }
+
+  const handleConfirmMonthPreview = () => {
+    if (!pendingPayments) {
+      setShowMonthPreview(false)
+      return
+    }
+    setShowMonthPreview(false)
+
+    const totalPayment = pendingPayments.savings + pendingPayments.debt
+    if (state.check - totalPayment < 0) {
+      setAutoLoanAmount(Math.abs(state.check - totalPayment))
+      setShowAutoLoanConfirm(true)
+      return
+    }
+
+    processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped)
+    setPendingPayments(null)
   }
 
   const handleSkipPayment = () => {
@@ -460,6 +577,72 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 className="flex-1 bg-slate-300 text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-400"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMonthPreview && monthPreview && (
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
+          <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold mb-2">📋 Monthly Preview</h2>
+            <p className="text-sm text-slate-600 mb-5">Estimated summary before starting <span className="font-bold">{monthPreview.nextMonthLabel}</span>.</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-sm">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <p className="text-[10px] uppercase font-bold text-emerald-700">Money In</p>
+                <p className="font-bold text-emerald-800">Salary: ${Number(monthPreview.monthlyIncome || 0).toLocaleString()}</p>
+                <p className="text-emerald-700">Savings interest est.: +${Number(monthPreview.projectedSavingsInterest || 0).toFixed(2)}</p>
+                <p className="text-emerald-700">Dividend income est.: +${Number(monthPreview.projectedDividendIncome || 0).toFixed(2)}</p>
+              </div>
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3">
+                <p className="text-[10px] uppercase font-bold text-rose-700">Money Out</p>
+                <p className="font-bold text-rose-800">Baseline monthly outflow est.: ${Number(monthPreview.baselineOut || 0).toFixed(2)}</p>
+                <p className="text-rose-700">Debt interest est.: +${Number(monthPreview.projectedDebtInterest || 0).toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-sm">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Planned Payments</p>
+                <p>Savings transfer: <span className="font-bold">${Number(monthPreview.plannedSavings || 0).toFixed(2)}</span></p>
+                <p>Debt payment: <span className="font-bold">${Number(monthPreview.plannedDebtPayment || 0).toFixed(2)}</span></p>
+                {monthPreview.autoLoanNeeded > 0 && (
+                  <p className="text-rose-700 font-bold mt-1">Auto-loan would be needed: ${Number(monthPreview.autoLoanNeeded || 0).toFixed(2)}</p>
+                )}
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[10px] uppercase font-bold text-slate-500">Payoff Timelines</p>
+                <p>Debt payoff est.: <span className="font-bold">{formatMonths(Number(monthPreview.projectedDebtPayoffMonths || 0))}</span></p>
+                <p>Vehicle loans open: <span className="font-bold">{Number(monthPreview.openVehicleLoanCount || 0)}</span></p>
+                <p>Nearest vehicle payoff: <span className="font-bold">{monthPreview.openVehicleLoanCount > 0 ? formatMonths(Number(monthPreview.nearestVehiclePayoff || 0)) : 'None'}</span></p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 text-sm">
+              <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Education Progress</p>
+              {monthPreview.hasEducation ? (
+                <p>
+                  <span className="font-bold">{monthPreview.activeEduName}</span> remaining time: <span className="font-bold">{formatMonths(Number(monthPreview.eduRemaining || 0))}</span>
+                </p>
+              ) : (
+                <p>No active degree or certification this month.</p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowMonthPreview(false)}
+                className="flex-1 bg-slate-200 text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-300"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleConfirmMonthPreview}
+                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800"
+              >
+                Confirm & Start Month
               </button>
             </div>
           </div>
