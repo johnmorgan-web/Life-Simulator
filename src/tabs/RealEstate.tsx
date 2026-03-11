@@ -452,10 +452,29 @@ export default function RealEstate() {
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2 mt-3">
-                    <button className="px-2 py-1 text-xs rounded bg-slate-200" onClick={() => setMaintenance(property.id, 0.8)}>Lean Maintenance</button>
-                    <button className="px-2 py-1 text-xs rounded bg-slate-200" onClick={() => setMaintenance(property.id, 1)}>Balanced Maintenance</button>
-                    <button className="px-2 py-1 text-xs rounded bg-slate-200" onClick={() => setMaintenance(property.id, 1.2)}>Protective Maintenance</button>
                     <button
+                      title="Lean Maintenance: Spend less on upkeep. Lowers ongoing costs but the building condition decays faster over time."
+                      className="px-2 py-1 text-xs rounded bg-slate-200"
+                      onClick={() => setMaintenance(property.id, 0.8)}
+                    >
+                      Lean Maintenance
+                    </button>
+                    <button
+                      title="Balanced Maintenance: Standard upkeep spending. Condition holds roughly steady without over-investing."
+                      className="px-2 py-1 text-xs rounded bg-slate-200"
+                      onClick={() => setMaintenance(property.id, 1)}
+                    >
+                      Balanced Maintenance
+                    </button>
+                    <button
+                      title="Protective Maintenance: Higher spending on upkeep. Significantly slows condition decay and preserves asset value long-term."
+                      className="px-2 py-1 text-xs rounded bg-slate-200"
+                      onClick={() => setMaintenance(property.id, 1.2)}
+                    >
+                      Protective Maintenance
+                    </button>
+                    <button
+                      title="Refresh Plan: Light touch renovation at 55% of standard budget. Cosmetic fixes only — restores some condition with a 76% value recovery rate on dollars spent."
                       className="px-2 py-1 text-xs rounded bg-indigo-500 text-white"
                       onClick={() => startRenovation(property.id, 'refresh')}
                       disabled={Number(property.renovationMonthsRemaining || 0) > 0}
@@ -463,6 +482,7 @@ export default function RealEstate() {
                       Refresh Plan
                     </button>
                     <button
+                      title="Modernize Plan: Full renovation at 95% of standard budget. Upgrades systems and finishes — restores more condition with a 92% value recovery rate on dollars spent."
                       className="px-2 py-1 text-xs rounded bg-indigo-600 text-white"
                       onClick={() => startRenovation(property.id, 'modernize')}
                       disabled={Number(property.renovationMonthsRemaining || 0) > 0}
@@ -470,6 +490,7 @@ export default function RealEstate() {
                       Modernize Plan
                     </button>
                     <button
+                      title="Signature Reposition: Premium overhaul at 135% of standard budget. Full repositioning of the asset — maximizes condition recovery and achieves a 108% value recovery rate, meaning every dollar spent grows the property's value more than it costs."
                       className="px-2 py-1 text-xs rounded bg-indigo-800 text-white"
                       onClick={() => startRenovation(property.id, 'signature')}
                       disabled={Number(property.renovationMonthsRemaining || 0) > 0}
@@ -478,6 +499,18 @@ export default function RealEstate() {
                     </button>
                     <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => sellInvestmentProperty(property.id)}>Sell & Relist</button>
                   </div>
+                  <details className="mt-3">
+                    <summary className="text-[11px] text-slate-500 cursor-pointer select-none hover:text-slate-700">▸ What do these options mean?</summary>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-600 bg-slate-100 rounded p-2">
+                      <p><strong>Lean Maintenance</strong> — Reduced upkeep spend (0.8×). Saves money each month but the building wears down faster. Best when cash flow is tight and the property is already in good shape.</p>
+                      <p><strong>Balanced Maintenance</strong> — Standard upkeep spend (1×). Keeps condition roughly stable over time without over-investing.</p>
+                      <p><strong>Protective Maintenance</strong> — Higher upkeep spend (1.2×). Significantly slows condition decay. Best for older buildings or high-value assets where condition loss is expensive to recover.</p>
+                      <p><strong>Refresh Plan</strong> — Light cosmetic renovation at a smaller budget (55%). Recovers some condition. Only 76 cents of every dollar spent converts to property value growth.</p>
+                      <p><strong>Modernize Plan</strong> — Full systems-and-finishes renovation at a standard budget (95%). Stronger condition recovery. 92 cents of every dollar spent adds to property value.</p>
+                      <p><strong>Signature Reposition</strong> — Premium overhaul at an elevated budget (135%). Maximum condition recovery and highest value accretion: every dollar spent returns $1.08 in property value growth, making it a net value creator.</p>
+                      <p><strong>Value Recovery Rate</strong> — The portion of renovation spending that converts into increased property value. Above 1.0 means the renovation literally grows the asset faster than it costs.</p>
+                    </div>
+                  </details>
                   <div className="mt-2 text-xs text-slate-600">Amenities: {(property.amenities || []).map((amenity: string) => titleizeAmenity(amenity)).join(', ') || 'None'}</div>
                   {openAmenities.length > 0 ? (
                     <div className="flex flex-wrap gap-2 mt-2">
