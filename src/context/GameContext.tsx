@@ -475,10 +475,50 @@ function spinRewardPrize(state: any, forcedPrize?: any) {
 	return chosen
 }
 
+function scoreStockSignal(asset: any, price: number, prevPrice: number, portfolioValue: number, positionValue: number) {
+	const momentumPct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0
+	const premiumToBasePct = asset.basePrice > 0 ? ((price - asset.basePrice) / asset.basePrice) * 100 : 0
+	const isETF = asset.sector === 'ETF'
+	const concentrationPct = portfolioValue > 0 ? (positionValue / portfolioValue) * 100 : 0
+
+	let score = 0
+
+	if (asset.drift >= 0.01) score += 1.1
+	else if (asset.drift >= 0.006) score += 0.6
+	else if (asset.drift <= 0.004) score -= 0.35
+
+	if (momentumPct <= -4 && asset.drift >= 0.007) score += 0.9
+	else if (momentumPct >= 6) score -= 0.7
+	else if (momentumPct >= 2) score -= 0.2
+
+	if (momentumPct >= 9 && asset.drift >= 0.008) score += 0.35
+	else if (momentumPct <= -9) score -= 0.45
+
+	if (premiumToBasePct <= -8) score += 0.8
+	else if (premiumToBasePct >= 18) score -= 0.9
+	else if (premiumToBasePct >= 8) score -= 0.35
+
+	if (asset.volatility >= 0.12) score -= 0.45
+	else if (asset.volatility <= 0.055) score += 0.2
+
+	if (isETF) score += 0.35
+
+	if (concentrationPct >= 35) score -= 1
+	else if (concentrationPct >= 20) score -= 0.45
+	else if (concentrationPct > 0 && concentrationPct <= 8 && score > 0.5) score += 0.15
+
+	let recommendation: 'Buy' | 'Hold' | 'Sell' = 'Hold'
+	if (score >= 1.35) recommendation = 'Buy'
+	else if (score <= -0.75) recommendation = 'Sell'
+
+	return { recommendation, score }
+}
+
 function applyAutoInvestCycle(
 	checkBalance: number,
 	portfolio: any[],
 	marketPrices: Record<string, number>,
+	previousPrices: Record<string, number>,
 	autoInvest: any,
 	logs: any[],
 	month: number,
@@ -499,9 +539,29 @@ function applyAutoInvestCycle(
 	let investedAmount = 0
 	const nextPortfolio = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : []
 	const tradeSummary: string[] = []
+	const startingPortfolioValue = portfolioMarketValue(nextPortfolio, marketPrices)
 
-	for (const [ticker, weight] of Object.entries(profile.allocations || {})) {
-		const allocation = maxInvest * Number(weight || 0)
+	const baseAllocEntries = Object.entries(profile.allocations || {}) as Array<[string, number]>
+	const adjustedAllocEntries = baseAllocEntries.map(([ticker, baseWeight]) => {
+		const asset = stockMarketAssets.find((a) => a.ticker === ticker)
+		const marketPrice = Number(marketPrices[ticker] || 0)
+		const prevPrice = Number(previousPrices[ticker] || marketPrice)
+		const holding = nextPortfolio.find((h: any) => h.ticker === ticker)
+		const positionValue = Number(holding?.shares || 0) * marketPrice
+
+		let multiplier = 1
+		if (asset && marketPrice > 0) {
+			const signal = scoreStockSignal(asset, marketPrice, prevPrice, startingPortfolioValue, positionValue)
+			if (signal.recommendation === 'Buy') multiplier = 1.4
+			else if (signal.recommendation === 'Sell') multiplier = 0.4
+		}
+
+		return [ticker, Number(baseWeight || 0) * multiplier] as [string, number]
+	})
+	const adjustedWeightTotal = adjustedAllocEntries.reduce((sum, [, w]) => sum + Number(w || 0), 0)
+
+	for (const [ticker, adjustedWeight] of adjustedAllocEntries) {
+		const allocation = adjustedWeightTotal > 0 ? (maxInvest * Number(adjustedWeight || 0)) / adjustedWeightTotal : 0
 		const marketPrice = Number(marketPrices[ticker] || 0)
 		if (marketPrice <= 0 || allocation <= 0) continue
 		const price = executionPriceWithSlippage(marketPrice, `${ticker}-${month}-${year}-${profile.id}-auto`)
@@ -532,7 +592,7 @@ function applyAutoInvestCycle(
 	if (tradeSummary.length > 0) {
 		logs = [...logs, {
 			date: `${month}/${year}`,
-			msg: `🤖 Auto-invest (${profile.name}) executed: ${tradeSummary.join(', ')}`
+			msg: `🤖 Auto-invest (${profile.name}, signal-biased) executed: ${tradeSummary.join(', ')}`
 		}]
 	}
 
@@ -1124,6 +1184,31 @@ function pickInterMonthEvent(state: State): LifeEvent | null {
 	return pool[Math.floor(Math.random() * pool.length)]
 }
 
+function scaleLifeEventAmount(event: LifeEvent, netMonthlyIncome: number) {
+	const baseAmount = Number(event?.amt || 0)
+	if (!Number.isFinite(baseAmount) || baseAmount <= 0) return 0
+
+	const income = Math.max(0, Number(netMonthlyIncome || 0))
+	const ruleTable: Record<string, { inPct: number; outPct: number; minMult: number; maxMult: number }> = {
+		none: { inPct: 0.015, outPct: 0.01, minMult: 0.8, maxMult: 2.5 },
+		job: { inPct: 0.12, outPct: 0.045, minMult: 0.9, maxMult: 8 },
+		car: { inPct: 0.06, outPct: 0.06, minMult: 0.9, maxMult: 8 },
+		academy: { inPct: 0.08, outPct: 0.05, minMult: 0.8, maxMult: 6 },
+		burnout: { inPct: 0.025, outPct: 0.03, minMult: 0.85, maxMult: 5 },
+		hazard: { inPct: 0.03, outPct: 0.04, minMult: 0.85, maxMult: 7 },
+		health: { inPct: 0.035, outPct: 0.04, minMult: 0.85, maxMult: 5.5 },
+		family: { inPct: 0.04, outPct: 0.035, minMult: 0.85, maxMult: 5.5 }
+	}
+
+	const rule = ruleTable[event.trigger] || ruleTable.none
+	const pct = event.type === 'in' ? rule.inPct : rule.outPct
+	const incomeAnchored = income * pct
+	const blended = (baseAmount * 0.45) + (incomeAnchored * 0.55)
+	const minAmount = baseAmount * rule.minMult
+	const maxAmount = baseAmount * rule.maxMult
+	return round2(Math.max(minAmount, Math.min(maxAmount, blended)))
+}
+
 function reducer(state: State, action: any) {
 	switch (action.type) {
 		case 'INIT_LEDGER':
@@ -1438,16 +1523,17 @@ function reducer(state: State, action: any) {
 			// Between-month random event: applies after settlement and before the next statement.
 			const interMonthEvent = pickInterMonthEvent({ ...state, job: updatedJob, activeEdu, garage: updatedGarage, credit, paymentStreak })
 			if (interMonthEvent) {
-				const delta = interMonthEvent.type === 'in' ? interMonthEvent.amt : -interMonthEvent.amt
+				const scaledEventAmount = scaleLifeEventAmount(interMonthEvent, Math.max(0, updatedJob.base * city.p * 0.8))
+				const delta = interMonthEvent.type === 'in' ? scaledEventAmount : -scaledEventAmount
 				resultingCheck = fix(resultingCheck + delta)
 				logs.push({
 					date: `${nextMonth}/${nextYear}`,
-					msg: `${interMonthEvent.icon} Mid-month event: ${interMonthEvent.title} (${interMonthEvent.type === 'in' ? '+' : '-'}$${interMonthEvent.amt.toFixed(2)})`
+					msg: `${interMonthEvent.icon} Mid-month event: ${interMonthEvent.title} (${interMonthEvent.type === 'in' ? '+' : '-'}$${scaledEventAmount.toFixed(2)})`
 				})
 				eventHistory.push({
 					id: interMonthEvent.id,
 					title: interMonthEvent.title,
-					amount: interMonthEvent.amt,
+					amount: scaledEventAmount,
 					type: interMonthEvent.type,
 					icon: interMonthEvent.icon,
 					desc: interMonthEvent.desc,
@@ -1591,6 +1677,7 @@ function reducer(state: State, action: any) {
 				resultingCheck,
 				Array.isArray(state.portfolio) ? state.portfolio : [],
 				previousMarketPrices,
+				normalizeMarketPrices(state.marketPricesPrevious || previousMarketPrices),
 				state.autoInvest,
 				logs,
 				nextMonth,

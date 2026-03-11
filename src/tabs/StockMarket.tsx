@@ -8,6 +8,115 @@ function toCurrency(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 }
 
+function recommendationClasses(recommendation?: string) {
+  if (recommendation === 'Buy') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (recommendation === 'Sell') return 'bg-rose-50 text-rose-700 border-rose-200'
+  return 'bg-amber-50 text-amber-700 border-amber-200'
+}
+
+function generateRecommendation(asset: any, price: number, prevPrice: number, portfolioValue: number, positionValue: number) {
+  const momentumPct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0
+  const premiumToBasePct = asset.basePrice > 0 ? ((price - asset.basePrice) / asset.basePrice) * 100 : 0
+  const isETF = asset.sector === 'ETF'
+  const concentrationPct = portfolioValue > 0 ? (positionValue / portfolioValue) * 100 : 0
+  const sectorSentiment: Record<string, { score: number; note: string }> = {
+    Technology: { score: 0.45, note: 'tech leadership remains strong' },
+    Semiconductors: { score: 0.55, note: 'chip demand remains a leadership theme' },
+    ETF: { score: 0.3, note: 'broad index exposure remains well supported' },
+    Financials: { score: 0.05, note: 'financials look solid but less explosive' },
+    'Consumer Staples': { score: -0.05, note: 'defensive staples are steady, not fast growers' },
+    Energy: { score: -0.25, note: 'energy leadership looks less durable after a strong run' },
+    Automotive: { score: 0.1, note: 'auto innovation is appealing but execution risk stays high' },
+    'Communication Services': { score: 0.05, note: 'communications is mixed with selective strength' },
+    Consumer: { score: 0.15, note: 'consumer platforms still have growth support' }
+  }
+
+  let score = 0
+  const reasons: string[] = []
+
+  const sectorView = sectorSentiment[asset.sector]
+  if (sectorView) {
+    score += sectorView.score
+    reasons.push(sectorView.note)
+  }
+
+  if (asset.drift >= 0.01) {
+    score += 1.1
+    reasons.push('strong long-term drift')
+  } else if (asset.drift >= 0.006) {
+    score += 0.6
+    reasons.push('positive trend profile')
+  } else if (asset.drift <= 0.004) {
+    score -= 0.35
+    reasons.push('slower expected growth')
+  }
+
+  if (momentumPct <= -4 && asset.drift >= 0.007) {
+    score += 0.9
+    reasons.push('recent pullback in a stronger name')
+  } else if (momentumPct >= 6) {
+    score -= 0.7
+    reasons.push('recent run-up may be overheated')
+  } else if (momentumPct >= 2) {
+    score -= 0.2
+    reasons.push('price already moved higher recently')
+  }
+
+  // Strong one-month moves act like a simplified earnings/repricing signal.
+  if (momentumPct >= 9 && asset.drift >= 0.008) {
+    score += 0.35
+    reasons.push('breakout momentum is still being rewarded')
+  } else if (momentumPct <= -9) {
+    score -= 0.45
+    reasons.push('sharp downside move suggests a weaker near-term setup')
+  }
+
+  if (premiumToBasePct <= -8) {
+    score += 0.8
+    reasons.push('trading below base anchor')
+  } else if (premiumToBasePct >= 18) {
+    score -= 0.9
+    reasons.push('well above base anchor')
+  } else if (premiumToBasePct >= 8) {
+    score -= 0.35
+    reasons.push('some valuation stretch')
+  }
+
+  if (asset.volatility >= 0.12) {
+    score -= 0.45
+    reasons.push('high volatility')
+  } else if (asset.volatility <= 0.055) {
+    score += 0.2
+    reasons.push('more stable price behavior')
+  }
+
+  if (isETF) {
+    score += 0.35
+    reasons.push('broad diversification support')
+  }
+
+  if (concentrationPct >= 35) {
+    score -= 1
+    reasons.push('your portfolio is already heavily concentrated here')
+  } else if (concentrationPct >= 20) {
+    score -= 0.45
+    reasons.push('position size is already large in your portfolio')
+  } else if (concentrationPct > 0 && concentrationPct <= 8 && score > 0.5) {
+    score += 0.15
+    reasons.push('current exposure is still modest')
+  }
+
+  let recommendation: 'Buy' | 'Hold' | 'Sell' = 'Hold'
+  if (score >= 1.35) recommendation = 'Buy'
+  else if (score <= -0.75) recommendation = 'Sell'
+
+  const thesis = reasons.length
+    ? `${reasons.slice(0, 2).join('; ')}.`
+    : 'Mixed signal with no strong edge right now.'
+
+  return { recommendation, thesis, score, momentumPct, premiumToBasePct }
+}
+
 export default function StockMarket() {
   const { state, dispatch } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
@@ -59,9 +168,33 @@ export default function StockMarket() {
     return { costBasis, marketValue, gain }
   }, [portfolio, marketPrices])
 
+  const signalsByTicker = useMemo(() => {
+    const map: Record<string, ReturnType<typeof generateRecommendation>> = {}
+    for (const asset of stockMarketAssets) {
+      const price = Number(marketPrices[asset.ticker] || asset.basePrice)
+      const prevPrice = Number(previousPrices[asset.ticker] || price)
+      const holding = holdingsByTicker[asset.ticker]
+      const positionValue = Number(holding?.shares || 0) * price
+      map[asset.ticker] = generateRecommendation(asset, price, prevPrice, portfolioStats.marketValue, positionValue)
+    }
+    return map
+  }, [marketPrices, previousPrices, holdingsByTicker, portfolioStats.marketValue])
+
+  const topIdeas = useMemo(() => {
+    return stockMarketAssets
+      .map((asset) => ({ asset, signal: signalsByTicker[asset.ticker] }))
+      .sort((a, b) => Number(b.signal?.score || 0) - Number(a.signal?.score || 0))
+      .slice(0, 5)
+  }, [signalsByTicker])
+
   const handleBuy = (ticker: string) => {
     const shares = Math.max(0, Math.floor(Number(shareInputs[ticker] || 0)))
     if (shares <= 0) return
+    const signal = signalsByTicker[ticker]
+    if (signal?.recommendation === 'Sell') {
+      const proceed = window.confirm(`This stock is currently rated SELL (${ticker}). Continue with this buy anyway?`)
+      if (!proceed) return
+    }
     dispatch({ type: 'BUY_STOCK', payload: { ticker, shares } })
   }
 
@@ -208,6 +341,25 @@ export default function StockMarket() {
       </div>
 
       <div className="glass p-6">
+        <h3 className="font-bold text-lg mb-3">⭐ Top Ideas</h3>
+        <p className="text-xs text-slate-500 mb-3">Ranked by current model score using drift, volatility, momentum, valuation gap, and your concentration risk.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2 mb-2">
+          {topIdeas.map(({ asset, signal }) => (
+            <div key={`idea-${asset.ticker}`} className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold text-slate-900">{asset.icon} {asset.ticker}</p>
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${recommendationClasses(signal?.recommendation)}`}>
+                  {signal?.recommendation || 'Hold'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">Score: {Number(signal?.score || 0).toFixed(2)}</p>
+              <p className="text-[11px] text-slate-500 mt-1">{signal?.thesis}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="glass p-6">
         <h3 className="font-bold text-lg mb-3">Trade Desk</h3>
         <p className="text-xs text-slate-500 mb-3">Orders may fill slightly above or below quote prices to simulate ceiling/floor executions.</p>
         <div className="space-y-3">
@@ -224,6 +376,7 @@ export default function StockMarket() {
             const positionGainPct = investedAmount > 0 ? (positionGain / investedAmount) * 100 : 0
             const inputShares = Number(shareInputs[asset.ticker] || 0)
             const estimatedCost = Math.max(0, Math.floor(inputShares)) * price
+            const signal = signalsByTicker[asset.ticker] || generateRecommendation(asset, price, prevPrice, portfolioStats.marketValue, positionValue)
 
             return (
               <div key={asset.ticker} className="bg-white border border-slate-200 rounded-xl p-3">
@@ -238,6 +391,20 @@ export default function StockMarket() {
                       {pct >= 0 ? '+' : ''}{pct.toFixed(2)}% vs last month
                     </p>
                   </div>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold ${recommendationClasses(signal.recommendation)}`}>
+                    {signal.recommendation}
+                  </span>
+                  <span className="text-xs text-slate-600">{signal.thesis}</span>
+                </div>
+
+                <div className="mt-1 text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+                  <span>Drift: {(asset.drift * 100).toFixed(1)}%</span>
+                  <span>Volatility: {(asset.volatility * 100).toFixed(1)}%</span>
+                  <span>Base Gap: {signal.premiumToBasePct >= 0 ? '+' : ''}{signal.premiumToBasePct.toFixed(1)}%</span>
+                  <span>Portfolio Weight: {portfolioStats.marketValue > 0 ? `${((positionValue / portfolioStats.marketValue) * 100).toFixed(1)}%` : '0.0%'}</span>
                 </div>
 
                 <div className="mt-2 text-xs text-slate-600">
