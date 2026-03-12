@@ -22,6 +22,7 @@ export type RealEstateAmenityImpact = {
   valueBoost: number
   installCost: number
   upgradeTier: 'core' | 'premium' | 'signature'
+  prerequisites?: string[]
 }
 
 export const realEstateTemplates: RealEstateTemplate[] = [
@@ -39,7 +40,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.02,
     renovationCostRate: 0.06,
     renovationMonths: 2,
-    amenityOptions: ['parking', 'gym', 'pet-friendly', 'smart-lock', 'fiber-internet', 'ev-charging', 'rooftop-lounge']
+    amenityOptions: ['parking', 'gym', 'pet-friendly', 'smart-lock', 'fiber-internet', 'ev-charging', 'pool-access', 'in-unit-laundry', 'balcony', 'solar-lighting', 'keyless-entry', 'package-lockers', 'community-events', 'concierge', 'security', 'bike-storage', 'clubhouse', 'courtyard', 'playground', 'dog-park', 'backup-generator', 'cold-storage', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'rooftop', 'fitness-studio', 'security', 'smart-lock', 'gym', 'conference-center', 'backup-generator', 'fiber-internet']
   },
   {
     id: 'townhome-2',
@@ -55,7 +56,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.022,
     renovationCostRate: 0.07,
     renovationMonths: 3,
-    amenityOptions: ['parking', 'in-unit-laundry', 'pet-friendly', 'balcony', 'fiber-internet', 'smart-thermostat', 'ev-charging']
+    amenityOptions: ['parking', 'in-unit-laundry', 'pet-friendly', 'balcony', 'fiber-internet', 'smart-thermostat', 'ev-charging', 'solar-lighting', 'keyless-entry', 'package-lockers', 'community-events', 'concierge', 'security', 'bike-storage', 'clubhouse', 'courtyard', 'playground', 'dog-park', 'backup-generator', 'cold-storage', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'rooftop', 'fitness-studio', 'security', 'smart-lock', 'gym', 'conference-center', 'backup-generator', 'fiber-internet']
   },
   {
     id: 'midrise-8',
@@ -71,7 +72,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.03,
     renovationCostRate: 0.09,
     renovationMonths: 4,
-    amenityOptions: ['laundry-room', 'security', 'parcel-room', 'rooftop', 'fitness-studio', 'bike-storage', 'package-lockers']
+    amenityOptions: ['laundry-room', 'security', 'parcel-room', 'rooftop', 'fitness-studio', 'bike-storage', 'package-lockers', 'community-events', 'concierge', 'pet-friendly', 'balcony', 'fiber-internet', 'smart-thermostat', 'ev-charging', 'solar-lighting', 'keyless-entry', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'clubhouse', 'courtyard', 'playground', 'dog-park', 'backup-generator', 'cold-storage']
   },
   {
     id: 'garden-12',
@@ -103,7 +104,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.026,
     renovationCostRate: 0.09,
     renovationMonths: 4,
-    amenityOptions: ['parking', 'security', 'smart-lock', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating']
+    amenityOptions: ['parking', 'security', 'smart-lock', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'fiber-internet', 'ev-charging', 'solar-lighting', 'keyless-entry', 'package-lockers', 'community-events', 'concierge', 'bike-storage', 'clubhouse', 'courtyard', 'playground', 'dog-park' ]
   },
   {
     id: 'office-20',
@@ -119,7 +120,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.03,
     renovationCostRate: 0.11,
     renovationMonths: 6,
-    amenityOptions: ['security', 'rooftop', 'smart-lock', 'gym', 'conference-center', 'backup-generator', 'fiber-internet']
+    amenityOptions: ['security', 'rooftop', 'smart-lock', 'gym', 'conference-center', 'backup-generator', 'fiber-internet', 'parking', 'balcony', 'solar-lighting', 'keyless-entry', 'package-lockers', 'concierge', 'bike-storage', 'clubhouse', 'courtyard', 'playground', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating'    ]
   },
   {
     id: 'warehouse-1',
@@ -135,7 +136,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.024,
     renovationCostRate: 0.08,
     renovationMonths: 4,
-    amenityOptions: ['security', 'parking', 'smart-lock', 'dock-doors', 'cold-storage', 'solar-roof']
+    amenityOptions: ['security', 'parking', 'smart-lock', 'dock-doors', 'cold-storage', 'solar-roof', 'fiber-internet', 'backup-generator', 'ev-charging', 'keyless-entry', 'facade-refresh', 'tenant-signage',]
   },
   {
     id: 'self-storage-80',
@@ -151,7 +152,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.02,
     renovationCostRate: 0.07,
     renovationMonths: 3,
-    amenityOptions: ['security', 'smart-lock', 'parking', 'climate-control', 'covered-loading', 'solar-lighting']
+    amenityOptions: ['security', 'smart-lock', 'parking', 'climate-control', 'covered-loading', 'solar-lighting', 'backup-generator', 'keyless-entry', 'facade-refresh', 'tenant-signage']
   },
   {
     id: 'rv-park-40',
@@ -167,7 +168,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.018,
     renovationCostRate: 0.06,
     renovationMonths: 3,
-    amenityOptions: ['security', 'playground', 'parking', 'clubhouse', 'laundry-room', 'solar-lighting']
+    amenityOptions: ['security', 'playground', 'parking', 'clubhouse', 'laundry-room', 'solar-lighting', 'backup-generator', 'keyless-entry', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'rooftop', 'fitness-studio', 'security', 'smart-lock', 'gym', 'conference-center', 'backup-generator', 'fiber-internet']
   },
   {
     id: 'farmland-120',
@@ -183,8 +184,8 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.012,
     renovationCostRate: 0.05,
     renovationMonths: 2,
-    amenityOptions: ['security', 'smart-lock', 'irrigation-upgrade', 'equipment-barn', 'solar-pump']
-  },
+    amenityOptions: ['security', 'smart-lock', 'irrigation-upgrade', 'equipment-barn', 'solar-pump', 'cropshield', 'soil-enrichment', 'fencing', 'animal pasture', 'tractors']
+        },
   {
     id: 'cell-tower-land',
     name: 'Cell Tower Ground Lease Parcel',
@@ -199,8 +200,8 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.01,
     renovationCostRate: 0.03,
     renovationMonths: 1,
-    amenityOptions: ['security', 'backup-generator', 'fiber-backhaul']
-  },
+    amenityOptions: ['security', 'backup-generator', 'fiber-backhaul',]
+        },
   {
     id: 'boutique-hotel-24',
     name: 'Boutique Hotel (24 Keys)',
@@ -215,7 +216,7 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.035,
     renovationCostRate: 0.12,
     renovationMonths: 6,
-    amenityOptions: ['gym', 'security', 'rooftop', 'parking', 'spa-suite', 'event-space', 'smart-room-entry']
+    amenityOptions: ['gym', 'security', 'rooftop', 'parking', 'spa-suite', 'event-space', 'smart-room-entry', 'keyless-entry', 'community-events', 'concierge', 'bike-storage', 'clubhouse', 'courtyard', 'playground', 'dog-park', 'backup-generator', 'cold-storage', 'parcel-room', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'fiber-internet', 'ev-charging', 'solar-lighting', 'conference-center']
   },
   {
     id: 'mixed-use-10',
@@ -231,52 +232,52 @@ export const realEstateTemplates: RealEstateTemplate[] = [
     maintenanceRateAnnual: 0.029,
     renovationCostRate: 0.1,
     renovationMonths: 5,
-    amenityOptions: ['security', 'parking', 'parcel-room', 'balcony', 'cowork-lounge', 'street-retail-refresh', 'fitness-studio']
+    amenityOptions: ['security', 'parking', 'parcel-room', 'balcony', 'cowork-lounge', 'street-retail-refresh', 'fitness-studio', 'bike-storage', 'package-lockers', 'community-events', 'concierge', 'pet-friendly', 'fiber-internet', 'smart-thermostat', 'ev-charging', 'solar-lighting', 'keyless-entry', 'facade-refresh', 'tenant-signage', 'outdoor-seating', 'clubhouse', 'courtyard', 'playground', 'dog-park', 'backup-generator', 'cold-storage']
   }
 ]
 
 export const amenityImpact: Record<string, RealEstateAmenityImpact> = {
   parking: { rentBoost: 0.03, upkeepRate: 0.0015, occupancyBoost: 0.04, valueBoost: 0.012, installCost: 18000, upgradeTier: 'core' },
-  gym: { rentBoost: 0.035, upkeepRate: 0.0025, occupancyBoost: 0.03, valueBoost: 0.016, installCost: 42000, upgradeTier: 'premium' },
+  gym: { rentBoost: 0.035, upkeepRate: 0.0025, occupancyBoost: 0.03, valueBoost: 0.016, installCost: 42000, upgradeTier: 'premium', prerequisites: ['security'] },
   'pet-friendly': { rentBoost: 0.02, upkeepRate: 0.001, occupancyBoost: 0.025, valueBoost: 0.008, installCost: 9000, upgradeTier: 'core' },
   'smart-lock': { rentBoost: 0.01, upkeepRate: 0.0008, occupancyBoost: 0.02, valueBoost: 0.007, installCost: 6500, upgradeTier: 'core' },
   'in-unit-laundry': { rentBoost: 0.028, upkeepRate: 0.0012, occupancyBoost: 0.03, valueBoost: 0.014, installCost: 15000, upgradeTier: 'premium' },
   balcony: { rentBoost: 0.018, upkeepRate: 0.0007, occupancyBoost: 0.02, valueBoost: 0.01, installCost: 12000, upgradeTier: 'core' },
   'laundry-room': { rentBoost: 0.02, upkeepRate: 0.0015, occupancyBoost: 0.02, valueBoost: 0.011, installCost: 22000, upgradeTier: 'premium' },
-  security: { rentBoost: 0.025, upkeepRate: 0.002, occupancyBoost: 0.03, valueBoost: 0.013, installCost: 26000, upgradeTier: 'premium' },
+  security: { rentBoost: 0.025, upkeepRate: 0.002, occupancyBoost: 0.03, valueBoost: 0.013, installCost: 26000, upgradeTier: 'premium', prerequisites: ['smart-lock'] },
   'parcel-room': { rentBoost: 0.012, upkeepRate: 0.0007, occupancyBoost: 0.015, valueBoost: 0.008, installCost: 14000, upgradeTier: 'core' },
   rooftop: { rentBoost: 0.02, upkeepRate: 0.001, occupancyBoost: 0.02, valueBoost: 0.012, installCost: 28000, upgradeTier: 'premium' },
   courtyard: { rentBoost: 0.015, upkeepRate: 0.001, occupancyBoost: 0.018, valueBoost: 0.009, installCost: 16000, upgradeTier: 'core' },
   playground: { rentBoost: 0.013, upkeepRate: 0.0009, occupancyBoost: 0.015, valueBoost: 0.008, installCost: 11000, upgradeTier: 'core' },
   'fiber-internet': { rentBoost: 0.018, upkeepRate: 0.0006, occupancyBoost: 0.02, valueBoost: 0.011, installCost: 13000, upgradeTier: 'core' },
-  'ev-charging': { rentBoost: 0.024, upkeepRate: 0.0014, occupancyBoost: 0.018, valueBoost: 0.014, installCost: 24000, upgradeTier: 'premium' },
-  'rooftop-lounge': { rentBoost: 0.03, upkeepRate: 0.0018, occupancyBoost: 0.024, valueBoost: 0.018, installCost: 52000, upgradeTier: 'signature' },
+  'ev-charging': { rentBoost: 0.024, upkeepRate: 0.0014, occupancyBoost: 0.018, valueBoost: 0.014, installCost: 24000, upgradeTier: 'premium', prerequisites: ['parking'] },
+  'rooftop-lounge': { rentBoost: 0.03, upkeepRate: 0.0018, occupancyBoost: 0.024, valueBoost: 0.018, installCost: 52000, upgradeTier: 'signature', prerequisites: ['rooftop', 'security'] },
   'smart-thermostat': { rentBoost: 0.012, upkeepRate: 0.0005, occupancyBoost: 0.012, valueBoost: 0.007, installCost: 5000, upgradeTier: 'core' },
-  'fitness-studio': { rentBoost: 0.022, upkeepRate: 0.0017, occupancyBoost: 0.018, valueBoost: 0.013, installCost: 30000, upgradeTier: 'premium' },
+  'fitness-studio': { rentBoost: 0.022, upkeepRate: 0.0017, occupancyBoost: 0.018, valueBoost: 0.013, installCost: 30000, upgradeTier: 'premium', prerequisites: ['security'] },
   'bike-storage': { rentBoost: 0.008, upkeepRate: 0.0004, occupancyBoost: 0.012, valueBoost: 0.005, installCost: 7000, upgradeTier: 'core' },
   'package-lockers': { rentBoost: 0.012, upkeepRate: 0.0006, occupancyBoost: 0.015, valueBoost: 0.007, installCost: 10000, upgradeTier: 'core' },
-  clubhouse: { rentBoost: 0.024, upkeepRate: 0.0018, occupancyBoost: 0.02, valueBoost: 0.014, installCost: 36000, upgradeTier: 'premium' },
-  'dog-park': { rentBoost: 0.014, upkeepRate: 0.0008, occupancyBoost: 0.016, valueBoost: 0.008, installCost: 12000, upgradeTier: 'core' },
+  clubhouse: { rentBoost: 0.024, upkeepRate: 0.0018, occupancyBoost: 0.02, valueBoost: 0.014, installCost: 36000, upgradeTier: 'premium', prerequisites: ['courtyard'] },
+  'dog-park': { rentBoost: 0.014, upkeepRate: 0.0008, occupancyBoost: 0.016, valueBoost: 0.008, installCost: 12000, upgradeTier: 'core', prerequisites: ['pet-friendly'] },
   'solar-lighting': { rentBoost: 0.009, upkeepRate: 0.0003, occupancyBoost: 0.01, valueBoost: 0.009, installCost: 14000, upgradeTier: 'core' },
   'facade-refresh': { rentBoost: 0.018, upkeepRate: 0.0009, occupancyBoost: 0.014, valueBoost: 0.013, installCost: 26000, upgradeTier: 'premium' },
   'tenant-signage': { rentBoost: 0.011, upkeepRate: 0.0003, occupancyBoost: 0.01, valueBoost: 0.006, installCost: 9000, upgradeTier: 'core' },
   'outdoor-seating': { rentBoost: 0.015, upkeepRate: 0.0008, occupancyBoost: 0.012, valueBoost: 0.009, installCost: 15000, upgradeTier: 'core' },
-  'conference-center': { rentBoost: 0.024, upkeepRate: 0.0016, occupancyBoost: 0.016, valueBoost: 0.015, installCost: 46000, upgradeTier: 'signature' },
-  'backup-generator': { rentBoost: 0.018, upkeepRate: 0.0012, occupancyBoost: 0.014, valueBoost: 0.013, installCost: 34000, upgradeTier: 'premium' },
-  'dock-doors': { rentBoost: 0.028, upkeepRate: 0.0014, occupancyBoost: 0.018, valueBoost: 0.016, installCost: 40000, upgradeTier: 'premium' },
-  'cold-storage': { rentBoost: 0.032, upkeepRate: 0.002, occupancyBoost: 0.014, valueBoost: 0.02, installCost: 70000, upgradeTier: 'signature' },
-  'solar-roof': { rentBoost: 0.016, upkeepRate: 0.0005, occupancyBoost: 0.012, valueBoost: 0.014, installCost: 32000, upgradeTier: 'premium' },
-  'climate-control': { rentBoost: 0.02, upkeepRate: 0.001, occupancyBoost: 0.014, valueBoost: 0.012, installCost: 28000, upgradeTier: 'premium' },
+  'conference-center': { rentBoost: 0.024, upkeepRate: 0.0016, occupancyBoost: 0.016, valueBoost: 0.015, installCost: 46000, upgradeTier: 'signature', prerequisites: ['rooftop', 'fiber-internet'] },
+  'backup-generator': { rentBoost: 0.018, upkeepRate: 0.0012, occupancyBoost: 0.014, valueBoost: 0.013, installCost: 34000, upgradeTier: 'premium', prerequisites: ['security'] },
+  'dock-doors': { rentBoost: 0.028, upkeepRate: 0.0014, occupancyBoost: 0.018, valueBoost: 0.016, installCost: 40000, upgradeTier: 'premium', prerequisites: ['parking'] },
+  'cold-storage': { rentBoost: 0.032, upkeepRate: 0.002, occupancyBoost: 0.014, valueBoost: 0.02, installCost: 70000, upgradeTier: 'signature', prerequisites: ['backup-generator', 'security'] },
+  'solar-roof': { rentBoost: 0.016, upkeepRate: 0.0005, occupancyBoost: 0.012, valueBoost: 0.014, installCost: 32000, upgradeTier: 'premium', prerequisites: ['solar-lighting'] },
+  'climate-control': { rentBoost: 0.02, upkeepRate: 0.001, occupancyBoost: 0.014, valueBoost: 0.012, installCost: 28000, upgradeTier: 'premium', prerequisites: ['smart-thermostat'] },
   'covered-loading': { rentBoost: 0.013, upkeepRate: 0.0007, occupancyBoost: 0.01, valueBoost: 0.009, installCost: 18000, upgradeTier: 'core' },
   'irrigation-upgrade': { rentBoost: 0.014, upkeepRate: 0.0007, occupancyBoost: 0.012, valueBoost: 0.01, installCost: 20000, upgradeTier: 'core' },
-  'equipment-barn': { rentBoost: 0.016, upkeepRate: 0.0008, occupancyBoost: 0.01, valueBoost: 0.011, installCost: 26000, upgradeTier: 'premium' },
-  'solar-pump': { rentBoost: 0.012, upkeepRate: 0.0003, occupancyBoost: 0.009, valueBoost: 0.009, installCost: 12000, upgradeTier: 'core' },
-  'fiber-backhaul': { rentBoost: 0.026, upkeepRate: 0.0009, occupancyBoost: 0.012, valueBoost: 0.016, installCost: 38000, upgradeTier: 'signature' },
-  'spa-suite': { rentBoost: 0.03, upkeepRate: 0.0018, occupancyBoost: 0.022, valueBoost: 0.018, installCost: 54000, upgradeTier: 'signature' },
-  'event-space': { rentBoost: 0.027, upkeepRate: 0.0016, occupancyBoost: 0.018, valueBoost: 0.017, installCost: 48000, upgradeTier: 'signature' },
-  'smart-room-entry': { rentBoost: 0.016, upkeepRate: 0.0007, occupancyBoost: 0.014, valueBoost: 0.01, installCost: 16000, upgradeTier: 'premium' },
-  'cowork-lounge': { rentBoost: 0.021, upkeepRate: 0.0013, occupancyBoost: 0.017, valueBoost: 0.013, installCost: 26000, upgradeTier: 'premium' },
-  'street-retail-refresh': { rentBoost: 0.018, upkeepRate: 0.0009, occupancyBoost: 0.012, valueBoost: 0.012, installCost: 24000, upgradeTier: 'premium' }
+  'equipment-barn': { rentBoost: 0.016, upkeepRate: 0.0008, occupancyBoost: 0.01, valueBoost: 0.011, installCost: 26000, upgradeTier: 'premium', prerequisites: ['irrigation-upgrade'] },
+  'solar-pump': { rentBoost: 0.012, upkeepRate: 0.0003, occupancyBoost: 0.009, valueBoost: 0.009, installCost: 12000, upgradeTier: 'core', prerequisites: ['irrigation-upgrade'] },
+  'fiber-backhaul': { rentBoost: 0.026, upkeepRate: 0.0009, occupancyBoost: 0.012, valueBoost: 0.016, installCost: 38000, upgradeTier: 'signature', prerequisites: ['fiber-internet'] },
+  'spa-suite': { rentBoost: 0.03, upkeepRate: 0.0018, occupancyBoost: 0.022, valueBoost: 0.018, installCost: 54000, upgradeTier: 'signature', prerequisites: ['gym', 'security'] },
+  'event-space': { rentBoost: 0.027, upkeepRate: 0.0016, occupancyBoost: 0.018, valueBoost: 0.017, installCost: 48000, upgradeTier: 'signature', prerequisites: ['clubhouse', 'security'] },
+  'smart-room-entry': { rentBoost: 0.016, upkeepRate: 0.0007, occupancyBoost: 0.014, valueBoost: 0.01, installCost: 16000, upgradeTier: 'premium', prerequisites: ['smart-lock'] },
+  'cowork-lounge': { rentBoost: 0.021, upkeepRate: 0.0013, occupancyBoost: 0.017, valueBoost: 0.013, installCost: 26000, upgradeTier: 'premium', prerequisites: ['fiber-internet'] },
+  'street-retail-refresh': { rentBoost: 0.018, upkeepRate: 0.0009, occupancyBoost: 0.012, valueBoost: 0.012, installCost: 24000, upgradeTier: 'premium', prerequisites: ['facade-refresh'] }
 }
 
 export const rentControlByCityType = {
