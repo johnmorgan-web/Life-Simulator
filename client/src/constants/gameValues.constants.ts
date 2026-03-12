@@ -1,4 +1,4 @@
-import type { GameValues } from "../types/GameValues.types";
+import type { GameValues } from "@server/types/GameValues.types";
 
 const gameValues: GameValues = {
   

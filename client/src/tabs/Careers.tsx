@@ -1,5 +1,5 @@
 import { useGame } from '../context/GameContext'
-import type { Job } from '../types/models.types'
+import type { Job } from '@server/types/models.types'
 import { useMemo, useState } from 'react'
 import { resolveDomainKey, domainBadgeStyle } from '../constants/domainColors.constants'
 

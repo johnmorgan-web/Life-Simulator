@@ -1,4 +1,4 @@
-import type { City } from "../types/models.types";
+import type { City } from "@server/types/models.types";
 
 const cityData: City[] = [
   { name: 'San Francisco, US', p: 1.6, r: 2.3, icon: '🌉', lat: 37.7749, lon: -122.4194, country: 'US' },

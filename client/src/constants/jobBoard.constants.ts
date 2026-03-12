@@ -1,4 +1,4 @@
-import type { Job } from "../types/models.types"
+import type { Job } from "@server/types/models.types"
 
 const jobBoard: Job[] = [
 

@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+  "baseUrl": ".",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    "types": ["node"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -14,7 +14,6 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "jsx": "react-jsx",
 
     /* Linting */
     "strict": true,
@@ -22,7 +21,11 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    
+    "paths": {
+      "@server/*": ["../server/*", "../server/types/*", "../server/src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["vite.config.ts"]
 }

@@ -1,5 +1,5 @@
 import { useGame } from '../context/GameContext'
-import type { TransitOption } from '../types/models.types'
+import type { TransitOption } from '@server/types/models.types'
 import { useState } from 'react'
 
 const discoveredVehicleImages = import.meta.glob('../assets/vehicles/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' }) as Record<string, string>

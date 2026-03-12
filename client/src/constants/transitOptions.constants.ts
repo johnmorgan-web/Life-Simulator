@@ -1,4 +1,4 @@
-import type { TransitOption } from "../types/models.types"
+import type { TransitOption } from "@server/types/models.types"
 
 const transitOptions: TransitOption[] = [
     // L1 - Walk/Bike

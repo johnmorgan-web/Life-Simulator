@@ -1,4 +1,4 @@
-import type { AcademyCourse } from "../types/models.types"
+import type { AcademyCourse } from "@server/types/models.types"
 
 const academyCourses: AcademyCourse[] = [
   // Degrees with prerequisites

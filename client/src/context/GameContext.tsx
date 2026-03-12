@@ -10,7 +10,7 @@ import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
-import type { Job, Application, LifeEvent } from '../types/models.types'
+import type { Job, Application, LifeEvent } from '@server/types/models.types'
 
 type State = any
 

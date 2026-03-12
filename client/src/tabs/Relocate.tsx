@@ -1,5 +1,5 @@
 import { useGame } from '../context/GameContext'
-import type { City } from '../types/models.types'
+import type { City } from '@server/types/models.types'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import countries from '../constants/countries.constants'
 //import countryBoundaries from '../constants/countryBoundaries.constants'
