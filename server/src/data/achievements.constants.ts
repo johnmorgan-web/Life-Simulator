@@ -1,0 +1,210 @@
+export type AchievementRule = {
+  id: string
+  title: string
+  description: string
+  category: 'vehicles' | 'calculation' | 'relocation' | 'lifestyle' | 'stocks' | 'tenure' | 'education' | 'wealth' | 'household' | 'entertainment'
+  metric:
+    | 'vehiclesOwned'
+    | 'calculationStreak'
+    | 'relocationCount'
+    | 'lifestyleServices'
+    | 'stockUnrealizedGain'
+    | 'tenureMonths'
+    | 'credentialsCount'
+    | 'netWorth'
+    | 'tickerShares'
+    | 'singleStockShares'
+    | 'lifetimeGasPaid'
+    | 'lifetimeUtilitiesPaid'
+    | 'ticketStubCount'
+    | 'monthlyLuxuryEventSpend'
+  threshold: number
+  tokenReward: number
+  ticker?: string
+}
+
+export const achievementRules: AchievementRule[] = [
+  { id: 'veh-1', title: 'First Set of Keys', description: 'Own 1 vehicle.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 1, tokenReward: 1 },
+  { id: 'veh-3', title: 'Family Fleet', description: 'Own 3 vehicles.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 3, tokenReward: 1 },
+  { id: 'veh-6', title: 'Motor Mogul', description: 'Own 6 vehicles.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 6, tokenReward: 2 },
+  { id: 'veh-10', title: 'Garage Goals', description: 'Own 10 vehicles.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 10, tokenReward: 3 },
+  { id: 'veh-20', title: 'Car Collector', description: 'Own 20 vehicles.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 20, tokenReward: 5 },
+  { id: 'veh-50', title: 'Automotive Aficionado', description: 'Own 50 vehicles.', category: 'vehicles', metric: 'vehiclesOwned', threshold: 50, tokenReward: 8 },
+
+  { id: 'calc-10', title: 'Ledger Sharp', description: 'Reach a 10-step calculation streak.', category: 'calculation', metric: 'calculationStreak', threshold: 10, tokenReward: 1 },
+  { id: 'calc-25', title: 'Human Calculator', description: 'Reach a 25-step calculation streak.', category: 'calculation', metric: 'calculationStreak', threshold: 25, tokenReward: 2 },
+  { id: 'calc-50', title: 'Mental Math Master', description: 'Reach a 50-step calculation streak.', category: 'calculation', metric: 'calculationStreak', threshold: 50, tokenReward: 3 },
+  { id: 'calc-100', title: 'Arithmetic Ace', description: 'Reach a 100-step calculation streak.', category: 'calculation', metric: 'calculationStreak', threshold: 100, tokenReward: 5 },
+  { id: 'calc-200', title: 'Numerical Ninja', description: 'Reach a 200-step calculation streak.', category: 'calculation', metric: 'calculationStreak', threshold: 200, tokenReward: 8 },
+
+  { id: 'rel-1', title: 'Fresh Start', description: 'Relocate once.', category: 'relocation', metric: 'relocationCount', threshold: 1, tokenReward: 1 },
+  { id: 'rel-3', title: 'City Hopper', description: 'Relocate 3 times.', category: 'relocation', metric: 'relocationCount', threshold: 3, tokenReward: 2 },
+  { id: 'rel-5', title: 'Globe Trotter', description: 'Relocate 5 times.', category: 'relocation', metric: 'relocationCount', threshold: 5, tokenReward: 3 },
+  { id: 'rel-10', title: 'World Explorer', description: 'Relocate 10 times.', category: 'relocation', metric: 'relocationCount', threshold: 10, tokenReward: 5 },
+  { id: 'rel-20', title: 'Ultimate Nomad', description: 'Relocate 20 times.', category: 'relocation', metric: 'relocationCount', threshold: 20, tokenReward: 8 },
+  { id: 'rel-50', title: 'Relocation Legend', description: 'Relocate 50 times.', category: 'relocation', metric: 'relocationCount', threshold: 50, tokenReward: 13 },
+
+  { id: 'life-1', title: 'Luxury Tester', description: 'Run 1 active lifestyle service.', category: 'lifestyle', metric: 'lifestyleServices', threshold: 1, tokenReward: 1 },
+  { id: 'life-3', title: 'Luxury Lite', description: 'Run 3 active lifestyle services.', category: 'lifestyle', metric: 'lifestyleServices', threshold: 3, tokenReward: 1 },
+  { id: 'life-6', title: 'Concierge Class', description: 'Run all 6 lifestyle services.', category: 'lifestyle', metric: 'lifestyleServices', threshold: 6, tokenReward: 2 },
+
+  { id: 'stk-1k', title: 'Market Green', description: 'Reach $1,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 1000, tokenReward: 1 },
+  { id: 'stk-10k', title: 'Bull Runner', description: 'Reach $10,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 10000, tokenReward: 2 },
+  { id: 'stk-50k', title: 'Stock Star', description: 'Reach $50,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 50000, tokenReward: 3 },
+  { id: 'stk-100k', title: 'Equity Elite', description: 'Reach $100,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 100000, tokenReward: 5 },
+  { id: 'stk-500k', title: 'Portfolio Powerhouse', description: 'Reach $500,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 500000, tokenReward: 8 },
+  { id: 'stk-1m', title: 'Market Mogul', description: 'Reach $1,000,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 1000000, tokenReward: 13 },
+  { id: 'stk-5m', title: 'Equity Emperor', description: 'Reach $5,000,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 5000000, tokenReward: 21 },
+  { id: 'stk-10m', title: 'Stock Titan', description: 'Reach $10,000,000 unrealized stock gains.', category: 'stocks', metric: 'stockUnrealizedGain', threshold: 10000000, tokenReward: 34 },
+  
+  { id: 'stk-aapl-5', title: 'Apple Starter Lot', description: 'Own 5 shares of AAPL.', category: 'stocks', metric: 'tickerShares', ticker: 'AAPL', threshold: 5, tokenReward: 1 },
+  { id: 'stk-aapl-20', title: 'Apple Core Position', description: 'Own 20 shares of AAPL.', category: 'stocks', metric: 'tickerShares', ticker: 'AAPL', threshold: 20, tokenReward: 2 },
+  { id: 'stk-aapl-50', title: 'Apple Whale', description: 'Own 50 shares of AAPL.', category: 'stocks', metric: 'tickerShares', ticker: 'AAPL', threshold: 50, tokenReward: 3 },
+  { id: 'stk-vti-10', title: 'ETF Enthusiast', description: 'Own 10 shares of VTI.', category: 'stocks', metric: 'tickerShares', ticker: 'VTI', threshold: 10, tokenReward: 1 },
+  { id: 'stk-vti-50', title: 'ETF Investor', description: 'Own 50 shares of VTI.', category: 'stocks', metric: 'tickerShares', ticker: 'VTI', threshold: 50, tokenReward: 2 },
+  { id: 'stk-vti-200', title: 'ETF Strategist', description: 'Own 200 shares of VTI.', category: 'stocks', metric: 'tickerShares', ticker: 'VTI', threshold: 200, tokenReward: 3 },
+  { id: 'stk-tsla-3', title: 'EV Curiosity', description: 'Own 3 shares of TSLA.', category: 'stocks', metric: 'tickerShares', ticker: 'TSLA', threshold: 3, tokenReward: 1 },
+  { id: 'stk-tsla-12', title: 'EV Conviction', description: 'Own 12 shares of TSLA.', category: 'stocks', metric: 'tickerShares', ticker: 'TSLA', threshold: 12, tokenReward: 2 },
+  { id: 'stk-tsla-30', title: 'EV Heavyweight', description: 'Own 30 shares of TSLA.', category: 'stocks', metric: 'tickerShares', ticker: 'TSLA', threshold: 30, tokenReward: 3 },
+  { id: 'stk-single-25', title: 'Focused Bet', description: 'Hold 25 shares in one stock.', category: 'stocks', metric: 'singleStockShares', threshold: 25, tokenReward: 1 },
+  { id: 'stk-single-75', title: 'Concentrated Conviction', description: 'Hold 75 shares in one stock.', category: 'stocks', metric: 'singleStockShares', threshold: 75, tokenReward: 2 },
+  { id: 'stk-single-150', title: 'Single-Name Titan', description: 'Hold 150 shares in one stock.', category: 'stocks', metric: 'singleStockShares', threshold: 150, tokenReward: 3 },
+  
+  { id: 'ten-1', title: 'Stepping Stone', description: 'Hold a position for 1 month.', category: 'tenure', metric: 'tenureMonths', threshold: 1, tokenReward: 1 },
+  { id: 'ten-6', title: 'Half-Year Hold', description: 'Hold a position for 6 months.', category: 'tenure', metric: 'tenureMonths', threshold: 6, tokenReward: 1 },
+  { id: 'ten-12', title: 'One-Year Anchor', description: 'Hold a position for 12 months.', category: 'tenure', metric: 'tenureMonths', threshold: 12, tokenReward: 1 },
+  { id: 'ten-36', title: 'Career Pillar', description: 'Hold a position for 36 months.', category: 'tenure', metric: 'tenureMonths', threshold: 36, tokenReward: 2 },
+  { id: 'ten-60', title: 'Loyalist', description: 'Hold a position for 60 months.', category: 'tenure', metric: 'tenureMonths', threshold: 60, tokenReward: 3 },
+  { id: 'ten-120', title: 'Veteran', description: 'Hold a position for 120 months.', category: 'tenure', metric: 'tenureMonths', threshold: 120, tokenReward: 5 },
+
+  { id: 'edu-1', title: 'Credential Starter', description: 'Earn 1 credential.', category: 'education', metric: 'credentialsCount', threshold: 1, tokenReward: 1 },
+  { id: 'edu-3', title: 'Credential Stack', description: 'Earn 3 credentials.', category: 'education', metric: 'credentialsCount', threshold: 3, tokenReward: 1 },
+  { id: 'edu-5', title: 'Credential Collector', description: 'Earn 5 credentials.', category: 'education', metric: 'credentialsCount', threshold: 5, tokenReward: 2 },
+  { id: 'edu-8', title: 'Academic Arsenal', description: 'Earn 8 credentials.', category: 'education', metric: 'credentialsCount', threshold: 8, tokenReward: 2 },
+  { id: 'edu-12', title: 'Education Empire', description: 'Earn 12 credentials.', category: 'education', metric: 'credentialsCount', threshold: 12, tokenReward: 3 },
+  { id: 'edu-20', title: 'Lifelong Learner', description: 'Earn 20 credentials.', category: 'education', metric: 'credentialsCount', threshold: 20, tokenReward: 5 },
+  { id: 'edu-30', title: 'Master of All Trades', description: 'Earn 30 credentials.', category: 'education', metric: 'credentialsCount', threshold: 30, tokenReward: 8 },
+  { id: 'edu-50', title: 'Renaissance Scholar', description: 'Earn 50 credentials.', category: 'education', metric: 'credentialsCount', threshold: 50, tokenReward: 13 },
+
+  { id: 'net-10k', title: 'Financial Footing', description: 'Reach $10,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 10000, tokenReward: 1 },
+  { id: 'net-25k', title: 'Quarter-Century Climber', description: 'Reach $25,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 25000, tokenReward: 1 },
+  { id: 'net-50k', title: 'Half-Century Climber', description: 'Reach $50,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 50000, tokenReward: 2 },
+  { id: 'net-100k', title: 'Six-Figure Climber', description: 'Reach $100,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 100000, tokenReward: 1 },
+  { id: 'net-250k', title: 'Quarter-Million Milestone', description: 'Reach $250,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 250000, tokenReward: 2 },
+  { id: 'net-1m', title: 'Millionaire Mile', description: 'Reach $1,000,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 1000000, tokenReward: 3 },
+  { id: 'net-5m', title: 'Multi-Million Milestone', description: 'Reach $5,000,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 5000000, tokenReward: 5 },
+  { id: 'net-10m', title: 'Deca-Millionaire', description: 'Reach $10,000,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 10000000, tokenReward: 8 },
+  { id: 'net-50m', title: 'Centimillionaire', description: 'Reach $50,000,000 net worth.', category: 'wealth', metric: 'netWorth', threshold: 50000000, tokenReward: 13 },
+
+  { id: 'house-gas-1k', title: 'Fueling Up', description: 'Pay $1,000 total in gas.', category: 'household', metric: 'lifetimeGasPaid', threshold: 1000, tokenReward: 1 },
+  { id: 'house-gas-5k', title: 'Road Budget Veteran', description: 'Pay $5,000 total in gas.', category: 'household', metric: 'lifetimeGasPaid', threshold: 5000, tokenReward: 2 },
+  { id: 'house-gas-15k', title: 'Fuel Mogul', description: 'Pay $15,000 total in gas.', category: 'household', metric: 'lifetimeGasPaid', threshold: 15000, tokenReward: 3 },
+  { id: 'house-gas-50k', title: 'Gas Giant', description: 'Pay $50,000 total in gas.', category: 'household', metric: 'lifetimeGasPaid', threshold: 50000, tokenReward: 5 },
+  { id: 'house-gas-100k', title: 'Petrol Powerhouse', description: 'Pay $100,000 total in gas.', category: 'household', metric: 'lifetimeGasPaid', threshold: 100000, tokenReward: 8 },
+
+  { id: 'house-util-500', title: 'Utility User', description: 'Pay $500 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 500, tokenReward: 1 },
+  { id: 'house-util-2k', title: 'Lights On', description: 'Pay $2,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 2000, tokenReward: 1 },
+  { id: 'house-util-10k', title: 'Household Backbone', description: 'Pay $10,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 10000, tokenReward: 2 },
+  { id: 'house-util-20k', title: 'Energy Enthusiast', description: 'Pay $20,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 20000, tokenReward: 3 },
+  { id: 'house-util-30k', title: 'Grid Sponsor', description: 'Pay $30,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 30000, tokenReward: 3 },
+  { id: 'house-util-50k', title: 'Utility Tycoon', description: 'Pay $50,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 50000, tokenReward: 5 },
+  { id: 'house-util-100k', title: 'Power Baron', description: 'Pay $100,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 100000, tokenReward: 8 },
+  { id: 'house-util-250k', title: 'Energy Emperor', description: 'Pay $250,000 total in utilities.', category: 'household', metric: 'lifetimeUtilitiesPaid', threshold: 250000, tokenReward: 13 },
+
+  { id: 'ent-stub-1', title: 'Event Explorer', description: 'Collect 1 ticket stub from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 1, tokenReward: 1 },
+  { id: 'ent-stub-3', title: 'Weekend Host', description: 'Collect 3 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 3, tokenReward: 1 },
+  { id: 'ent-stub-6', title: 'Social Butterfly', description: 'Collect 6 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 6, tokenReward: 2 },
+  { id: 'ent-stub-12', title: 'Venue Favorite', description: 'Collect 12 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 12, tokenReward: 2 },
+  { id: 'ent-stub-18', title: 'Event Enthusiast', description: 'Collect 18 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 18, tokenReward: 3 },
+  { id: 'ent-stub-24', title: 'Event Legend', description: 'Collect 24 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 24, tokenReward: 3 },
+  { id: 'ent-stub-36', title: 'Socialite', description: 'Collect 36 ticket stubs from hosted events.', category: 'entertainment', metric: 'ticketStubCount', threshold: 36, tokenReward: 5 },
+
+  { id: 'ent-luxe-500', title: 'Social Spark', description: 'Reach $500 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 500, tokenReward: 1 },
+  { id: 'ent-luxe-1500', title: 'Event Aficionado', description: 'Reach $1,500 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 1500, tokenReward: 2 },
+  { id: 'ent-luxe-2500', title: 'Curated Nights', description: 'Reach $2,500 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 2500, tokenReward: 2 },
+  { id: 'ent-luxe-5000', title: 'Luxury Event Connoisseur', description: 'Reach $5,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 5000, tokenReward: 3 },
+  { id: 'ent-luxe-7500', title: 'High Society Host', description: 'Reach $7,500 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 7500, tokenReward: 3 },
+  { id: 'ent-luxe-10000', title: 'Galactic Gala Planner', description: 'Reach $10,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 10000, tokenReward: 3 },
+  { id: 'ent-luxe-25000', title: 'Extravaganza Expert', description: 'Reach $25,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 25000, tokenReward: 5 },
+  { id: 'ent-luxe-50000', title: 'Luxury Legend', description: 'Reach $50,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 50000, tokenReward: 8 },
+  { id: 'ent-luxe-100000', title: 'Opulence Overlord', description: 'Reach $100,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 100000, tokenReward: 13},
+  { id: 'ent-luxe-250000', title: 'Galactic Gala Planner', description: 'Reach $250,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 250000, tokenReward: 21 },
+  { id: 'ent-luxe-500000', title: 'Extravaganza Expert', description: 'Reach $500,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 500000, tokenReward: 34 },
+  { id: 'ent-luxe-1m', title: 'Luxury Legend', description: 'Reach $1,000,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 1000000, tokenReward: 55 },
+  { id: 'ent-luxe-5m', title: 'Opulence Overlord', description: 'Reach $5,000,000 in monthly luxury-event spending.', category: 'entertainment', metric: 'monthlyLuxuryEventSpend', threshold: 5000000, tokenReward: 89 },
+
+]
+
+export const cosmeticThemes: Record<string, { name: string; accent: string; bg: string }> = {
+  default: { name: 'Classic Red', accent: '#ef4444', bg: '#f8fafc' },
+  emerald: { name: 'Emerald', accent: '#10b981', bg: '#ecfdf5' },
+  ocean: { name: 'Ocean Blue', accent: '#0ea5e9', bg: '#f0f9ff' },
+  sunset: { name: 'Sunset Orange', accent: '#f97316', bg: '#fff7ed' },
+  graphite: { name: 'Graphite', accent: '#475569', bg: '#f8fafc' },
+}
+
+export type RewardPrize =
+  | { kind: 'cash'; value: number; weight: number; label: string }
+  | { kind: 'theme'; value: string; weight: number; label: string }
+  | { kind: 'stock'; ticker: string; shares: number; weight: number; label: string }
+  | { kind: 'vehicle'; weight: number; label: string; vehicleId?: string }
+
+export const rewardWheelVehicleGrantPool = ['honda-civic-2024', 'toyota-corolla-2024', 'hyundai-elantra-2024', 'ford-mustang-2024', 'chevrolet-camaro-2024', 'nissan-altima-2024', 'tesla-model-3-2024', 'bmw-3-series-2024', 'audi-a4-2024', 'mercedes-c-class-2024', 'jeep-wrangler-2024', 'subaru-outback-2024', 'volkswagen-golf-2024', 'kia-sportage-2024', 'mazda-cx-5-2024', 'volvo-xc60-2024', 'acura-rdx-2024', 'infiniti-q50-2024', 'lexus-is-2024', 'cadillac-ct5-2024', 'alfa-romeo-giulia-2024', 'jaguar-xe-2024', 'lincoln-corsair-2024', 'mini-cooper-2024', 'porsche-macan-2024', 'ram-1500-2024', 'tesla-model-y-2024', 'gmc-sierra-1500-2024', 'chevrolet-silverado-1500-2024', 'ford-f-150-2024', 'nissan-frontier-2024', 'toyota-tundra-2024', 'honda-ridgeline-2024', 'jeep-gladiator-2024', 'subaru-brz-2024', 'mazda-mx-5-miata-2024', 'fiat-124-spider-2024', 'toyota-supra-2024', 'ford-mustang-mach-e-2024', 'chevrolet-corvette-stingray-2024']
+
+export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
+  vehicles: [
+    { kind: 'theme', value: 'graphite', weight: 3, label: 'Graphite theme' },
+    { kind: 'cash', value: 750, weight: 3, label: '$750 cash bonus' },
+    { kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' },
+    { kind: 'theme', value: 'ocean', weight: 2, label: 'Ocean theme' },
+    { kind: 'vehicle', weight: 5, label: 'Gifted luxury car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+    { kind: 'vehicle', weight: 4, label: 'Gifted commuter car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+    { kind: 'vehicle', weight: 3, label: 'Luxury car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+    { kind: 'vehicle', weight: 2, label: 'Commuter car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+
+  ],
+  education: [
+    { kind: 'vehicle', weight: 2, label: 'Scholar ride reward' },
+    { kind: 'theme', value: 'ocean', weight: 4, label: 'Ocean theme' },
+    { kind: 'stock', ticker: 'VTI', shares: 2, weight: 4, label: '2 VTI shares' },
+    { kind: 'cash', value: 1000, weight: 3, label: '$1,000 cash bonus' },
+    { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
+  ],
+  stocks: [
+    { kind: 'stock', ticker: 'VTI', shares: 2, weight: 5, label: '2 VTI shares' },
+    { kind: 'cash', value: 1200, weight: 3, label: '$1,200 cash bonus' },
+    { kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' },
+    { kind: 'stock', ticker: 'VTI', shares: 5, weight: 4, label: '5 VTI shares' },
+    { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 4, label: '1 AAPL share' },
+    { kind: 'stock', ticker: 'TSLA', shares: 1, weight: 4, label: '1 TSLA share' },
+    { kind: 'stock', ticker: 'AMZN', shares: 1, weight: 4, label: '1 AMZN share' },
+    { kind: 'stock', ticker: 'GOOGL', shares: 1, weight: 4, label: '1 GOOGL share' },
+    { kind: 'stock', ticker: 'MSFT', shares: 1, weight: 4, label: '1 MSFT share' },
+    { kind: 'stock', ticker: 'NVDA', shares: 1, weight: 4, label: '1 NVDA share' },
+    { kind: 'stock', ticker: 'META', shares: 1, weight: 4, label: '1 META share' },
+  ],
+  wealth: [
+    { kind: 'cash', value: 2000, weight: 5, label: '$2,000 cash bonus' },
+    { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
+    { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 2, label: '1 AAPL share' },
+    { kind: 'stock', ticker: 'TSLA', shares: 1, weight: 2, label: '1 TSLA share' },
+    { kind: 'stock', ticker: 'AMZN', shares: 1, weight: 2, label: '1 AMZN share' },
+    { kind: 'stock', ticker: 'GOOGL', shares: 1, weight: 2, label: '1 GOOGL share' },
+    { kind: 'stock', ticker: 'MSFT', shares: 1, weight: 2, label: '1 MSFT share' },
+    { kind: 'stock', ticker: 'NVDA', shares: 1, weight: 2, label: '1 NVDA share' },
+    { kind: 'stock', ticker: 'META', shares: 1, weight: 2, label: '1 META share' },
+    { kind: 'stock', ticker: 'VTI', shares: 5, weight: 4, label: '5 VTI shares' },
+    { kind: 'stock', ticker: 'VTI', shares: 10, weight: 3, label: '10 VTI shares' },
+  ],
+  default: [
+    { kind: 'cash', value: 500, weight: 4, label: '$500 cash bonus' },
+    { kind: 'theme', value: 'ocean', weight: 3, label: 'Ocean theme' },
+    { kind: 'stock', ticker: 'VTI', shares: 1, weight: 3, label: '1 VTI share' },
+    { kind: 'vehicle', weight: 2, label: 'Commuter car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+    { kind: 'theme', value: 'graphite', weight: 2, label: 'Graphite theme' },
+    { kind: 'cash', value: 1000, weight: 2, label: '$1,000 cash bonus' },
+    { kind: 'vehicle', weight: 3, label: 'Luxury car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
+    { kind: 'stock', ticker: 'VTI', shares: 3, weight: 4, label: '3 VTI shares' },
+    { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 3, label: '1 AAPL share' },
+  ]
+}

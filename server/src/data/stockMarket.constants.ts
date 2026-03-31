@@ -1,0 +1,186 @@
+export const stockMarketAssets = [
+  { ticker: 'AAPL', company: 'Apple', sector: 'Technology', basePrice: 260.72, volatility: 0.08, drift: 0.01, dividendYield: 0.005, icon: '📱' },
+  { ticker: 'MSFT', company: 'Microsoft', sector: 'Technology', basePrice: 405.76, volatility: 0.07, drift: 0.01, dividendYield: 0.007, icon: '💻' },
+  { ticker: 'NVDA', company: 'NVIDIA', sector: 'Semiconductors', basePrice: 184.76, volatility: 0.14, drift: 0.012, dividendYield: 0.001, icon: '🧠' },
+  { ticker: 'AMZN', company: 'Amazon', sector: 'Consumer', basePrice: 214.34, volatility: 0.1, drift: 0.008, dividendYield: 0, icon: '📦' },
+  { ticker: 'KO', company: 'Coca-Cola', sector: 'Consumer Staples', basePrice: 77.88, volatility: 0.045, drift: 0.004, dividendYield: 0.03, icon: '🥤' },
+  { ticker: 'JPM', company: 'JPMorgan', sector: 'Financials', basePrice: 288.73, volatility: 0.065, drift: 0.005, dividendYield: 0.02, icon: '🏦' },
+  { ticker: 'XOM', company: 'ExxonMobil', sector: 'Energy', basePrice: 148.13, volatility: 0.09, drift: 0.003, dividendYield: 0.033, icon: '🛢️' },
+  { ticker: 'VTI', company: 'US Total Market ETF', sector: 'ETF', basePrice: 333.57, volatility: 0.05, drift: 0.006, dividendYield: 0.014, icon: '🧺' },
+  { ticker: 'TSLA', company: 'Tesla', sector: 'Automotive', basePrice: 399.25, volatility: 0.12, drift: 0.015, dividendYield: 0, icon: '🚗' },
+  { ticker: 'GOOGL', company: 'Alphabet', sector: 'Technology', basePrice: 307.04, volatility: 0.09, drift: 0.01, dividendYield: 0.004, icon: '🔍' },
+  { ticker: 'META', company: 'Meta Platforms', sector: 'Technology', basePrice: 653.91, volatility: 0.11, drift: 0.008, dividendYield: 0.003, icon: '👓' },
+  { ticker: 'NFLX', company: 'Netflix', sector: 'Communication Services', basePrice: 96.94, volatility: 0.13, drift: 0.007, dividendYield: 0, icon: '📺' },
+  { ticker: 'DIS', company: 'Disney', sector: 'Communication Services', basePrice: 101.32, volatility: 0.1, drift: 0.005, dividendYield: 0, icon: '🏰' },
+  { ticker: 'SPY', company: 'S&P 500 ETF', sector: 'ETF', basePrice: 677.05, volatility: 0.04, drift: 0.005, dividendYield: 0.012, icon: '📈' },
+  { ticker: 'QQQ', company: 'Nasdaq 100 ETF', sector: 'ETF', basePrice: 607.73, volatility: 0.06, drift: 0.007, dividendYield: 0.006, icon: '📊' },
+  { ticker: 'DIA', company: 'Dow Jones ETF', sector: 'ETF', basePrice: 477.74, volatility: 0.05, drift: 0.006, dividendYield: 0.018, icon: '📉' },
+]
+
+export const stockMarketGlossary = [
+  {
+    term: 'Bull Market',
+    plain: 'A stretch where prices mostly go up.',
+    levels: {
+      elementary: 'The market is climbing like a hill.',
+      'middle-school': 'Prices have been rising for a while.',
+      'high-school': 'A broad uptrend driven by optimism and buying pressure.',
+      adult: 'A sustained period of rising asset prices with strong investor sentiment.'
+    }
+  },
+  {
+    term: 'Bear Market',
+    plain: 'A stretch where prices mostly go down.',
+    levels: {
+      elementary: 'The market is sliding downhill.',
+      'middle-school': 'Prices have been falling for months.',
+      'high-school': 'A prolonged downturn, commonly defined by major declines from prior highs.',
+      adult: 'A broad market decline, often 20%+ from peaks, with risk-off behavior.'
+    }
+  },
+  {
+    term: 'Volatility',
+    plain: 'How jumpy prices are.',
+    levels: {
+      elementary: 'How much prices bounce around.',
+      'middle-school': 'How quickly and how far prices move up and down.',
+      'high-school': 'The statistical dispersion of returns over time.',
+      adult: 'Magnitude and frequency of price variation, often measured via standard deviation.'
+    }
+  },
+  {
+    term: 'Diversification',
+    plain: 'Not putting all your money in one place.',
+    levels: {
+      elementary: 'Use different baskets for your eggs.',
+      'middle-school': 'Spread money across different investments to reduce risk.',
+      'high-school': 'Allocating across uncorrelated assets to smooth portfolio risk.',
+      adult: 'Risk management by spreading exposure across sectors, asset classes, and factors.'
+    }
+  },
+  {
+    term: 'Dividend',
+    plain: 'A cash reward some companies pay shareholders.',
+    levels: {
+      elementary: 'Some companies share part of their money with owners.',
+      'middle-school': 'A payout from company profits to shareholders.',
+      'high-school': 'Periodic cash distributions paid per share from earnings.',
+      adult: 'A board-approved earnings distribution, typically paid quarterly per share.'
+    }
+  },
+  {
+    term: 'P/E Ratio',
+    plain: 'Price compared to company earnings.',
+    levels: {
+      elementary: 'A clue for whether a stock seems pricey or cheap.',
+      'middle-school': 'Stock price divided by earnings per share.',
+      'high-school': 'Valuation metric comparing market price to EPS.',
+      adult: 'Relative valuation multiple indicating how much investors pay per unit of earnings.'
+    }
+  },
+  {
+    term: 'Portfolio Value',
+    plain: 'What all your current shares are worth right now.',
+    levels: {
+      elementary: 'How much your investment basket is worth today.',
+      'middle-school': 'The current total value of all stocks you own.',
+      'high-school': 'Sum of each holding: shares multiplied by current price.',
+      adult: 'Aggregate mark-to-market value of all open positions.'
+    }
+  },
+  {
+    term: 'Cost Basis',
+    plain: 'How much money you put into your current holdings.',
+    levels: {
+      elementary: 'The money you spent to buy your shares.',
+      'middle-school': 'Your total invested amount in the shares you still own.',
+      'high-school': 'For each position: shares multiplied by average purchase cost, summed across holdings.',
+      adult: 'Total capital invested in current open positions, adjusted by average entry prices.'
+    }
+  },
+  {
+    term: 'Unrealized P/L',
+    plain: 'The gain or loss if you sold your shares right now.',
+    levels: {
+      elementary: 'How much you are up or down before selling.',
+      'middle-school': 'Paper profit or loss on holdings you still own.',
+      'high-school': 'Current value minus cost basis for open positions.',
+      adult: 'Mark-to-market profit/loss not yet realized through execution.'
+    }
+  }
+]
+
+export const autoInvestProfiles = [
+  {
+    id: 'conservative',
+    name: 'Conservative Income',
+    risk: 'Low',
+    description: 'ETF-heavy with defensive consumer, financial, and energy exposure plus small allocations to the market leaders.',
+    allocations: {
+      VTI: 0.22,
+      SPY: 0.17,
+      DIA: 0.10,
+      QQQ: 0.08,
+      KO: 0.08,
+      JPM: 0.08,
+      XOM: 0.06,
+      MSFT: 0.05,
+      AAPL: 0.04,
+      GOOGL: 0.025,
+      AMZN: 0.02,
+      META: 0.02,
+      DIS: 0.02,
+      NVDA: 0.012,
+      NFLX: 0.011,
+      TSLA: 0.012,
+    }
+  },
+  {
+    id: 'balanced',
+    name: 'Balanced Blend',
+    risk: 'Medium',
+    description: 'Balanced mix of broad-market ETFs, mega-cap winners, and a lighter sleeve of defensive and cyclical names.',
+    allocations: {
+      VTI: 0.18,
+      SPY: 0.14,
+      QQQ: 0.10,
+      MSFT: 0.10,
+      AAPL: 0.09,
+      GOOGL: 0.08,
+      AMZN: 0.08,
+      META: 0.07,
+      NVDA: 0.06,
+      JPM: 0.025,
+      KO: 0.02,
+      TSLA: 0.02,
+      XOM: 0.015,
+      NFLX: 0.01,
+      DIA: 0.005,
+      DIS: 0.005,
+    }
+  },
+  {
+    id: 'growth',
+    name: 'Growth Accelerator',
+    risk: 'Higher',
+    description: 'Tilts hard toward the strongest tech and innovation leaders, with only a small stabilizing ETF and defensive sleeve.',
+    allocations: {
+      NVDA: 0.16,
+      MSFT: 0.13,
+      META: 0.11,
+      GOOGL: 0.11,
+      AMZN: 0.10,
+      AAPL: 0.09,
+      TSLA: 0.08,
+      QQQ: 0.08,
+      NFLX: 0.04,
+      VTI: 0.03,
+      SPY: 0.02,
+      JPM: 0.015,
+      XOM: 0.01,
+      KO: 0.01,
+      DIA: 0.01,
+      DIS: 0.005,
+    }
+  }
+]
