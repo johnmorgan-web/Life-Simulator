@@ -2733,7 +2733,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// HOUSING - Dynamic rent based on 30% of salary
 		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
 		bal = fix(bal - rent)
-		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
+		ledger.push({ id: id++, desc: `Housing/Rent Payment`, amt: rent, type: 'out', bal, done: false })
 		const mortgagePayment = Math.max(
 			0,
 			Number(state.house?.mortgagePayment ?? state.house?.monthlyPayment ?? state.house?.mortgage ?? 0)

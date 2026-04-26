@@ -72,7 +72,7 @@ export default function Bank() {
     <div className="space-y-6">
       <div className="glass p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Bank & Affluence</h2>
-        <p className="text-sm text-slate-600">Your wealth meter compares your affluence against the average and highest user in this browser.</p>
+        <p className="text-sm text-slate-600">Your wealth meter compares your prosperity against the average and highest user in this browser.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -92,7 +92,7 @@ export default function Bank() {
       </div>
 
       <div className="glass p-6 space-y-4">
-        <h3 className="font-bold text-lg">📈 Affluence Meter</h3>
+        <h3 className="font-bold text-lg">📈 Wealthy Meter</h3>
 
         <div>
           <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
@@ -131,7 +131,7 @@ export default function Bank() {
       </div>
 
       <div className="glass p-6">
-        <h3 className="font-bold text-lg mb-1">🪙 Coin Heap Comparison</h3>
+        <h3 className="font-bold text-lg mb-1">🪙 Player Comparison</h3>
         <p className="text-xs text-slate-500 mb-4">Hover each heap to compare annual income, balances, stock investment, cars, luxury services, and house level.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <CoinHeap
@@ -162,7 +162,7 @@ export default function Bank() {
       </div>
 
       <div className="glass p-6">
-        <h3 className="font-bold text-lg mb-3">🏦 Top Affluence Board</h3>
+        <h3 className="font-bold text-lg mb-3">🏦 Top Player</h3>
         <div className="space-y-2">
           {comparison.topPeers.map((peer, index) => (
             <div key={`${peer.user}-${index}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">

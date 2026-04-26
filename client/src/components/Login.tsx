@@ -15,6 +15,7 @@ export default function Login() {
   return (
     <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
       <form onSubmit={handleSubmit} className="glass p-8 rounded-xl w-full max-w-sm">
+        <img src="/Ledger Legends.png" alt="Ledger Legends" className="w-full mb-4 rounded-xl" />
         <h2 className="text-2xl font-small mb-4 ">Your neighbors missed you. (The nice ones, anyway.)</h2>
         <div className="mb-4">
           <label className="block text-sm font-bold text-slate-600 mb-1">Username</label>
