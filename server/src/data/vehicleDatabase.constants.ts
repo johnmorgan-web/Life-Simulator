@@ -1,7 +1,7 @@
 // Comprehensive vehicle database organized by class and condition
 // Easy to extend with new vehicles by adding objects to the appropriate arrays
 
-const vehicleDatabase = {
+export const vehicleDatabase = {
   classes: {
     economy: {
       name: 'Economy',
@@ -488,5 +488,3 @@ const vehicleDatabase = {
     apr: 0.065 // 6.5% APR baseline (can be adjusted by credit score)
   }
 }
-
-export default vehicleDatabase

@@ -675,7 +675,7 @@ function achievementMetricValue(rule: any, snapshot: any) {
 	const unrealized = round2(marketValue - costBasis)
 	const netWorth = round2(
 		Number(snapshot.check || 0)
-		+ Number(snapshot.save || 0)
+		+ Number(snapshot.savings || 0)
 		+ Number(snapshot.house?.value || 0)
 		+ marketValue
 		+ realEstateEquityValue(snapshot)
@@ -1040,7 +1040,7 @@ const initializeEduProgress = () => {
 
 const initialState: State = {
 	check: 1200.0,
-	save: 0,
+	savings: 0,
 	debt: 0,
 	credit: 600,
 	month: 2,
@@ -1792,7 +1792,7 @@ function reducer(state: State, action: any) {
 			}
 
 			// Apply monthly interest on debt with dynamic APR based on credit score
-			let saveBefore = state.save + paySave
+			let saveBefore = state.savings + paySave
 			if (newDebt > 0) {
 				const dynamicAPR = calculateDynamicAPR(credit)
 				const monthlyDebtInterest = fix(newDebt * (dynamicAPR / 12))
@@ -2364,7 +2364,7 @@ function reducer(state: State, action: any) {
 			const achievementSnapshot = {
 				...state,
 				check: resultingCheck,
-				save: newSave,
+				savings: newSave,
 				debt: newDebt,
 				tenure,
 				credentials,
@@ -2398,7 +2398,7 @@ function reducer(state: State, action: any) {
 			return {
 				...state,
 				check: resultingCheck,
-				save: newSave,
+				savings: newSave,
 				debt: newDebt,
 				credit,
 				paymentStreak,
@@ -3115,7 +3115,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const startingMarketPrices = initializeMarketPrices()
 		const freshState = {
 			check: 1200.0,
-			save: 0,
+			savings: 0,
 			debt: 0,
 			credit: 600,
 			month: 2,

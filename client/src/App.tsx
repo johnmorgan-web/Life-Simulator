@@ -299,7 +299,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
     const debtAfterPayment = Math.max(0, Number(state.debt || 0) - (skippedPayment ? 0 : debtPayment))
     const projectedDebtInterest = debtAfterPayment > 0 ? debtAfterPayment * (dynamicAPR / 12) : 0
-    const projectedSavingsBase = Math.max(0, Number(state.save || 0) + savings)
+    const projectedSavingsBase = Math.max(0, Number(state.savings || 0) + savings)
     const projectedSavingsInterest = projectedSavingsBase > 0 ? projectedSavingsBase * (gameValues.hysaAPR / 12) : 0
     const projectedDebtPayoffMonths = estimateDebtPayoffMonths(debtAfterPayment, skippedPayment ? 0 : debtPayment, dynamicAPR)
     const projectedDividendIncome = Math.round(((Array.isArray(state.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {

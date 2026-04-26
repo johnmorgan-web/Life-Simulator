@@ -80,7 +80,7 @@ export default function Lifestyle() {
     }, 0)
     : 0
   const netWorth = Number(state.check || 0)
-    + Number(state.save || 0)
+    + Number(state.savings || 0)
     + Number(state.house?.value || 0)
     + portfolioMarketValue
     + realEstateEquity
@@ -238,7 +238,7 @@ export default function Lifestyle() {
   // House purchase handler - pull from savings first, then checking
   const buyHouse = (model: any) => {
     let totalNeeded = model.price
-    let newSave = state.save
+    let newSave = state.savings
     let newCheck = state.check
     
     if (newSave >= totalNeeded) {
@@ -253,7 +253,7 @@ export default function Lifestyle() {
       newCheck = Math.round((newCheck - fromChecking) * 100) / 100
     }
     
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, save: newSave, house: { model: model.id, level: 1, value: model.price } } })
+    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, house: { model: model.id, level: 1, value: model.price } } })
   }
 
   // Upgrade house - pull from savings first, then checking
@@ -263,7 +263,7 @@ export default function Lifestyle() {
     if (!model) return
     const upgradeCost = model.baseUpgrade * (state.house.level || 1)
     
-    let newSave = state.save
+    let newSave = state.savings
     let newCheck = state.check
     
     if (newSave >= upgradeCost) {
@@ -276,12 +276,12 @@ export default function Lifestyle() {
       newCheck = Math.round((newCheck - fromChecking) * 100) / 100
     }
     
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, save: newSave, house: { ...state.house, level: (state.house.level || 0) + 1, value: state.house.value + upgradeCost } } })
+    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, house: { ...state.house, level: (state.house.level || 0) + 1, value: state.house.value + upgradeCost } } })
   }
 
   // Store purchase - pull from savings first, then checking
   const buyItem = (item: any) => {
-    let newSave = state.save
+    let newSave = state.savings
     let newCheck = state.check
     
     if (newSave >= item.price) {
@@ -295,7 +295,7 @@ export default function Lifestyle() {
     }
     
     const newInv = [...(state.inventory || []), item]
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, save: newSave, inventory: newInv } })
+    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, inventory: newInv } })
   }
 
   return (
@@ -636,7 +636,7 @@ export default function Lifestyle() {
           <h3 className="font-bold text-lg">🏡 Houses</h3>
           <div className="grid grid-cols-3 gap-4">
             {housingModels.map((m: any) => {
-              const canAfford = state.save + state.check >= m.price
+              const canAfford = state.savings + state.check >= m.price
               return (
                 <div key={m.id} className={`glass p-4 ${!canAfford ? 'opacity-60' : ''}`}>
                   <h4 className="font-bold">{m.name}</h4>
@@ -686,7 +686,7 @@ export default function Lifestyle() {
           <h3 className="font-bold text-lg">🛒 Store - Furnishings & Decor</h3>
           <div className="grid grid-cols-2 gap-4">
             {storeItems.map(item => {
-              const canAfford = state.save + state.check >= item.price
+              const canAfford = state.savings + state.check >= item.price
               return (
                 <div key={item.id} className={`glass p-4 ${!canAfford ? 'opacity-60' : ''}`}>
                   <div className="flex justify-between items-start mb-2">

@@ -1,13 +1,18 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { UserService } from './user.service';
 
-@Controller('user')
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
   async createUser(@Body() body: { name: string }) {
     return this.userService.createUser(body.name);
+  }
+
+  @Get()
+  async listUsers() {
+    return this.userService.listAllUsers();
   }
 
   @Get(':name')
@@ -20,5 +25,13 @@ export class UserController {
     return this.userService.processMonth(name);
   }
 
-  // Add more endpoints for other actions
+  @Post(':name/action')
+  async applyAction(@Param('name') name: string, @Body() action: any) {
+    return this.userService.applyAction(name, action);
+  }
+
+  @Delete(':name')
+  async deleteUser(@Param('name') name: string) {
+    return this.userService.deleteUser(name);
+  }
 }

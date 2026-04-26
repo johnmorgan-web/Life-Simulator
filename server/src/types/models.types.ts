@@ -1,4 +1,4 @@
-export type City = { name: string; p: number; r: number; icon: string; lat?: number; lon?: number; country?: string }
+export type City = { name: string; p: number; r: number; icon: string; lat: number; lon: number; country: string }
 export type JobExperienceRequirement = {
 	roles: string[]
 	minMonths: number

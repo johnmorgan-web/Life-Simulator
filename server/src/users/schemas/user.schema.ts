@@ -12,7 +12,7 @@ export class User {
   check: number;
 
   @Prop({ default: 0 })
-  save: number;
+  savings: number;
 
   @Prop({ default: 0 })
   debt: number;

@@ -78,7 +78,7 @@ function metricValue(rule: AchievementRule, state: GenericState) {
       const portfolio = Array.isArray(state.portfolio) ? state.portfolio as Array<{ ticker?: string; shares?: number }> : []
       const marketValue = portfolio.reduce((sum, h) => sum + Number(h.shares || 0) * Number(prices[h.ticker || ''] || 0), 0)
       const houseValue = Number(((state.house as { value?: number } | undefined)?.value) || 0)
-      return Number(state.check || 0) + Number(state.save || 0) + houseValue + marketValue - Number(state.debt || 0)
+      return Number(state.check || 0) + Number(state.savings || 0) + houseValue + marketValue - Number(state.debt || 0)
     }
     case 'tickerShares': {
       const ticker = String(rule.ticker || '')

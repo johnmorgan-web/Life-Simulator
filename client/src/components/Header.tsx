@@ -20,7 +20,7 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Savings</span>
-            <p className="text-xl font-bold text-blue-600">${state.save.toFixed(2)}</p>
+            <p className="text-xl font-bold text-blue-600">${state.savings.toFixed(2)}</p>
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Debt</span>

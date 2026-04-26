@@ -118,7 +118,7 @@ export default function Transit() {
     const financedPrincipal = Math.max(0, price - downPayment)
     const monthlyPayment = calculateMonthlyPayment(financedPrincipal, getAPR(), 60)
     const dueAtSigning = downPayment + monthlyPayment
-    const canPayCash = state.save >= price || state.check >= price
+    const canPayCash = state.savings >= price || state.check >= price
     const canFinance = state.check >= dueAtSigning
     
     setFinancingModal({ vehicle, condition, price, downPayment, monthlyPayment, dueAtSigning, canPayCash, canFinance })
@@ -195,9 +195,9 @@ export default function Transit() {
       }
 
       // Check if user can afford it
-      if (state.save >= price) {
+      if (state.savings >= price) {
         // Use savings
-        const newSave = Math.round((state.save - price) * 100) / 100
+        const newSave = Math.round((state.savings - price) * 100) / 100
         const newVehicle = {
           id: createGarageEntryId(vehicle.id, condition),
           vehicleId: vehicle.id,
@@ -215,7 +215,7 @@ export default function Transit() {
         dispatch({
           type: 'SET_STATE',
           payload: {
-            save: newSave,
+            savings: newSave,
             garage: [...garage, newVehicle],
             ownsVehicle: state.ownsVehicle || newVehicle,
             transit: syncTransitForGarage([...garage, newVehicle], state.transit),
@@ -297,7 +297,7 @@ export default function Transit() {
   const completeSale = () => {
     if (!state.ownsVehicle || !state.ownsVehicle.for_sale) return
     const proceeds = isNonPayoutSaleVehicle(state.ownsVehicle) ? 0 : (state.ownsVehicle.listPrice || 0)
-    const newSave = Math.round((state.save + proceeds) * 100) / 100
+    const newSave = Math.round((state.savings + proceeds) * 100) / 100
     // remove from garage
     const updatedGarage = (garage || []).filter((g: any) => g.id !== state.ownsVehicle.id)
     // update ownsVehicle to next available or null
@@ -305,7 +305,7 @@ export default function Transit() {
     dispatch({
       type: 'SET_STATE',
       payload: {
-        save: newSave,
+        savings: newSave,
         ownsVehicle: newPrimary,
         garage: updatedGarage,
         vehicleHistory: [...(state.vehicleHistory || []), state.ownsVehicle],
@@ -329,7 +329,7 @@ export default function Transit() {
     const v = garage.find((g: any) => g.id === id)
     if (!v || !v.for_sale) return
     const proceeds = isNonPayoutSaleVehicle(v) ? 0 : (v.listPrice || 0)
-    const newSave = Math.round((state.save + proceeds) * 100) / 100
+    const newSave = Math.round((state.savings + proceeds) * 100) / 100
     const updatedGarage = (garage || []).filter((g: any) => g.id !== id)
     // if sold was primary, update ownsVehicle
     let newPrimary = state.ownsVehicle
@@ -339,7 +339,7 @@ export default function Transit() {
     dispatch({
       type: 'SET_STATE',
       payload: {
-        save: newSave,
+        savings: newSave,
         garage: updatedGarage,
         ownsVehicle: newPrimary,
         vehicleHistory: [...(state.vehicleHistory || []), v],

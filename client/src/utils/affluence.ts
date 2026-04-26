@@ -59,7 +59,7 @@ function getWealthStats(snapshot: any): WealthStats {
   return {
     annualIncome: Math.round(estimateAnnualIncome(snapshot) * 100) / 100,
     checking: Math.round(toNumber(snapshot?.check) * 100) / 100,
-    savings: Math.round(toNumber(snapshot?.save) * 100) / 100,
+    savings: Math.round(toNumber(snapshot?.savings) * 100) / 100,
     investedStocks: Math.round(estimateInvestedStocks(snapshot) * 100) / 100,
     carsOwned: Array.isArray(snapshot?.garage) ? snapshot.garage.length : 0,
     luxuryServicesOwned: countLuxuryServices(snapshot),
@@ -115,7 +115,7 @@ export function computeAffluence(snapshot: any) {
   if (!snapshot) return 0
 
   const check = toNumber(snapshot.check)
-  const save = toNumber(snapshot.save)
+  const save = toNumber(snapshot.savings)
   const debt = toNumber(snapshot.debt)
   const houseValue = toNumber(snapshot.house?.value)
 
