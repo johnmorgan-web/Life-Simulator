@@ -443,7 +443,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
         </div>
       )}
       <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
-      <main className="flex-1 overflow-hidden p-6 max-w-7xl mx-auto w-full grid grid-cols-12 gap-6">
+      <main className="flex-1 overflow-hidden p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-12 gap-7">
         <Nav tab={tab} setTab={setTab} />
         <div 
           className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"

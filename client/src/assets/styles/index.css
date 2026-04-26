@@ -8,11 +8,13 @@
 :root {
 	--app-accent: #ef4444;
 	--app-bg: #f8fafc;
+	font-size: 17px;
 }
 
 body {
 	font-family: 'DM Sans', sans-serif;
 	height: 100vh;
+	font-size: 1rem;
 }
 
 .app-shell {

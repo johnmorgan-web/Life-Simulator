@@ -24,18 +24,18 @@ export default function Nav({ tab, setTab }: any) {
   ]
   return (
     <nav className="col-span-2">
-      <div className="space-y-2 sticky top-6">
-        <div className="glass px-3 py-2 border border-slate-200 bg-white/80">
+      <div className="space-y-2.5 sticky top-6">
+        <div className="glass px-4 py-3 border border-slate-200 bg-white/80">
           <p className="text-[10px] uppercase font-bold tracking-wide text-slate-500">Garage</p>
-          <p className="text-xs font-bold text-slate-700">{garageIconStrip}</p>
+          <p className="text-sm font-bold text-slate-700">{garageIconStrip}</p>
         </div>
         {tabs.map(t => {
           const isRewards = t.id === 'rewards'
           return (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`w-full text-left px-4 py-3 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'} flex items-center justify-between`}>
-              <span>{t.label}</span>
+            <button key={t.id} onClick={() => setTab(t.id)} className={`w-full text-left px-5 py-3.5 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'} flex items-center justify-between text-base font-semibold`}>
+              <span className="leading-tight">{t.label}</span>
               {isRewards && rewardTokens > 0 ? (
-                <span className="ml-2 min-w-6 h-6 px-2 rounded-full bg-violet-600 text-white text-xs font-bold inline-flex items-center justify-center">
+                <span className="ml-2 min-w-7 h-7 px-2 rounded-full bg-violet-600 text-white text-sm font-bold inline-flex items-center justify-center">
                   {rewardTokens}
                 </span>
               ) : null}

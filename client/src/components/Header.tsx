@@ -11,24 +11,24 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
   const averageWidth = Math.min(100, (affluence.average / meterMax) * 100)
 
   return (
-    <header className="p-4 bg-white border-b border-slate-200 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
+    <header className="p-5 bg-white border-b border-slate-200 sticky top-0 z-40">
+      <div className="max-w-[98vw] mx-auto flex justify-between items-center">
         <div className="flex gap-8">
           <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Checking</span>
-            <p className="text-xl font-bold text-slate-800">${state.check.toFixed(2)}</p>
+            <span className="text-[11px] text-slate-400 font-bold uppercase block">Checking</span>
+            <p className="text-2xl font-bold text-slate-800">${state.check.toFixed(2)}</p>
           </div>
           <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Savings</span>
-            <p className="text-xl font-bold text-blue-600">${state.savings.toFixed(2)}</p>
+            <span className="text-[11px] text-slate-400 font-bold uppercase block">Savings</span>
+            <p className="text-2xl font-bold text-blue-600">${state.savings.toFixed(2)}</p>
           </div>
           <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Debt</span>
-            <p className="text-xl font-bold text-rose-600">${state.debt.toFixed(2)}</p>
+            <span className="text-[11px] text-slate-400 font-bold uppercase block">Debt</span>
+            <p className="text-2xl font-bold text-rose-600">${state.debt.toFixed(2)}</p>
           </div>
           <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Credit</span>
-            <p className="text-xl font-bold text-indigo-600">{state.credit}</p>
+            <span className="text-[11px] text-slate-400 font-bold uppercase block">Credit</span>
+            <p className="text-2xl font-bold text-indigo-600">{state.credit}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -48,8 +48,8 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
             <p className="text-[10px] text-slate-500 mt-1">Green: you | Blue: average</p>
           </div>
           <div className="text-right mr-4">
-            <span className="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold uppercase">{state.city.name}</span>
-            <p className="text-sm font-bold text-slate-500">{new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+            <span className="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold uppercase">{state.city.name}</span>
+            <p className="text-base font-bold text-slate-500">{new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             <div className="xl:hidden mt-2 w-[170px] ml-auto bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
               <p className="text-[10px] font-bold text-slate-600">Affluence #{affluence.rank}/{affluence.count}</p>
               <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
@@ -62,8 +62,8 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           </div>
           <div className="flex items-center gap-2">
             <SaveManager />
-            <button onClick={() => logout()} className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
-            <button onClick={onVerify} disabled={!verifyEnabled} className={`px-6 py-3 rounded-xl text-xs font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
+            <button onClick={() => logout()} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
+            <button onClick={onVerify} disabled={!verifyEnabled} className={`px-6 py-3 rounded-xl text-sm font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
           </div>
         </div>
       </div>
