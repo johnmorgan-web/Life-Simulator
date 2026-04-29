@@ -124,7 +124,7 @@ function tierLabel(metric: AchievementRule['metric'], ticker?: string) {
 }
 
 export default function Rewards() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch, spinRewardWheel } = useGame()
   const [wheelRotation, setWheelRotation] = useState(0)
   const [isSpinning, setIsSpinning] = useState(false)
   const typedState = state as GenericState
@@ -135,21 +135,37 @@ export default function Rewards() {
   const prizePool = (rewardWheelPrizePools[wheelCategory] || rewardWheelPrizePools.default) as RewardPrize[]
   const segmentAngle = prizePool.length > 0 ? 360 / prizePool.length : 360
 
-  const handleAnimatedSpin = () => {
+  const findPrizeIndex = (prize: any) => {
+    if (!prize || prizePool.length === 0) return -1
+    return prizePool.findIndex((candidate: any) => {
+      if (candidate.kind !== prize.kind) return false
+      if (candidate.kind === 'cash') return Number(candidate.value) === Number(prize.value)
+      if (candidate.kind === 'theme') return String(candidate.value) === String(prize.value)
+      if (candidate.kind === 'stock') {
+        return String(candidate.ticker) === String(prize.ticker) && Number(candidate.shares) === Number(prize.shares)
+      }
+      return candidate.kind === 'vehicle'
+    })
+  }
+
+  const handleAnimatedSpin = async () => {
     if (isSpinning || Number(state.rewardTokens || 0) <= 0 || prizePool.length === 0) return
-    const winningIndex = weightedChoiceIndex(prizePool)
-    const selectedPrize = prizePool[winningIndex]
+    setIsSpinning(true)
+
+    const result = await spinRewardWheel()
+    const selectedPrize = result?.prize
+    let winningIndex = findPrizeIndex(selectedPrize)
+    if (winningIndex < 0) winningIndex = weightedChoiceIndex(prizePool)
+
     const centerAngle = (winningIndex * segmentAngle) + (segmentAngle / 2)
     const normalizedCurrent = ((wheelRotation % 360) + 360) % 360
     const desiredFinal = (360 - centerAngle) % 360
     const delta = (desiredFinal - normalizedCurrent + 360) % 360
     const nextRotation = wheelRotation + (360 * 6) + delta
 
-    setIsSpinning(true)
     setWheelRotation(nextRotation)
 
     window.setTimeout(() => {
-      dispatch({ type: 'SPIN_REWARD_WHEEL', payload: { forcedPrize: selectedPrize } })
       setIsSpinning(false)
     }, 4200)
   }
@@ -266,7 +282,12 @@ export default function Rewards() {
 
         <div className="flex flex-wrap gap-2 items-center mt-4 mb-3">
           <button
-            onClick={() => dispatch({ type: 'SPIN_REWARD_WHEEL' })}
+            onClick={async () => {
+              if (isSpinning || Number(state.rewardTokens || 0) <= 0) return
+              setIsSpinning(true)
+              await spinRewardWheel()
+              setIsSpinning(false)
+            }}
             disabled={Number(state.rewardTokens || 0) <= 0 || isSpinning}
             className={`px-3 py-1 rounded text-xs font-bold ${Number(state.rewardTokens || 0) > 0 && !isSpinning ? 'bg-slate-700 text-white hover:bg-slate-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
           >

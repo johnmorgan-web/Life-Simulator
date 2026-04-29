@@ -9,7 +9,7 @@ import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
-import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
+import { achievementRules } from '../constants/achievements.constants'
 import type { Job, Application, LifeEvent } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
@@ -79,6 +79,15 @@ async function persistUserState(id: string, state: any) {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(state),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function spinRewardWheelForUser(id: string) {
+	const response = await fetch(`${API_BASE_URL}/game/${id}/spin-reward`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
 	})
 	if (!response.ok) return null
 	return response.json()
@@ -787,50 +796,6 @@ function generateAchievementUnlocks(snapshot: any) {
 		}
 	}
 	return unlockedNow
-}
-
-function addOrUpdateHolding(portfolio: any[], ticker: string, shares: number, price: number) {
-	const next = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : []
-	const idx = next.findIndex((h: any) => h.ticker === ticker)
-	const totalCost = round2(shares * price)
-	if (idx >= 0) {
-		const existing = next[idx]
-		const existingShares = Number(existing.shares || 0)
-		const existingAvg = Number(existing.avgCost || price)
-		const totalShares = existingShares + shares
-		const avgCost = totalShares > 0 ? round2(((existingShares * existingAvg) + totalCost) / totalShares) : round2(price)
-		next[idx] = { ...existing, shares: totalShares, avgCost }
-	} else {
-		next.push({ ticker, shares, avgCost: round2(price) })
-	}
-	return next
-}
-
-function chooseWeightedPrize(pool: any[]) {
-	const totalWeight = pool.reduce((sum, p) => sum + Number(p.weight || 1), 0)
-	let roll = Math.random() * totalWeight
-	let chosen = pool[pool.length - 1]
-	for (const p of pool) {
-		roll -= Number(p.weight || 1)
-		if (roll <= 0) {
-			chosen = p
-			break
-		}
-	}
-	return chosen
-}
-
-function spinRewardPrize(state: any, forcedPrize?: any) {
-	const category = state.lastAchievementCategory || 'wealth'
-	const pool = rewardWheelPrizePools[category] || rewardWheelPrizePools.default
-	const chosen = forcedPrize || chooseWeightedPrize(pool)
-
-	if (chosen.kind === 'vehicle') {
-		const randomVehicleId = rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)]
-		return { ...chosen, vehicleId: randomVehicleId }
-	}
-
-	return chosen
 }
 
 function scoreStockSignal(asset: any, price: number, prevPrice: number, portfolioValue: number, positionValue: number) {
@@ -2508,65 +2473,6 @@ function reducer(state: State, action: any) {
 				logs
 			}
 		}
-		case 'SPIN_REWARD_WHEEL': {
-			if (Number(state.rewardTokens || 0) <= 0) return state
-			const prize = spinRewardPrize(state, action.payload?.forcedPrize)
-			let check = Number(state.check || 0)
-			let portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
-			let garage = Array.isArray(state.garage) ? [...state.garage] : []
-			let ownsVehicle = state.ownsVehicle
-			let unlockedThemes = Array.isArray(state.unlockedThemes) ? [...state.unlockedThemes] : ['default']
-			const logs = [...state.logs]
-			const rewardHistory = Array.isArray(state.rewardHistory) ? [...state.rewardHistory] : []
-
-			if (prize.kind === 'cash') {
-				check = round2(check + Number(prize.value || 0))
-				logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: ${prize.label}` })
-			} else if (prize.kind === 'theme') {
-				if (!unlockedThemes.includes(prize.value)) unlockedThemes.push(prize.value)
-				logs.push({ date: `${state.month}/${state.year}`, msg: `🎨 Reward wheel: unlocked theme ${prize.value}` })
-			} else if (prize.kind === 'stock') {
-				const marketPrice = Number(state.marketPrices?.[prize.ticker] || 0)
-				if (marketPrice > 0 && Number(prize.shares || 0) > 0) {
-					portfolio = addOrUpdateHolding(portfolio, prize.ticker, Number(prize.shares), marketPrice)
-					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: granted ${prize.shares} ${prize.ticker} shares` })
-				}
-			} else if (prize.kind === 'vehicle') {
-				const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === prize.vehicleId)
-				if (vehicle) {
-					const rewardCar = {
-						id: `reward-${prize.vehicleId}-${Date.now()}`,
-						vehicleId: vehicle.id,
-						vehicleName: vehicle.name,
-						purchasePrice: vehicle.newPrice,
-						currentValue: vehicle.newPrice,
-						condition: 'new',
-						financed: false,
-						monthsRemaining: 0,
-						monthlyPayment: 0,
-						purchaseMonth: state.month,
-						purchaseYear: state.year,
-						for_sale: false
-					}
-					garage.push(rewardCar)
-					if (!ownsVehicle) ownsVehicle = rewardCar
-					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: gifted vehicle ${vehicle.name}` })
-				}
-			}
-
-			rewardHistory.unshift({ month: state.month, year: state.year, label: prize.label || prize.kind, category: state.lastAchievementCategory || 'general' })
-			return {
-				...state,
-				check,
-				portfolio,
-				garage,
-				ownsVehicle,
-				unlockedThemes: Array.from(new Set(unlockedThemes)),
-				rewardTokens: Math.max(0, Number(state.rewardTokens || 0) - 1),
-				rewardHistory: rewardHistory.slice(0, 40),
-				logs
-			}
-		}
 		case 'SET_STATE':
 			return { ...state, ...action.payload }
 		default:
@@ -2734,6 +2640,23 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (!saved) return false
 		await refreshPeerSnapshots()
 		return true
+	}
+
+	async function spinRewardWheel() {
+		if (!state.id) return null
+		const result = await spinRewardWheelForUser(state.id)
+		if (!result?.user) return null
+
+		const normalized = normalizeLoadedUserState(
+			result.user,
+			state,
+			result.user.username || state.currentUser || state.username || 'player',
+		)
+
+		dispatch({ type: 'SET_STATE', payload: normalized })
+		buildLedger(0, 0, normalized)
+		await refreshPeerSnapshots()
+		return result
 	}
 
 	async function loadGame() {
@@ -3157,7 +3080,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots }}>
 			{children}
 		</GameContext.Provider>
 	)
