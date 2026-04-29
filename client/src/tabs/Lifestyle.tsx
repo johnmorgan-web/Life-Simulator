@@ -16,9 +16,7 @@ export default function Lifestyle() {
   const handleToggleService = (serviceId: string) => {
     const updated = { ...state.luxuryServices, [serviceId]: !state.luxuryServices[serviceId] }
     dispatch({ type: 'SET_STATE', payload: { luxuryServices: updated } })
-    window.setTimeout(() => {
-      buildLedger(0, 0)
-    }, 0)
+    buildLedger(0, 0, { ...state, luxuryServices: updated })
   }
 
   const handleEntertainmentChange = (newAmount: number) => {

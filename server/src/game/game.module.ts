@@ -7,8 +7,11 @@ import { RealEstateService } from './logic/realEstate.service';
 import { MarketService } from './logic/market.service';
 import { EntertainmentService } from './logic/entertainment.service';
 import { JobService } from './logic/job.service';
+import { LedgerService } from './logic/ledger.service';
+import { GameController } from './game.controller';
 
 @Module({
+  controllers: [GameController],
   providers: [
     GameService,
     UtilitiesService,
@@ -18,6 +21,7 @@ import { JobService } from './logic/job.service';
     MarketService,
     EntertainmentService,
     JobService,
+    LedgerService,
   ],
   exports: [
     GameService,
@@ -28,6 +32,7 @@ import { JobService } from './logic/job.service';
     MarketService,
     EntertainmentService,
     JobService,
+    LedgerService,
   ],
 })
 export class GameModule {}

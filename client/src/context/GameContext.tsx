@@ -1459,41 +1459,6 @@ function renameSaveForUser(user: string, oldName: string, newName: string) {
 	}
 }
 
-// Deterministic seasonal + noise multiplier based on year/month/category/cityName
-function variableMultiplier(year: number, month: number, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
-	const seasonal: Record<string, number[]> = {
-		utilities: [0.02, 0.03, 0.02, 0.00, -0.01, -0.02, 0.03, 0.03, 0.01, 0.00, 0.01, 0.04],
-		food: [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.00, 0.01, 0.00, 0.00, 0.03, 0.04],
-		gas: [0.01, 0.01, 0.00, 0.00, 0.00, 0.03, 0.04, 0.03, 0.01, 0.00, 0.00, 0.00],
-		car: [0.02, 0.02, 0.01, 0.00, 0.00, -0.01, -0.01, 0.00, 0.01, 0.02, 0.02, 0.02],
-		entertainment: [0.00, 0.02, 0.03, 0.02, 0.01, 0.00, -0.01, 0.00, 0.01, 0.02, 0.03, 0.04]
-	}
-
-	const m = Math.max(1, Math.min(12, Math.floor(month)))
-	const season = (seasonal[category] && seasonal[category][m - 1]) || 0
-
-	// Build a seed from year, month, category, and city name to ensure reproducibility across playthroughs
-	let catHash = 0
-	for (let i = 0; i < category.length; i++) catHash = (catHash * 31 + category.charCodeAt(i)) >>> 0
-	let cityHash = 0
-	for (let i = 0; i < cityName.length; i++) cityHash = (cityHash * 31 + cityName.charCodeAt(i)) >>> 0
-	const seed = (year * 100 + m) ^ catHash ^ cityHash
-	const rnd = mulberry32(seed)()
-	// deterministic noise in [-0.02, 0.02]
-	const noise = rnd * 0.04 - 0.02
-
-	let adjust = season + noise
-	if (adjust > 0.05) adjust = 0.05
-	if (adjust < -0.05) adjust = -0.05
-
-	return 1 + adjust
-}
-
-function variableCost(base: number, month: number, year: number, cityMultiplier = 1, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
-	const mult = variableMultiplier(year, month, category, cityName)
-	return fix(base * cityMultiplier * mult)
-}
-
 function transitStateByName(name: string) {
 	const selected = transitOptions.find(t => t.n === name)
 	if (!selected) {
@@ -2687,290 +2652,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
-	function buildLedger(paySave = 0, payDebt = 0) {
-		const ledger: any[] = []
-		let id = 0
-
-		// Start with previous balance after payments
-		let bal = state.check - paySave - payDebt;
-		ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
-		
-		// Get current job and calculate net salary
-		const job = state.pendingJob || state.job
-		const applyLedgerDecimalVariance = (amount: number, key: string) => {
-			if (amount <= 0) return 0
-			const seedText = `${state.year}-${state.month}-${state.city.name}-${job.title}-${key}`
-			let hash = 0
-			for (let i = 0; i < seedText.length; i++) hash = (hash * 31 + seedText.charCodeAt(i)) >>> 0
-			const offset = ((hash % 91) - 45) / 100 // deterministic +/- $0.45 variance
-			return fix(Math.max(0.01, amount + offset))
-		}
-		const grossSalary = fix(job.base * state.city.p)
-		const baseNetSalary = fix(grossSalary * 0.8)
-		const workPenaltyPercent = Math.max(0, Math.min(0.35, state.workPenaltyPercent || 0))
-		const netSalary = applyLedgerDecimalVariance(fix(baseNetSalary * (1 - workPenaltyPercent)), 'net-salary') // 80% after taxes + attendance adjustment
-		
-		// INCOME
-		bal = fix(bal + netSalary)
-		ledger.push({ id: id++, desc: `Net Salary: ${job.title}${workPenaltyPercent > 0 ? ` (${(workPenaltyPercent * 100).toFixed(1)}% attendance impact)` : ''}`, amt: netSalary, type: 'inc', bal, done: false })
-
-		const realEstateIncome = Math.max(0, Number(state.realEstateLastMonthIncome || 0))
-		const realEstateExpenses = Math.max(0, Number(state.realEstateLastMonthExpenses || 0))
-		const realEstatePropertyBreakdown = Array.isArray(state.realEstateLastMonthPropertyBreakdown)
-			? state.realEstateLastMonthPropertyBreakdown
-			: []
-		if (realEstateIncome > 0) {
-			if (state.luxuryServices?.housekeeper) {
-				bal = fix(bal + realEstateIncome)
-				ledger.push({
-					id: id++,
-					desc: 'Rental Income (Managed Portfolio)',
-					amt: realEstateIncome,
-					type: 'inc',
-					bal,
-					done: false,
-					details: realEstatePropertyBreakdown
-						.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
-						.map((entry: any) => `${entry.propertyName} (${entry.cityName}): $${Math.round(Number(entry.grossIncome || 0)).toLocaleString()}`)
-				})
-			} else {
-				const incomeRows = realEstatePropertyBreakdown.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
-				if (incomeRows.length > 0) {
-					for (const entry of incomeRows) {
-						const grossIncome = Math.max(0, Number(entry.grossIncome || 0))
-						bal = fix(bal + grossIncome)
-						ledger.push({
-							id: id++,
-							desc: `Rental Income: ${entry.propertyName} (${entry.cityName})`,
-							amt: grossIncome,
-							type: 'inc',
-							bal,
-							done: false
-						})
-					}
-				} else {
-					bal = fix(bal + realEstateIncome)
-					ledger.push({ id: id++, desc: 'Rental Income (Last Month)', amt: realEstateIncome, type: 'inc', bal, done: false })
-				}
-			}
-		}
-		if (realEstateExpenses > 0) {
-			bal = fix(bal - realEstateExpenses)
-			ledger.push({ id: id++, desc: 'Rental Operating Costs (Last Month)', amt: realEstateExpenses, type: 'out', bal, done: false })
-		}
-		
-		// HOUSING - Dynamic rent based on 30% of salary
-		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
-		bal = fix(bal - rent)
-		ledger.push({ id: id++, desc: `Housing/Rent Payment (${Math.round(gameValues.rentPercentOfSalary * 100)}% salary)`, amt: rent, type: 'out', bal, done: false })
-		const mortgagePayment = Math.max(
-			0,
-			Number(state.house?.mortgagePayment ?? state.house?.monthlyPayment ?? state.house?.mortgage ?? 0)
-		)
-		const housingPaymentForUtilities = mortgagePayment > 0 ? mortgagePayment : rent
-		
-		// TRANSPORTATION
-		// If chauffeur hired, no gas/transit cost (chauffeur covers it)
-		if (!state.luxuryServices.chauffer) {
-			// Transit cost
-			const transitCost = applyLedgerDecimalVariance(state.transit.cost, `transit-${state.transit.name}`)
-			bal = fix(bal - transitCost)
-			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: transitCost, type: 'out', bal, done: false })
-			
-			// Gas cost (if not using L1 Walk/Bike and no vehicle owned - vehicle costs handled separately)
-			if (state.transit.level > 1 && !(state.garage && state.garage.length > 0)) {
-				const gas = variableCost(gameValues.gasCostPercentOfSalary * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
-				const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
-				const gasAndMaint = applyLedgerDecimalVariance(fix(gas + carMaint), 'gas-maint-no-vehicle')
-				bal = fix(bal - gasAndMaint)
-				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
-			}
-		} else {
-			// Chauffeur cost handled in luxury services section
-		}
-		
-		// UTILITIES & PHONE (utilities track your rent/mortgage burden and vary seasonally)
-		const utilitiesBase = fix(housingPaymentForUtilities * 0.12)
-		const utilities = variableCost(utilitiesBase, state.month, state.year, 1, 'utilities', state.city.name)
-		const phoneInternet = gameValues.phoneInternetBase
-		const totalUtilities = applyLedgerDecimalVariance(fix(utilities + phoneInternet), 'utilities-phone')
-		bal = fix(bal - totalUtilities)
-		ledger.push({ id: id++, desc: 'Utilities & Phone/Internet', amt: totalUtilities, type: 'out', bal, done: false })
-		
-		// FOOD - If personal chef hired, no food costs (chef provides meals)
-		if (!state.luxuryServices.chef) {
-			const foodCost = applyLedgerDecimalVariance(variableCost(gameValues.FoodCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'food', state.city.name), 'food')
-			bal = fix(bal - foodCost)
-			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
-		}
-		
-		// ENTERTAINMENT
-		const entertainmentCap = entertainmentCapForSalary(job, state.city)
-		const adjustedEntertainment = autoAdjustEntertainmentBudgets(
-			state.entertainmentSpending || 0,
-			state.subscriptionEntertainmentSpending || 0,
-			state.year,
-			state.month,
-			job.title,
-			state.city.name,
-			entertainmentCap
-		)
-
-		if (adjustedEntertainment.entertainmentBudget > 0) {
-			const entertainmentCost = applyLedgerDecimalVariance(
-				variableCost(adjustedEntertainment.entertainmentBudget, state.month, state.year, 1, 'entertainment', state.city.name),
-				'entertainment-general'
-			)
-			bal = fix(bal - entertainmentCost)
-			ledger.push({ id: id++, desc: 'Entertainment', amt: entertainmentCost, type: 'out', bal, done: false })
-		}
-
-		if (adjustedEntertainment.subscriptionBudget > 0) {
-			const subscriptionCost = applyLedgerDecimalVariance(
-				variableCost(adjustedEntertainment.subscriptionBudget, state.month, state.year, 1, 'entertainment', `${state.city.name}-subs`),
-				'entertainment-subscriptions'
-			)
-			bal = fix(bal - subscriptionCost)
-			ledger.push({ id: id++, desc: 'Subscription Entertainment', amt: subscriptionCost, type: 'out', bal, done: false })
-		}
-
-		const stockInvestDebit = fix(Number(state.stockInvestedLastMonth || 0))
-		if (stockInvestDebit > 0) {
-			bal = fix(bal - stockInvestDebit)
-			ledger.push({ id: id++, desc: 'Stock Investments (Cost Basis)', amt: stockInvestDebit, type: 'out', bal, done: false })
-		}
-		
-		// EDUCATION - If currently studying
-		if (state.activeEdu) {
-			const course = academyCourses.find(c => c.n === state.activeEdu)
-			const cost = applyLedgerDecimalVariance(course ? course.c : 1000, `tuition-${state.activeEdu}`)
-			bal = fix(bal - cost)
-			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
-		}
-		
-		// VEHICLE COSTS - Monthly payment, gas, maintenance
-		if (state.garage && state.garage.length > 0) {
-			state.garage.forEach((g: any) => {
-				const vehicle = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
-				if (!vehicle) return
-
-				// Loan payment
-				if (g.monthsRemaining > 0) {
-					const payment = applyLedgerDecimalVariance(g.monthlyPayment, `vehicle-payment-${g.id}`)
-					bal = fix(bal - payment)
-					ledger.push({ id: id++, desc: `Vehicle Loan Payment: ${g.vehicleName}`, amt: payment, type: 'out', bal, done: false })
-				}
-
-				if (!state.luxuryServices.chauffer) {
-					// Monthly gas for this vehicle
-					const gasCost = calculateMonthlyGasCost(g)
-					if (gasCost > 0) {
-						const adjustedGasCost = applyLedgerDecimalVariance(gasCost, `vehicle-gas-${g.id}`)
-						bal = fix(bal - adjustedGasCost)
-						ledger.push({ id: id++, desc: `Gas: ${g.vehicleName}`, amt: adjustedGasCost, type: 'out', bal, done: false })
-					}
-
-					// Monthly maintenance for this vehicle
-					const maintCost = calculateMonthlyMaintenanceCost(g, state.month, state.year)
-					if (maintCost > 0) {
-						const adjustedMaintCost = applyLedgerDecimalVariance(maintCost, `vehicle-maint-${g.id}`)
-						bal = fix(bal - adjustedMaintCost)
-						ledger.push({ id: id++, desc: `Maintenance: ${g.vehicleName}`, amt: adjustedMaintCost, type: 'out', bal, done: false })
-					}
-				}
+	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
+		const buildState = stateOverride ?? state
+		try {
+			const response = await fetch(`${API_BASE_URL}/game/build-ledger`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ state: buildState, paySave, payDebt }),
 			})
+			if (!response.ok) return
+			const result = await response.json()
+			dispatch({ type: 'INIT_LEDGER', payload: result.ledger })
+		} catch (e) {
+			console.error('Failed to build ledger from server', e)
 		}
-		
-		// LUXURY SERVICES
-		let luxuryCosts = 0
-		const luxuryServicesList: string[] = []
-		const luxuryLineItems: Array<{ desc: string; amt: number }> = []
-		const netMonthlyIncome = totalMonthlyIncomeForLuxuryPricing(state)
-		const propertyCount = Array.isArray(state.investmentProperties) ? state.investmentProperties.length : 0
-		const luxuryServiceConfigs = [
-			{ id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
-			{ id: 'housekeeper', label: 'Housekeeper', varianceKey: 'luxury-housekeeper' },
-			{ id: 'chauffer', label: 'Chauffeur', varianceKey: 'luxury-chauffeur' },
-			{ id: 'therapist', label: 'Therapist', varianceKey: 'luxury-therapist' },
-			{ id: 'trainer', label: 'Trainer', varianceKey: 'luxury-trainer' },
-			{ id: 'concierge', label: 'Concierge', varianceKey: 'luxury-concierge' },
-			{ id: 'accountant', label: 'Accountant', varianceKey: 'luxury-accountant' }
-		]
-
-		for (const cfg of luxuryServiceConfigs) {
-			if (!(state.luxuryServices as any)?.[cfg.id]) continue
-			const baseCost = calculateLuxuryServiceMonthlyPay(cfg.id, netMonthlyIncome, { propertyCount })
-			const adjustedCost = applyLedgerDecimalVariance(baseCost, cfg.varianceKey)
-			luxuryCosts += adjustedCost
-			luxuryServicesList.push(`${cfg.label}: $${adjustedCost}`)
-			luxuryLineItems.push({ desc: `Luxury Service: ${cfg.label}`, amt: adjustedCost })
-		}
-		
-		if (luxuryCosts > 0) {
-			if (state.luxuryServices.housekeeper) {
-				bal = fix(bal - luxuryCosts)
-				ledger.push({ 
-					id: id++, 
-					desc: `Luxury Services (${luxuryServicesList.length})`, 
-					amt: luxuryCosts, 
-					type: 'out', 
-					bal, 
-					done: false,
-					details: luxuryServicesList
-				})
-			} else {
-				for (const line of luxuryLineItems) {
-					bal = fix(bal - line.amt)
-					ledger.push({
-						id: id++,
-						desc: line.desc,
-						amt: line.amt,
-						type: 'out',
-						bal,
-						done: false
-					})
-				}
-			}
-		}
-
-		if (state.luxuryServices?.accountant) {
-			const first = ledger[0]
-			const others = ledger.slice(1)
-			const totalDebits = fix(others.reduce((sum, row) => row?.type === 'out' ? sum + Number(row?.amt || 0) : sum, 0))
-			const nonDebitRows = others.filter((row) => row?.type !== 'out')
-
-			let runningBal = Number(first?.bal || 0)
-			const simplified: any[] = [{ ...first, id: 0, bal: runningBal, done: true }]
-
-			if (totalDebits > 0) {
-				runningBal = fix(runningBal - totalDebits)
-				simplified.push({
-					id: simplified.length,
-					desc: 'Accountant Summary: Total Debits',
-					amt: totalDebits,
-					type: 'out',
-					bal: runningBal,
-					done: false,
-					details: ['All debit items auto-summed by Accountant service']
-				})
-			}
-
-			for (const row of nonDebitRows) {
-				if (row?.type === 'in') runningBal = fix(runningBal + Number(row?.amt || 0))
-				simplified.push({
-					...row,
-					id: simplified.length,
-					bal: runningBal,
-					done: false
-				})
-			}
-
-			ledger.length = 0
-			ledger.push(...simplified)
-		}
-		
-		dispatch({ type: 'INIT_LEDGER', payload: ledger })
 	}
+
 
 	function checkRow(id: number, value: number, expectedCheck?: number) {
 		const tx = state.ledger.find((t: any) => t.id === id)
@@ -3238,10 +2935,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		freshState.realEstateMarketMeta = seededSharedMarket.meta
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
-		// Build the initial month's ledger
-		setTimeout(() => {
-			buildLedger(0, 0)
-		}, 60)
+		// Build the initial month's ledger from the server
+		buildLedger(0, 0, freshState)
 		
 		return true
 	}
@@ -3300,6 +2995,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			}
 		})
 
+		buildLedger(0, 0, data)
+
 		return true
 	}
 
@@ -3357,6 +3054,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
 			}
 		})
+
+		buildLedger(0, 0, data)
 
 		return true
 	}
