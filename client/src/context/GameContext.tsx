@@ -1,5 +1,5 @@
 // During migration we re-export the existing JS implementation to avoid duplication.
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import cityData from '../constants/cityData.constants'
 import rawJobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
@@ -2576,7 +2576,12 @@ function reducer(state: State, action: any) {
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
+	const stateRef = useRef(state)
 	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
+
+	useEffect(() => {
+		stateRef.current = state
+	}, [state])
 
 	async function refreshPeerSnapshots() {
 		try {
@@ -2626,15 +2631,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false) {
+		const priorMonth = state.month
+		const priorYear = state.year
 		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt, skippedPayment } })
-		// Rebuild ledger after state has updated from the reducer and then save
-		setTimeout(() => {
-			buildLedger(paySave, payDebt)
-			// allow reducer to settle then save
+
+		// Rebuild ledger and persist only after reducer has advanced month/year,
+		// so Previous Balance includes all post-month event effects.
+		const finalizeMonth = () => {
+			const latest = stateRef.current
+			const advanced = latest.month !== priorMonth || latest.year !== priorYear
+			if (!advanced) {
+				setTimeout(finalizeMonth, 0)
+				return
+			}
+
+			buildLedger(paySave, payDebt, latest)
 			setTimeout(() => {
-				saveGame()
+				saveGame(latest)
 			}, 60)
-		}, 0)
+		}
+
+		setTimeout(finalizeMonth, 0)
 	}
 
 	function evaluateApplications() {
