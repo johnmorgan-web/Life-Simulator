@@ -4,6 +4,11 @@ export type PeerAffluence = {
   stats: WealthStats
 }
 
+type AffluenceComparisonInput = {
+  currentState: any
+  peerSnapshots?: any[]
+}
+
 export type WealthStats = {
   annualIncome: number
   checking: number
@@ -55,7 +60,7 @@ function countLuxuryServices(snapshot: any) {
   return Object.values(services).filter(Boolean).length
 }
 
-function getWealthStats(snapshot: any): WealthStats {
+export function getWealthStats(snapshot: any): WealthStats {
   return {
     annualIncome: Math.round(estimateAnnualIncome(snapshot) * 100) / 100,
     checking: Math.round(toNumber(snapshot?.check) * 100) / 100,
@@ -128,56 +133,30 @@ export function computeAffluence(snapshot: any) {
   return Math.round(total * 100) / 100
 }
 
-function loadLatestSnapshotForUser(user: string) {
-  const autosaveRaw = localStorage.getItem(`life-sim:${user}:__autosave__`)
-  if (autosaveRaw) {
-    try {
-      return JSON.parse(autosaveRaw)
-    } catch (_e) {
-      // Fall through to indexed saves.
-    }
+export function getAffluenceComparison({ currentState, peerSnapshots = [] }: AffluenceComparisonInput) {
+  const currentUser = currentState.currentUser || currentState.username || 'Current Player'
+  const currentAffluence = computeAffluence(currentState)
+  const currentStats = getWealthStats(currentState)
+
+  const peersByUser = new Map<string, PeerAffluence>()
+
+  for (const snapshot of peerSnapshots) {
+    const user = String(snapshot?.username || snapshot?.currentUser || snapshot?.name || '').trim()
+    if (!user) continue
+    peersByUser.set(user, {
+      user,
+      affluence: computeAffluence(snapshot),
+      stats: getWealthStats(snapshot),
+    })
   }
 
-  try {
-    const saves = JSON.parse(localStorage.getItem(`life-sim:saves:${user}`) || '[]')
-    if (!Array.isArray(saves) || saves.length === 0) return null
-    const sorted = saves.slice().sort((a: any, b: any) => toNumber(b?.timestamp) - toNumber(a?.timestamp))
-    const latestName = sorted[0]?.name
-    if (!latestName) return null
+  peersByUser.set(String(currentUser), {
+    user: String(currentUser),
+    affluence: currentAffluence,
+    stats: currentStats,
+  })
 
-    const raw = localStorage.getItem(`life-sim:${user}:${latestName}`)
-    return raw ? JSON.parse(raw) : null
-  } catch (_e) {
-    return null
-  }
-}
-
-export function getAffluenceComparisonFromState(state: any) {
-  const currentUser = state.currentUser || 'Current Player'
-  const currentAffluence = computeAffluence(state)
-  const currentStats = getWealthStats(state)
-
-  let users: string[] = []
-  try {
-    const parsed = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-    users = Array.isArray(parsed) ? parsed : []
-  } catch (_e) {
-    users = []
-  }
-
-  const peers: PeerAffluence[] = []
-
-  for (const user of users) {
-    const snapshot = loadLatestSnapshotForUser(user)
-    if (!snapshot) continue
-    const affluence = user === currentUser ? currentAffluence : computeAffluence(snapshot)
-    const stats = user === currentUser ? currentStats : getWealthStats(snapshot)
-    peers.push({ user, affluence, stats })
-  }
-
-  if (!peers.some((p) => p.user === currentUser)) {
-    peers.push({ user: currentUser, affluence: currentAffluence, stats: currentStats })
-  }
+  const peers = Array.from(peersByUser.values())
 
   const sorted = peers.slice().sort((a, b) => b.affluence - a.affluence)
   const count = Math.max(1, sorted.length)

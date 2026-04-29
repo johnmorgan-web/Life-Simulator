@@ -1,5 +1,5 @@
 // During migration we re-export the existing JS implementation to avoid duplication.
-import React, { createContext, useContext, useEffect, useReducer } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useState } from 'react'
 import cityData from '../constants/cityData.constants'
 import rawJobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
@@ -11,19 +11,21 @@ import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
 import type { Job, Application, LifeEvent } from '@server/types/models.types'
+import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
+let cachedUserSnapshots: any[] = []
+
+function setCachedUserSnapshots(users: any[]) {
+	cachedUserSnapshots = Array.isArray(users) ? users : []
+}
+
 function getRegisteredUserCount() {
-	try {
-		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-		return Math.max(1, Array.isArray(users) ? users.length : 1)
-	} catch (e) {
-		return 1
-	}
+	return Math.max(1, Array.isArray(cachedUserSnapshots) ? cachedUserSnapshots.length : 1)
 }
 
 function capacityScaleForUsers(registeredUsers: number) {
@@ -57,6 +59,29 @@ async function registerUser(username: string, name: string, password: string) {
 
 	if (!registerResponse.ok) return null
 	return registerResponse.json()
+}
+
+async function fetchUserById(id: string) {
+	const response = await fetch(`${API_BASE_URL}/users/${id}`)
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function fetchAllUsers() {
+	const response = await fetch(`${API_BASE_URL}/users`)
+	if (!response.ok) return []
+	const users = await response.json()
+	return Array.isArray(users) ? users : []
+}
+
+async function persistUserState(id: string, state: any) {
+	const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(state),
+	})
+	if (!response.ok) return null
+	return response.json()
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -424,10 +449,10 @@ function writeSharedRealEstateMarket(market: Record<string, any[]>) {
 
 function getUserCityCounts(liveSnapshot?: any) {
 	const userCityMap = new Map<string, string>()
-	for (const user of listSavedUsers()) {
-		const snapshot = loadStateForUser(user)
+	for (const snapshot of cachedUserSnapshots) {
+		const username = String(snapshot?.username || snapshot?.currentUser || '').trim()
 		const cityName = snapshot?.city?.name
-		if (cityName) userCityMap.set(user, cityName)
+		if (username && cityName) userCityMap.set(username, cityName)
 	}
 	if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
 		userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name))
@@ -1326,136 +1351,41 @@ function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, cur
 	return Math.round(baseMaintenance * 100) / 100
 }
 
-// Save and load helpers (localStorage) - supports named saves + autosave
-interface SaveFile {
-	name: string
-	timestamp: number
-	isAutoSave: boolean
-}
-
-function saveStateForUser(user: string, state: any, saveName?: string) {
-	try {
-		const isAutoSave = !saveName || saveName === '__autosave__'
-		const fileName = saveName || '__autosave__'
-		
-		// Save the game state
-		localStorage.setItem(`life-sim:${user}:${fileName}`, JSON.stringify(state))
-		
-		// Update saves index for this user
-		const savesKey = `life-sim:saves:${user}`
-		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
-		
-		// Remove existing entry if it's being overwritten
-		saves = saves.filter(s => s.name !== fileName)
-		
-		// Add new save
-		saves.push({
-			name: fileName,
-			timestamp: Date.now(),
-			isAutoSave
-		})
-		
-		// Keep only last 5 saves, prioritize autosave
-		if (saves.length > 5) {
-			const autoSave = saves.find(s => s.isAutoSave)
-			const nonAutoSaves = saves.filter(s => !s.isAutoSave)
-			const keptNonAuto = nonAutoSaves.slice(-4)
-			saves = autoSave ? [autoSave, ...keptNonAuto] : keptNonAuto
-			
-			// Delete removed saves from storage
-			for (const save of saves.filter(s => s.isAutoSave === false)) {
-				const saveIndex = saves.indexOf(save)
-				if (saveIndex >= 5) {
-					localStorage.removeItem(`life-sim:${user}:${save.name}`)
-				}
-			}
-		}
-		
-		localStorage.setItem(savesKey, JSON.stringify(saves))
-		
-		// maintain user index
-		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-		if (!users.includes(user)) {
-			users.push(user)
-			localStorage.setItem('life-sim-keys', JSON.stringify(users))
-		}
-		
-		return true
-	} catch (e) {
-		console.error('Save failed', e)
-		return false
-	}
-}
-
-function loadStateForUser(user: string, saveName?: string) {
-	try {
-		const fileName = saveName || '__autosave__'
-		const raw = localStorage.getItem(`life-sim:${user}:${fileName}`)
-		if (!raw) return null
-		return JSON.parse(raw)
-	} catch (e) {
-		console.error('Load failed', e)
-		return null
-	}
-}
-
-function listSavedUsers() {
-	try {
-		return JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-	} catch (e) {
-		return []
-	}
-}
-
-function listSavesForUser(user: string): SaveFile[] {
-	try {
-		const saves = JSON.parse(localStorage.getItem(`life-sim:saves:${user}`) || '[]')
-		// Sort: autosave first, then by timestamp descending
-		return saves.sort((a: SaveFile, b: SaveFile) => {
-			if (a.isAutoSave) return -1
-			if (b.isAutoSave) return 1
-			return b.timestamp - a.timestamp
-		})
-	} catch (e) {
-		return []
-	}
-}
-
-function deleteSaveForUser(user: string, saveName: string) {
-	try {
-		localStorage.removeItem(`life-sim:${user}:${saveName}`)
-		const savesKey = `life-sim:saves:${user}`
-		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
-		saves = saves.filter(s => s.name !== saveName)
-		localStorage.setItem(savesKey, JSON.stringify(saves))
-		return true
-	} catch (e) {
-		console.error('Delete save failed', e)
-		return false
-	}
-}
-
-function renameSaveForUser(user: string, oldName: string, newName: string) {
-	try {
-		// Check name doesn't already exist
-		const saves = listSavesForUser(user)
-		if (saves.some(s => s.name === newName)) {
-			return false // Name already exists
-		}
-		
-		// Copy state to new name
-		const state = loadStateForUser(user, oldName)
-		if (!state) return false
-		
-		// Save with new name
-		saveStateForUser(user, state, newName)
-		
-		// Delete old
-		deleteSaveForUser(user, oldName)
-		return true
-	} catch (e) {
-		console.error('Rename save failed', e)
-		return false
+function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
+	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
+	const marketPrices = normalizeMarketPrices(data.marketPrices)
+	const realEstateState = normalizeRealEstateState(data)
+	return {
+		...data,
+		...realEstateState,
+		currentUser,
+		entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+		subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+		subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+		subscriptionBadges: data.subscriptionBadges ?? [],
+		entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+		happiness: data.happiness ?? 70,
+		workPenaltyPercent: data.workPenaltyPercent ?? 0,
+		marketPrices,
+		marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+		portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+		marketLearningLevel: data.marketLearningLevel ?? 'adult',
+		marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+		realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+		realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
+		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+		totalGasPaid: Number(data.totalGasPaid ?? 0),
+		totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+		maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
+		achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+		achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+		rewardTokens: Number(data.rewardTokens ?? 0),
+		lastAchievementCategory: data.lastAchievementCategory ?? null,
+		unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
+		activeTheme: data.activeTheme ?? 'default',
+		rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : [],
 	}
 }
 
@@ -2646,10 +2576,28 @@ function reducer(state: State, action: any) {
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
+	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
+
+	async function refreshPeerSnapshots() {
+		try {
+			const users = await fetchAllUsers()
+			setCachedUserSnapshots(users)
+			setPeerSnapshots(users)
+		} catch (e) {
+			console.error('Failed to refresh user snapshots', e)
+		}
+	}
+
+	const cityUserCounts = useMemo(() => getUserCityCounts(state), [peerSnapshots, state.currentUser, state.city?.name])
+	const affluenceComparison = useMemo(() => getAffluenceComparison({ currentState: state, peerSnapshots }), [peerSnapshots, state])
 
 	useEffect(() => {
 		buildLedger()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
+
+	useEffect(() => {
+		refreshPeerSnapshots()
 	}, [])
 
 	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
@@ -2761,85 +2709,34 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	// --- Save / Load / Auth ---
 
-	function saveGame(saveName?: string) {
-		const u = state.currentUser
-		if (!u) return false
-		const snapshot = { ...state, currentUser: u }
-		return saveStateForUser(u, snapshot, saveName)
-	}
-
-	function loadGame(saveName?: string) {
-		const u = state.currentUser
-		if (!u) return false
-		const data = loadStateForUser(u, saveName)
-		if (!data) return false
-		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-		const marketPrices = normalizeMarketPrices(data.marketPrices)
-		const realEstateState = normalizeRealEstateState(data)
-		dispatch({
-			type: 'SET_STATE',
-			payload: {
-				...data,
-				...realEstateState,
-				currentUser: u,
-				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-				subscriptionBadges: data.subscriptionBadges ?? [],
-				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-				happiness: data.happiness ?? 70,
-				workPenaltyPercent: data.workPenaltyPercent ?? 0,
-				marketPrices,
-				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-				marketLearningLevel: data.marketLearningLevel ?? 'adult',
-				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-				totalGasPaid: Number(data.totalGasPaid ?? 0),
-				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-				rewardTokens: Number(data.rewardTokens ?? 0),
-				lastAchievementCategory: data.lastAchievementCategory ?? null,
-				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
-				activeTheme: data.activeTheme ?? 'default',
-				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-			}
-		})
+	async function saveGame(stateOverride?: any) {
+		const snapshot = stateOverride ?? state
+		if (!snapshot?.id) return false
+		const payload = { ...snapshot, currentUser: snapshot.currentUser || snapshot.username }
+		const saved = await persistUserState(snapshot.id, payload)
+		if (!saved) return false
+		await refreshPeerSnapshots()
 		return true
 	}
 
-	function listSaves() {
-		return listSavedUsers()
-	}
-
-	function getSavesForCurrentUser() {
-		const u = state.currentUser
-		if (!u) return []
-		return listSavesForUser(u)
-	}
-
-	function deleteSave(saveName: string) {
-		const u = state.currentUser
-		if (!u) return false
-		return deleteSaveForUser(u, saveName)
-	}
-
-	function renameSave(oldName: string, newName: string) {
-		const u = state.currentUser
-		if (!u) return false
-		return renameSaveForUser(u, oldName, newName)
+	async function loadGame() {
+		if (!state.id || !state.currentUser) return false
+		const data = await fetchUserById(state.id)
+		if (!data) return false
+		dispatch({
+			type: 'SET_STATE',
+			payload: normalizeLoadedUserState(data, state, state.currentUser),
+		})
+		await refreshPeerSnapshots()
+		return true
 	}
 
 	function newGame() {
 		const defaultBudgets = comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3])
 		const startingMarketPrices = initializeMarketPrices()
 		const freshState = {
+			id: state.id,
+			username: state.username || state.currentUser,
 			check: 1200.0,
 			savings: 0,
 			debt: 0,
@@ -2937,6 +2834,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		
 		// Build the initial month's ledger from the server
 		buildLedger(0, 0, freshState)
+		saveGame(freshState)
 		
 		return true
 	}
@@ -2956,46 +2854,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		if (!data) return false
 
-		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-		const marketPrices = normalizeMarketPrices(data.marketPrices)
-		const realEstateState = normalizeRealEstateState(data)
 		dispatch({
 			type: 'SET_STATE',
-			payload: {
-				...data,
-				...realEstateState,
-				currentUser: data.username || normalizedUsername,
-				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-				subscriptionBadges: data.subscriptionBadges ?? [],
-				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-				happiness: data.happiness ?? 70,
-				workPenaltyPercent: data.workPenaltyPercent ?? 0,
-				marketPrices,
-				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-				marketLearningLevel: data.marketLearningLevel ?? 'adult',
-				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-				totalGasPaid: Number(data.totalGasPaid ?? 0),
-				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-				rewardTokens: Number(data.rewardTokens ?? 0),
-				lastAchievementCategory: data.lastAchievementCategory ?? null,
-				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
-				activeTheme: data.activeTheme ?? 'default',
-				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-			}
+			payload: normalizeLoadedUserState(data, state, data.username || normalizedUsername)
 		})
 
 		buildLedger(0, 0, data)
+		refreshPeerSnapshots()
 
 		return true
 	}
@@ -3016,46 +2881,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		if (!data) return false
 
-		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-		const marketPrices = normalizeMarketPrices(data.marketPrices)
-		const realEstateState = normalizeRealEstateState(data)
 		dispatch({
 			type: 'SET_STATE',
-			payload: {
-				...data,
-				...realEstateState,
-				currentUser: data.username || normalizedUsername,
-				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-				subscriptionBadges: data.subscriptionBadges ?? [],
-				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-				happiness: data.happiness ?? 70,
-				workPenaltyPercent: data.workPenaltyPercent ?? 0,
-				marketPrices,
-				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-				marketLearningLevel: data.marketLearningLevel ?? 'adult',
-				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-				totalGasPaid: Number(data.totalGasPaid ?? 0),
-				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-				rewardTokens: Number(data.rewardTokens ?? 0),
-				lastAchievementCategory: data.lastAchievementCategory ?? null,
-				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
-				activeTheme: data.activeTheme ?? 'default',
-				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-			}
+			payload: normalizeLoadedUserState(data, state, data.username || normalizedUsername)
 		})
 
 		buildLedger(0, 0, data)
+		refreshPeerSnapshots()
 
 		return true
 	}
@@ -3066,8 +2898,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	useEffect(() => {
 		if (!state.currentUser) return
-		// Persist cosmetic unlocks/theme selection immediately so refresh/load keeps them.
-		saveStateForUser(state.currentUser, { ...state, currentUser: state.currentUser })
+		saveGame()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [state.currentUser, state.unlockedThemes, state.activeTheme])
 
@@ -3309,7 +3140,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots }}>
 			{children}
 		</GameContext.Provider>
 	)

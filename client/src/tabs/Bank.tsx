@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useGame } from '../context/GameContext'
-import { getAffluenceComparisonFromState } from '../utils/affluence'
 
 function CoinHeap({ label, affluence, maxAffluence, accent, stats, userLabel }: {
   label: string
@@ -56,14 +55,13 @@ function CoinHeap({ label, affluence, maxAffluence, accent, stats, userLabel }: 
 }
 
 export default function Bank() {
-  const { state } = useGame()
+  const { affluenceComparison: comparison } = useGame()
 
-  const comparison = useMemo(() => getAffluenceComparisonFromState(state), [state])
+  const maxForMeter = useMemo(() => Math.max(1, comparison.top.affluence, comparison.currentAffluence, comparison.average), [comparison])
 
   const format = (amount: number) =>
     amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-  const maxForMeter = Math.max(1, comparison.top.affluence, comparison.currentAffluence, comparison.average)
   const currentWidth = Math.min(100, (comparison.currentAffluence / maxForMeter) * 100)
   const averageWidth = Math.min(100, (comparison.average / maxForMeter) * 100)
   const topWidth = Math.min(100, (comparison.top.affluence / maxForMeter) * 100)
@@ -72,7 +70,7 @@ export default function Bank() {
     <div className="space-y-6">
       <div className="glass p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Bank & Affluence</h2>
-        <p className="text-sm text-slate-600">Your wealth meter compares your affluence against the average and highest user in this browser.</p>
+        <p className="text-sm text-slate-600">Your wealth meter compares your affluence against the average and highest player on the server.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -164,7 +162,7 @@ export default function Bank() {
       <div className="glass p-6">
         <h3 className="font-bold text-lg mb-3">🏦 Top Affluence Board</h3>
         <div className="space-y-2">
-          {comparison.topPeers.map((peer, index) => (
+          {comparison.topPeers.map((peer: any, index: number) => (
             <div key={`${peer.user}-${index}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
               <div className="text-sm font-bold text-slate-700">#{index + 1} {peer.user}</div>
               <div className="text-sm font-bold text-slate-900">{format(peer.affluence)}</div>
