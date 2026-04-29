@@ -1,12 +1,14 @@
 import { Controller, Post, Body, Param } from '@nestjs/common';
 import { LedgerService } from './logic/ledger.service';
 import { RewardService } from './logic/reward.service';
+import { ApplicationService } from './logic/application.service';
 
 @Controller('game')
 export class GameController {
   constructor(
     private readonly ledgerService: LedgerService,
     private readonly rewardService: RewardService,
+    private readonly applicationService: ApplicationService,
   ) {}
 
   @Post('build-ledger')
@@ -22,5 +24,15 @@ export class GameController {
   @Post(':id/spin-reward')
   async spinRewardWheel(@Param('id') id: string) {
     return this.rewardService.spinRewardWheelForUser(id);
+  }
+
+  @Post('evaluate-applications')
+  evaluateApplications(@Body() body: { state: any }) {
+    return this.applicationService.evaluateApplications(body?.state || {});
+  }
+
+  @Post('apply-job')
+  applyForJob(@Body() body: { state: any; jobTitle: string }) {
+    return this.applicationService.applyForJob(body?.state || {}, body?.jobTitle || '');
   }
 }

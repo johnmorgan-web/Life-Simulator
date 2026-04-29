@@ -10,7 +10,7 @@ import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
-import type { Job, Application, LifeEvent } from '@server/types/models.types'
+import type { Job, LifeEvent } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
@@ -88,6 +88,26 @@ async function spinRewardWheelForUser(id: string) {
 	const response = await fetch(`${API_BASE_URL}/game/${id}/spin-reward`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function evaluateApplicationsOnServer(state: any) {
+	const response = await fetch(`${API_BASE_URL}/game/evaluate-applications`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state }),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function applyForJobOnServer(state: any, jobTitle: string) {
+	const response = await fetch(`${API_BASE_URL}/game/apply-job`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state, jobTitle }),
 	})
 	if (!response.ok) return null
 	return response.json()
@@ -2594,48 +2614,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		setTimeout(finalizeMonth, 0)
 	}
 
-	function evaluateApplications() {
-		const apps = [...state.applications]
-		const results: any[] = []
-		const logs = [...state.logs]
-		let changed = false
+	async function evaluateApplications(stateOverride?: any) {
+		const snapshot = stateOverride ?? state
+		const result = await evaluateApplicationsOnServer(snapshot)
+		if (!result) {
+			dispatch({ type: 'SET_STATE', payload: { applicationResults: [] } })
+			return []
+		}
 
-		apps.forEach(app => {
-			if (app.status === 'pending' && app.decisionMonth === state.month && app.decisionYear === state.year) {
-				const eligibility = getJobEligibility(state, app.job)
-				if (!eligibility.canApply) {
-					app.status = 'rejected'
-					results.push({ id: app.id, status: 'rejected', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title} (requirements changed or no openings)` })
-					changed = true
-					return
-				}
-
-				let accepted = false
-				if (app.score >= 75) accepted = Math.random() < 0.95
-				else if (app.score >= 60) accepted = Math.random() < 0.65
-				else if (app.score >= 50) accepted = Math.random() < 0.40
-				else accepted = Math.random() < 0.15
-
-				if (accepted) {
-					app.status = 'accepted'
-					results.push({ id: app.id, status: 'accepted', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Hired for ${app.job.title}` })
-				} else {
-					app.status = 'rejected'
-					results.push({ id: app.id, status: 'rejected', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title}` })
-				}
-				changed = true
-			}
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				applications: Array.isArray(result.applications) ? result.applications : snapshot.applications,
+				logs: Array.isArray(result.logs) ? result.logs : snapshot.logs,
+				applicationResults: Array.isArray(result.applicationResults) ? result.applicationResults : [],
+			},
 		})
 
-		if (changed) {
-			dispatch({ type: 'SET_STATE', payload: { applications: apps, logs, applicationResults: results } })
-		} else {
-			dispatch({ type: 'SET_STATE', payload: { applicationResults: [] } })
-		}
-		return results
+		return Array.isArray(result.applicationResults) ? result.applicationResults : []
 	}
 
 	function acceptJob(appId: string) {
@@ -2655,12 +2651,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	function openSettlement() {
-		evaluateApplications()
+	async function openSettlement() {
+		await evaluateApplications()
 		dispatch({ type: 'SET_STATE', payload: { showSettlement: true } })
-		// Save after opening settlement so job application results are persisted
 		setTimeout(() => {
-			saveGame()
+			saveGame(stateRef.current)
 		}, 60)
 	}
 
@@ -2884,102 +2879,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}, 3500)
 	}
 
-	function scoreApplication(job: Job) {
-		let score = 50
-		const eligibility = getJobEligibility(state, job)
-		// Education requirement (±20 points)
-		if (job.req) {
-			if (state.credentials.includes(job.req)) score += 20
-			else score -= 15
-		} else score += 10
-		
-		// Certificate requirement (±15 points)
-		if (job.certReq) {
-			if (state.credentials.includes(job.certReq)) score += 15
-			else score -= 10
-		} else score += 5
-		
-		// Credit score (±10 points)
-		if (state.credit >= 740) score += 10
-		else if (state.credit >= 670) score += 5
-		else if (state.credit < 580) score -= 10
-		
-		// Job tenure/stability (±15 points)
-		if (state.tenure >= 12) score += 15
-		else if (state.tenure >= 6) score += 10
-		else if (state.tenure >= 3) score += 5
+	async function applyForJob(job: Job) {
+		const result = await applyForJobOnServer(state, job.title)
+		if (!result) return
 
-		// Required prior role experience (±20 points)
-		if (job.expReq) {
-			if (eligibility.experienceMet) score += 20
-			else score -= 20
-		}
-
-		// Market openings influence (±10 points)
-		if (eligibility.openings <= 0) score -= 10
-		else if (eligibility.openings <= 3) score += 2
-		else score += 6
-		
-		// Career history (±10 points)
-		if (state.careerHistory.length > 3) score += 10
-		else if (state.careerHistory.length > 0) score += 5
-		
-		// Credentials count bonus (±10 points)
-		if (state.credentials.length > 0) score += 10
-		
-		score = Math.max(0, Math.min(100, score))
-		score += Math.random() * 20 - 10
-		return Math.round(score)
-	}
-
-	function applyForJob(job: Job) {
-		const existingPending = state.applications.some((a: any) => a.job?.title === job.title && a.status === 'pending')
-		if (existingPending) {
-			dispatch({ type: 'SET_STATE', payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Already applied: ${job.title}` }] } })
-			return
-		}
-
-		const eligibility = getJobEligibility(state, job)
-		if (!eligibility.canApply) {
-			const blocks: string[] = []
-			if (!eligibility.educationMet) blocks.push(`education (${job.req})`)
-			if (!eligibility.certificationMet) blocks.push(`certification (${job.certReq})`)
-			if (!eligibility.transitMet) blocks.push(`transit level ${job.tReq}`)
-			if (!eligibility.experienceMet) blocks.push(`experience (${eligibility.experienceDetail})`)
-			if (!eligibility.capacityMet) blocks.push('no openings')
-			dispatch({
-				type: 'SET_STATE',
-				payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Application blocked for ${job.title}: ${blocks.join(', ')}` }] }
-			})
-			return
-		}
-
-		const score = scoreApplication(job)
-		const appliedMonth = state.month
-		const appliedYear = state.year
-		const decisionMonth = appliedMonth + 1 + Math.floor(Math.random() * 3)
-		let dMonth = decisionMonth
-		let dYear = appliedYear
-		if (dMonth > 12) {
-			dYear += Math.floor(dMonth / 12)
-			dMonth = dMonth % 12 || 12
-		}
-
-		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
-		const variability = job.base * 0.05
-		const adjustedBase = job.base + (Math.random() * variability * 2 - variability)
-		const offeredJob = { ...job, base: adjustedBase }
-		const app: Application = {
-			id: `app_${Date.now()}`,
-			job: offeredJob,
-			appliedMonth,
-			appliedYear,
-			decisionMonth: dMonth,
-			decisionYear: dYear,
-			score,
-			status: 'pending'
-		}
-		dispatch({ type: 'APPLY_JOB', payload: app })
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				applications: Array.isArray(result.applications) ? result.applications : state.applications,
+				logs: Array.isArray(result.logs) ? result.logs : state.logs,
+			},
+		})
 	}
 
 	function refreshRealEstateMarket() {

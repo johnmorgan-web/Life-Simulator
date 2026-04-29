@@ -10,6 +10,7 @@ import { EntertainmentService } from './logic/entertainment.service';
 import { JobService } from './logic/job.service';
 import { LedgerService } from './logic/ledger.service';
 import { RewardService } from './logic/reward.service';
+import { ApplicationService } from './logic/application.service';
 import { GameController } from './game.controller';
 import { UserStateEntity } from '../users/entities/user-state.entity';
 
@@ -27,6 +28,7 @@ import { UserStateEntity } from '../users/entities/user-state.entity';
     JobService,
     LedgerService,
     RewardService,
+    ApplicationService,
   ],
   exports: [
     GameService,
@@ -39,6 +41,7 @@ import { UserStateEntity } from '../users/entities/user-state.entity';
     JobService,
     LedgerService,
     RewardService,
+    ApplicationService,
   ],
 })
 export class GameModule {}
