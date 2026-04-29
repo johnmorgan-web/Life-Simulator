@@ -7,6 +7,7 @@ export class UserController {
 
   @Post()
   async createUser(@Body() body: { name: string }) {
+    console.log('Creating user with name:', body.name); 
     return this.userService.createUser(body.name);
   }
 
@@ -15,23 +16,23 @@ export class UserController {
     return this.userService.listAllUsers();
   }
 
-  @Get(':name')
-  async getUser(@Param('name') name: string) {
-    return this.userService.getUserByName(name);
+  @Get(':id')
+  async getUser(@Param('id') id: string) {
+    return this.userService.getUserById(id);
   }
 
-  @Post(':name/process-month')
-  async processMonth(@Param('name') name: string) {
-    return this.userService.processMonth(name);
+  @Post(':id/process-month')
+  async processMonth(@Param('id') id: string) {
+    return this.userService.processMonth(id);
   }
 
-  @Post(':name/action')
-  async applyAction(@Param('name') name: string, @Body() action: any) {
-    return this.userService.applyAction(name, action);
+  @Post(':id/action')
+  async applyAction(@Param('id') id: string, @Body() action: any) {
+    return this.userService.applyAction(id, action);
   }
 
-  @Delete(':name')
-  async deleteUser(@Param('name') name: string) {
-    return this.userService.deleteUser(name);
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string) {
+    return this.userService.deleteUser(id);
   }
 }
