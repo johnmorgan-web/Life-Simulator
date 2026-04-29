@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import bcrypt from 'bcryptjs';
 import { GameService } from '../game/logic/game.service';
 import { GameState } from '../game/types/game.types';
 import { UserStateEntity } from './entities/user-state.entity';
@@ -10,6 +11,8 @@ const NON_PERSISTED_STATE_KEYS = new Set<string>([
   'realEstateMarket',
   'realEstateMarketMeta',
 ]);
+
+const PASSWORD_SALT_ROUNDS = 12;
 
 @Injectable()
 export class UserService {
@@ -47,6 +50,7 @@ export class UserService {
   private toGameSnapshot(entity: UserStateEntity): Partial<GameState> & { id: string } {
     return {
       ...(entity.state || {}),
+      username: entity.username,
       name: entity.name,
       id: entity.id,
     };
@@ -56,6 +60,7 @@ export class UserService {
     const hydratedState = this.buildHydratedState(entity.name, entity.state || {});
     return {
       ...hydratedState,
+      username: entity.username,
       name: entity.name,
       id: entity.id,
     };
@@ -64,21 +69,65 @@ export class UserService {
   /**
    * Create a new user with initial game state
    */
-  async createUser(name: string): Promise<(Partial<GameState> & { id: string }) | null> {
-    const existing = await this.userStateRepository.findOne({ where: { name } });
-    if (existing) return this.toGameSnapshot(existing);
+  async createUser(
+    username: string,
+    name: string,
+    password: string,
+  ): Promise<(Partial<GameState> & { id: string }) | null> {
+    const trimmedUsername = String(username || '').trim();
+    const trimmedName = String(name || '').trim();
+    if (!trimmedUsername) throw new BadRequestException('Username is required');
+    if (!trimmedName) throw new BadRequestException('Name is required');
+    if (!password || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const existing = await this.userStateRepository.findOne({ where: { username: trimmedUsername } });
+    if (existing) throw new ConflictException('User already exists');
 
     const id = crypto.randomUUID();
-    const initialState = this.gameService.getInitialState(name);
+    const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+    const initialState = this.gameService.getInitialState(trimmedName);
     const createdUser = this.userStateRepository.create({
       id,
-      name,
-      state: this.buildPersistedState(name, initialState),
+      username: trimmedUsername,
+      name: trimmedName,
+      passwordHash,
+      state: this.buildPersistedState(trimmedName, initialState),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     const saved = await this.userStateRepository.save(createdUser);
     return this.toGameSnapshot(saved);
+  }
+
+  async loginUser(
+    username: string,
+    password: string,
+  ): Promise<(Partial<GameState> & { id: string }) | null> {
+    const trimmedUsername = String(username || '').trim();
+    if (!trimmedUsername) throw new BadRequestException('Username is required');
+    if (!password) throw new BadRequestException('Password is required');
+
+    const user = await this.userStateRepository.findOne({ where: { username: trimmedUsername } });
+    if (!user) {
+      throw new UnauthorizedException('Invalid username or password');
+    }
+
+    // Backward-compatible upgrade path for legacy users created before password hashing.
+    if (!user.passwordHash) {
+      user.passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+      user.username = user.username || trimmedUsername;
+      const upgraded = await this.userStateRepository.save(user);
+      return this.toGameSnapshot(upgraded);
+    }
+
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
+      throw new UnauthorizedException('Invalid username or password');
+    }
+
+    return this.toGameSnapshot(user);
   }
 
   /**

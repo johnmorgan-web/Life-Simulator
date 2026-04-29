@@ -13,6 +13,7 @@ import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } 
 import type { Job, Application, LifeEvent } from '@server/types/models.types'
 
 type State = any
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
@@ -28,6 +29,34 @@ function getRegisteredUserCount() {
 function capacityScaleForUsers(registeredUsers: number) {
 	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 2x.
 	return Math.min(2, Math.max(1, 0.7 + registeredUsers * 0.3))
+}
+
+async function authenticateUser(username: string, password: string) {
+	const payload = JSON.stringify({ username, password })
+	const headers = { 'Content-Type': 'application/json' }
+
+	const loginResponse = await fetch(`${API_BASE_URL}/users/login`, {
+		method: 'POST',
+		headers,
+		body: payload
+	})
+
+	if (!loginResponse.ok) return null
+	return loginResponse.json()
+}
+
+async function registerUser(username: string, name: string, password: string) {
+	const payload = JSON.stringify({ username, name, password })
+	const headers = { 'Content-Type': 'application/json' }
+
+	const registerResponse = await fetch(`${API_BASE_URL}/users`, {
+		method: 'POST',
+		headers,
+		body: payload
+	})
+
+	if (!registerResponse.ok) return null
+	return registerResponse.json()
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -3217,61 +3246,118 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		return true
 	}
 
-	function login(user: string, _password?: string) {
-		const data = loadStateForUser(user)
-		if (data) {
-			const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-			const marketPrices = normalizeMarketPrices(data.marketPrices)
-			const realEstateState = normalizeRealEstateState(data)
-			dispatch({
-				type: 'SET_STATE',
-				payload: {
-					...data,
-					...realEstateState,
-					currentUser: user,
-					entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-					subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-					subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-					subscriptionBadges: data.subscriptionBadges ?? [],
-					entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-					happiness: data.happiness ?? 70,
-					workPenaltyPercent: data.workPenaltyPercent ?? 0,
-					marketPrices,
-					marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-					portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-					marketLearningLevel: data.marketLearningLevel ?? 'adult',
-					marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-					realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-					realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-					autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-					stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-					stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-					totalGasPaid: Number(data.totalGasPaid ?? 0),
-					totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-					maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-					achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-					achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-					rewardTokens: Number(data.rewardTokens ?? 0),
-					lastAchievementCategory: data.lastAchievementCategory ?? null,
-					unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
-					activeTheme: data.activeTheme ?? 'default',
-					rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-				}
-			})
-			return true
+	async function login(username: string, password?: string) {
+		const normalizedUsername = String(username || '').trim()
+		const normalizedPassword = String(password || '')
+		if (!normalizedUsername || !normalizedPassword) return false
+
+		let data: any = null
+		try {
+			data = await authenticateUser(normalizedUsername, normalizedPassword)
+		} catch (e) {
+			console.error('Authentication request failed', e)
+			return false
 		}
-		// No save yet, create a new slot with current initial-like state but set currentUser
-		const firstSnapshot = { ...state, currentUser: user }
-		saveStateForUser(user, firstSnapshot)
-		const seededSharedMarket = syncSharedRealEstateMarket(firstSnapshot, false)
+
+		if (!data) return false
+
+		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
+		const marketPrices = normalizeMarketPrices(data.marketPrices)
+		const realEstateState = normalizeRealEstateState(data)
 		dispatch({
 			type: 'SET_STATE',
 			payload: {
-				...firstSnapshot,
-				realEstateMarket: seededSharedMarket.market,
-				realEstateMarketMeta: seededSharedMarket.meta
+				...data,
+				...realEstateState,
+				currentUser: data.username || normalizedUsername,
+				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+				subscriptionBadges: data.subscriptionBadges ?? [],
+				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+				happiness: data.happiness ?? 70,
+				workPenaltyPercent: data.workPenaltyPercent ?? 0,
+				marketPrices,
+				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+				marketLearningLevel: data.marketLearningLevel ?? 'adult',
+				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
+				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+				totalGasPaid: Number(data.totalGasPaid ?? 0),
+				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
+				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+				rewardTokens: Number(data.rewardTokens ?? 0),
+				lastAchievementCategory: data.lastAchievementCategory ?? null,
+				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
+				activeTheme: data.activeTheme ?? 'default',
+				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
 			}
 		})
+
+		return true
+	}
+
+	async function createUser(username: string, name: string, password?: string) {
+		const normalizedUsername = String(username || '').trim()
+		const normalizedName = String(name || '').trim()
+		const normalizedPassword = String(password || '')
+		if (!normalizedUsername || !normalizedName || !normalizedPassword) return false
+
+		let data: any = null
+		try {
+			data = await registerUser(normalizedUsername, normalizedName, normalizedPassword)
+		} catch (e) {
+			console.error('Registration request failed', e)
+			return false
+		}
+
+		if (!data) return false
+
+		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
+		const marketPrices = normalizeMarketPrices(data.marketPrices)
+		const realEstateState = normalizeRealEstateState(data)
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				...data,
+				...realEstateState,
+				currentUser: data.username || normalizedUsername,
+				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+				subscriptionBadges: data.subscriptionBadges ?? [],
+				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+				happiness: data.happiness ?? 70,
+				workPenaltyPercent: data.workPenaltyPercent ?? 0,
+				marketPrices,
+				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+				marketLearningLevel: data.marketLearningLevel ?? 'adult',
+				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
+				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+				totalGasPaid: Number(data.totalGasPaid ?? 0),
+				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
+				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+				rewardTokens: Number(data.rewardTokens ?? 0),
+				lastAchievementCategory: data.lastAchievementCategory ?? null,
+				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
+				activeTheme: data.activeTheme ?? 'default',
+				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
+			}
+		})
+
 		return true
 	}
 
@@ -3524,7 +3610,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty }}>
 			{children}
 		</GameContext.Provider>
 	)

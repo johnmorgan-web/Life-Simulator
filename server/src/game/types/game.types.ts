@@ -236,6 +236,7 @@ export interface GameState {
   // UI & Preferences
   celebration: Celebration;
   showSettlement: boolean;
+  username?: string | null;
   currentUser?: string | null;
   name: string;
   unlockedThemes: string[];
