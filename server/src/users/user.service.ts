@@ -12,6 +12,18 @@ const NON_PERSISTED_STATE_KEYS = new Set<string>([
   'realEstateMarketMeta',
 ]);
 
+const APPEND_ONLY_STATE_KEYS = new Set<string>([
+  'logs',
+  'eventHistory',
+  'careerHistory',
+  'credentialHistory',
+  'applications',
+  'achievementHistory',
+  'rewardHistory',
+  'subscriptionBadges',
+  'vehicleHistory',
+]);
+
 const PASSWORD_SALT_ROUNDS = 12;
 
 @Injectable()
@@ -143,17 +155,29 @@ export class UserService {
    */
   async updateUser(
     id: string,
-    updateData: Partial<GameState>,
+    updateData: Partial<GameState> & { _append?: Record<string, any[]> },
   ): Promise<(Partial<GameState> & { id: string }) | null> {
     const user = await this.userStateRepository.findOne({ where: { id } });
     if (!user) return null;
 
-    const currentState = this.buildHydratedState(user.name, user.state || {});
-    const nextState = {
+    const { _append, ...directUpdates } = (updateData || {}) as Record<string, any>;
+    const currentState = {
+      ...(user.state || {}),
+    } as Record<string, any>;
+    const nextState: Record<string, any> = {
       ...currentState,
-      ...updateData,
+      ...directUpdates,
       name: user.name,
     };
+
+    if (_append && typeof _append === 'object') {
+      for (const [key, items] of Object.entries(_append)) {
+        if (!APPEND_ONLY_STATE_KEYS.has(key)) continue;
+        if (!Array.isArray(items) || items.length === 0) continue;
+        const existing = Array.isArray(nextState[key]) ? nextState[key] : [];
+        nextState[key] = [...existing, ...items];
+      }
+    }
 
     user.state = this.buildPersistedState(user.name, nextState);
     user.updatedAt = new Date();

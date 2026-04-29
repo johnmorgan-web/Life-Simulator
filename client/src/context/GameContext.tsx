@@ -15,6 +15,19 @@ import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta'])
+const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username'])
+const APPEND_ONLY_STATE_KEYS = new Set([
+	'logs',
+	'eventHistory',
+	'careerHistory',
+	'credentialHistory',
+	'applications',
+	'achievementHistory',
+	'rewardHistory',
+	'subscriptionBadges',
+	'vehicleHistory',
+])
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
@@ -94,23 +107,80 @@ async function spinRewardWheelForUser(id: string) {
 }
 
 async function evaluateApplicationsOnServer(state: any) {
+	const applications = Array.isArray(state?.applications) ? state.applications : []
+	const jobTitles: string[] = Array.from(
+		new Set(
+			applications
+				.map((app: any) => String(app?.job?.title || '').trim())
+				.filter((title: string) => !!title),
+		),
+	)
+	const compactState = buildApplicationsRequestState(state, jobTitles)
+
 	const response = await fetch(`${API_BASE_URL}/game/evaluate-applications`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state }),
+		body: JSON.stringify({ state: compactState }),
 	})
 	if (!response.ok) return null
 	return response.json()
 }
 
 async function applyForJobOnServer(state: any, jobTitle: string) {
+	const compactState = buildApplicationsRequestState(state, [jobTitle])
+
 	const response = await fetch(`${API_BASE_URL}/game/apply-job`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state, jobTitle }),
+		body: JSON.stringify({ state: compactState, jobTitle }),
 	})
 	if (!response.ok) return null
 	return response.json()
+}
+
+function buildApplicationsRequestState(source: any, relevantJobTitles: string[] = []) {
+	const snapshot = source || {}
+	const requestedTitles = Array.from(
+		new Set(
+			relevantJobTitles
+				.map((title: string) => String(title || '').trim())
+				.filter((title: string) => !!title),
+		),
+	)
+
+	const compactJobMarket = requestedTitles.reduce((acc: Record<string, any>, title: string) => {
+		const slot = snapshot?.jobMarket?.[title]
+		if (!slot || typeof slot !== 'object') return acc
+		acc[title] = {
+			capacity: Number(slot.capacity || 0),
+			occupied: Number(slot.occupied || 0),
+		}
+		return acc
+	}, {})
+
+	return {
+		month: Number(snapshot.month || 0),
+		year: Number(snapshot.year || 0),
+		credit: Number(snapshot.credit || 0),
+		tenure: Number(snapshot.tenure || 0),
+		credentials: Array.isArray(snapshot.credentials) ? snapshot.credentials : [],
+		transit: {
+			level: Number(snapshot?.transit?.level || 0),
+		},
+		job: snapshot?.job?.title
+			? {
+				title: snapshot.job.title,
+			}
+			: null,
+		careerHistory: Array.isArray(snapshot.careerHistory)
+			? snapshot.careerHistory.map((entry: any) => ({
+				title: entry?.title,
+				months: Number(entry?.months || 0),
+			}))
+			: [],
+		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
+		jobMarket: compactJobMarket,
+	}
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -1584,6 +1654,8 @@ function reducer(state: State, action: any) {
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
+			let lastNegotiationMonth = state.lastNegotiationMonth
+			let lastNegotiationYear = state.lastNegotiationYear
 			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'achievement' | 'rainbow' | null
 			
 			// Credit tracking
@@ -1675,6 +1747,8 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
 				// reset tenure and start times and set new job start
 				tenure = 0
+				lastNegotiationMonth = null
+				lastNegotiationYear = null
 				// Trigger celebration for job acceptance/promotion
 				celebration = isPromotion ? 'promotion' : 'job-accepted'
 			} else {
@@ -2333,6 +2407,8 @@ function reducer(state: State, action: any) {
 				pendingJob: pendingJobToApply,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
+				lastNegotiationMonth,
+				lastNegotiationYear,
 				lastAutoBumpMonth: newLastAutoBumpMonth,
 				lastAutoBumpYear: newLastAutoBumpYear,
 				entertainmentSpending: nextEntertainmentBudgets.entertainmentBudget,
@@ -2506,10 +2582,73 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
 	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
 	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
+	const dirtyStateKeysRef = useRef<Set<string>>(new Set())
+	const trackedStateRef = useRef<any>(initialState)
+	const savedStateRef = useRef<any>(initialState)
 
 	useEffect(() => {
 		stateRef.current = state
 	}, [state])
+
+	useEffect(() => {
+		const previous = trackedStateRef.current || {}
+		const current = state || {}
+		const allKeys = new Set([...Object.keys(previous), ...Object.keys(current)])
+		for (const key of allKeys) {
+			if (NON_PERSISTED_STATE_KEYS.has(key) || CLIENT_ONLY_STATE_KEYS.has(key)) continue
+			if (previous[key] !== current[key]) dirtyStateKeysRef.current.add(key)
+		}
+		trackedStateRef.current = current
+	}, [state])
+
+	function resetDirtyTracking(snapshot: any) {
+		const normalized = snapshot || {}
+		trackedStateRef.current = normalized
+		savedStateRef.current = normalized
+		dirtyStateKeysRef.current.clear()
+	}
+
+	function sameEntry(a: any, b: any) {
+		if (a === b) return true
+		if (a == null || b == null) return false
+		if (typeof a !== 'object' || typeof b !== 'object') return a === b
+		return JSON.stringify(a) === JSON.stringify(b)
+	}
+
+	function buildPartialStateUpdate(snapshot: any) {
+		const source = snapshot || {}
+		const baseline = savedStateRef.current || {}
+		const payload: Record<string, any> = {}
+		const appendPayload: Record<string, any[]> = {}
+		const keys = Array.from(dirtyStateKeysRef.current)
+
+		for (const key of keys) {
+			if (NON_PERSISTED_STATE_KEYS.has(key) || CLIENT_ONLY_STATE_KEYS.has(key)) continue
+			if (!(key in source)) continue
+			const value = source[key]
+			if (value === undefined) continue
+			const previousValue = baseline[key]
+
+			if (APPEND_ONLY_STATE_KEYS.has(key) && Array.isArray(value) && Array.isArray(previousValue)) {
+				const baselineLength = previousValue.length
+				const canAppend = value.length >= baselineLength && (baselineLength === 0 || sameEntry(value[baselineLength - 1], previousValue[baselineLength - 1]))
+
+				if (canAppend) {
+					const appended = value.slice(baselineLength)
+					if (appended.length > 0) appendPayload[key] = appended
+					continue
+				}
+			}
+
+			payload[key] = value
+		}
+
+		if (Object.keys(appendPayload).length > 0) {
+			payload._append = appendPayload
+		}
+
+		return Object.keys(payload).length > 0 ? payload : null
+	}
 
 	async function refreshPeerSnapshots() {
 		try {
@@ -2564,13 +2703,97 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		setLedgerEventNotifications((prev: any[]) => prev.slice(1))
 	}
 
+	function buildLedgerRequestState(source: any) {
+		const snapshot = source || {}
+		const month = Number(snapshot.month || 0)
+		const year = Number(snapshot.year || 0)
+
+		const statementEvents = Array.isArray(snapshot.eventHistory)
+			? snapshot.eventHistory
+					.filter((entry: any) => Number(entry?.month || 0) === month && Number(entry?.year || 0) === year)
+					.map((entry: any) => ({
+						id: entry?.id,
+						title: entry?.title,
+						amount: entry?.amount,
+						type: entry?.type,
+						icon: entry?.icon,
+						desc: entry?.desc,
+						trigger: entry?.trigger,
+						month,
+						year,
+					}))
+			: []
+
+		const garage = Array.isArray(snapshot.garage)
+			? snapshot.garage.map((vehicle: any) => ({
+					id: vehicle?.id,
+					vehicleId: vehicle?.vehicleId,
+					vehicleName: vehicle?.vehicleName,
+					purchaseMonth: vehicle?.purchaseMonth,
+					purchaseYear: vehicle?.purchaseYear,
+					monthlyPayment: vehicle?.monthlyPayment,
+					monthsRemaining: vehicle?.monthsRemaining,
+				}))
+			: []
+
+		const realEstateBreakdown = Array.isArray(snapshot.realEstateLastMonthPropertyBreakdown)
+			? snapshot.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
+					propertyName: entry?.propertyName,
+					cityName: entry?.cityName,
+					grossIncome: entry?.grossIncome,
+				}))
+			: []
+
+		return {
+			check: snapshot.check,
+			month,
+			year,
+			city: snapshot.city
+				? {
+						name: snapshot.city.name,
+						p: snapshot.city.p,
+						r: snapshot.city.r,
+				  }
+				: null,
+			job: snapshot.job,
+			pendingJob: snapshot.pendingJob,
+			workPenaltyPercent: snapshot.workPenaltyPercent,
+			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
+			realEstateLastMonthExpenses: snapshot.realEstateLastMonthExpenses,
+			realEstateLastMonthPropertyBreakdown: realEstateBreakdown,
+			house: snapshot.house
+				? {
+						mortgagePayment: snapshot.house.mortgagePayment,
+						monthlyPayment: snapshot.house.monthlyPayment,
+						mortgage: snapshot.house.mortgage,
+				  }
+				: null,
+			luxuryServices: snapshot.luxuryServices || {},
+			transit: snapshot.transit
+				? {
+						name: snapshot.transit.name,
+						cost: snapshot.transit.cost,
+						level: snapshot.transit.level,
+				  }
+				: null,
+			garage,
+			entertainmentSpending: snapshot.entertainmentSpending,
+			subscriptionEntertainmentSpending: snapshot.subscriptionEntertainmentSpending,
+			stockInvestedLastMonth: snapshot.stockInvestedLastMonth,
+			activeEdu: snapshot.activeEdu,
+			investmentPropertyCount: Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties.length : 0,
+			statementEvents,
+		}
+	}
+
 	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
 		const buildState = stateOverride ?? state
 		try {
+			const requestState = buildLedgerRequestState(buildState)
 			const response = await fetch(`${API_BASE_URL}/game/build-ledger`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ state: buildState, paySave, payDebt }),
+				body: JSON.stringify({ state: requestState, paySave, payDebt }),
 			})
 			if (!response.ok) return
 			const result = await response.json()
@@ -2626,7 +2849,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			type: 'SET_STATE',
 			payload: {
 				applications: Array.isArray(result.applications) ? result.applications : snapshot.applications,
-				logs: Array.isArray(result.logs) ? result.logs : snapshot.logs,
+				logs: Array.isArray(result.logEntries)
+					? [...(Array.isArray(snapshot.logs) ? snapshot.logs : []), ...result.logEntries]
+					: Array.isArray(result.logs)
+						? result.logs
+						: snapshot.logs,
 				applicationResults: Array.isArray(result.applicationResults) ? result.applicationResults : [],
 			},
 		})
@@ -2664,9 +2891,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	async function saveGame(stateOverride?: any) {
 		const snapshot = stateOverride ?? state
 		if (!snapshot?.id) return false
-		const payload = { ...snapshot, currentUser: snapshot.currentUser || snapshot.username }
+		const payload = buildPartialStateUpdate(snapshot)
+		if (!payload) return true
+		if (!('currentUser' in payload) && snapshot.currentUser) {
+			payload.currentUser = snapshot.currentUser
+		}
 		const saved = await persistUserState(snapshot.id, payload)
 		if (!saved) return false
+		resetDirtyTracking(snapshot)
 		await refreshPeerSnapshots()
 		return true
 	}
@@ -2682,6 +2914,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			result.user.username || state.currentUser || state.username || 'player',
 		)
 
+		resetDirtyTracking(normalized)
 		dispatch({ type: 'SET_STATE', payload: normalized })
 		buildLedger(0, 0, normalized)
 		await refreshPeerSnapshots()
@@ -2692,9 +2925,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		if (!state.id || !state.currentUser) return false
 		const data = await fetchUserById(state.id)
 		if (!data) return false
+		const normalized = normalizeLoadedUserState(data, state, state.currentUser)
+		resetDirtyTracking(normalized)
 		dispatch({
 			type: 'SET_STATE',
-			payload: normalizeLoadedUserState(data, state, state.currentUser),
+			payload: normalized,
 		})
 		await refreshPeerSnapshots()
 		return true
@@ -2799,6 +3034,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
 		freshState.realEstateMarket = seededSharedMarket.market
 		freshState.realEstateMarketMeta = seededSharedMarket.meta
+		resetDirtyTracking(freshState)
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
 		// Build the initial month's ledger from the server
@@ -2825,7 +3061,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		dispatch({
 			type: 'SET_STATE',
-			payload: normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+			payload: (() => {
+				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+				resetDirtyTracking(normalized)
+				return normalized
+			})()
 		})
 
 		buildLedger(0, 0, data)
@@ -2852,7 +3092,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 		dispatch({
 			type: 'SET_STATE',
-			payload: normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+			payload: (() => {
+				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+				resetDirtyTracking(normalized)
+				return normalized
+			})()
 		})
 
 		buildLedger(0, 0, data)
@@ -2862,6 +3106,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function logout() {
+		resetDirtyTracking({})
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
 
@@ -2887,7 +3132,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			type: 'SET_STATE',
 			payload: {
 				applications: Array.isArray(result.applications) ? result.applications : state.applications,
-				logs: Array.isArray(result.logs) ? result.logs : state.logs,
+				logs: Array.isArray(result.logEntries)
+					? [...(Array.isArray(state.logs) ? state.logs : []), ...result.logEntries]
+					: Array.isArray(result.logs)
+						? result.logs
+						: state.logs,
 			},
 		})
 	}

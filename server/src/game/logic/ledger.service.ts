@@ -390,9 +390,12 @@ export class LedgerService {
     const luxuryServicesList: string[] = [];
     const luxuryLineItems: Array<{ desc: string; amt: number }> = [];
     const netMonthlyIncome = this.entertainmentService.totalMonthlyIncomeForLuxuryPricing(state);
-    const propertyCount = Array.isArray(state.investmentProperties)
-      ? state.investmentProperties.length
-      : 0;
+    const explicitPropertyCount = Number(state?.investmentPropertyCount);
+    const propertyCount = Number.isFinite(explicitPropertyCount)
+      ? Math.max(0, Math.floor(explicitPropertyCount))
+      : Array.isArray(state.investmentProperties)
+        ? state.investmentProperties.length
+        : 0;
 
     const luxuryServiceConfigs = [
       { id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
@@ -487,7 +490,11 @@ export class LedgerService {
   extractStatementEvents(state: any): any[] {
     const month = Number(state?.month || 0);
     const year = Number(state?.year || 0);
-    const source = Array.isArray(state?.eventHistory) ? state.eventHistory : [];
+    const source = Array.isArray(state?.statementEvents)
+      ? state.statementEvents
+      : Array.isArray(state?.eventHistory)
+        ? state.eventHistory
+        : [];
 
     return source
       .filter((entry: any) => {

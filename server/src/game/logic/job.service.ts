@@ -105,8 +105,10 @@ export class JobService {
   }
 
   getJobEligibility(state: any, job: any): any {
-    const educationMet = !job.req || state.credentials.includes(job.req);
-    const certificationMet = !job.certReq || state.credentials.includes(job.certReq);
+    const resolvedReq = job.req ? (this.REQUIREMENT_ALIASES[job.req] ?? job.req) : null;
+    const educationMet = !resolvedReq || state.credentials.includes(resolvedReq);
+    const resolvedCertReq = job.certReq ? (this.CERT_ALIASES[job.certReq] ?? job.certReq) : null;
+    const certificationMet = !resolvedCertReq || state.credentials.includes(resolvedCertReq);
     const transitMet = state.transit.level >= job.tReq;
     const openings = this.getJobOpenings(state, job);
     const capacityMet = openings > 0;
@@ -131,6 +133,8 @@ export class JobService {
       capacityMet,
       experienceDetail,
       openings,
+      resolvedReq,
+      resolvedCertReq,
     };
   }
 

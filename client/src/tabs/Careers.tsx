@@ -74,20 +74,30 @@ export default function Careers() {
     return months
   }
 
+  const monthsSinceLastNegotiation = useMemo(() => {
+    if (state.lastNegotiationMonth == null || state.lastNegotiationYear == null) return null
+    return (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
+  }, [state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year])
+
+  const negotiationCooldownRemaining = useMemo(() => {
+    if (monthsSinceLastNegotiation == null) return 0
+    return Math.max(0, 6 - monthsSinceLastNegotiation)
+  }, [monthsSinceLastNegotiation])
+
+  const tenureUntilNegotiationEligible = useMemo(() => {
+    return Math.max(0, 6 - (state.tenure || 0))
+  }, [state.tenure])
+
   // Check if user can negotiate pay (6 month cooldown)
   const canNegotiatePay = useMemo(() => {
-    if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return true
-    const monthsSinceLastNegotiation = (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
-    return monthsSinceLastNegotiation >= 6 && state.tenure >= 6
-  }, [state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year, state.tenure])
+    return negotiationCooldownRemaining === 0 && tenureUntilNegotiationEligible === 0
+  }, [negotiationCooldownRemaining, tenureUntilNegotiationEligible])
 
   // Get months until next negotiation eligible
   const monthsUntilNegotiationEligible = useMemo(() => {
     if (canNegotiatePay) return 0
-    if (!state.lastNegotiationMonth || !state.lastNegotiationYear) return 0
-    const monthsSince = (state.year - state.lastNegotiationYear) * 12 + (state.month - state.lastNegotiationMonth)
-    return 6 - monthsSince
-  }, [canNegotiatePay, state.lastNegotiationMonth, state.lastNegotiationYear, state.month, state.year])
+    return Math.max(negotiationCooldownRemaining, tenureUntilNegotiationEligible)
+  }, [canNegotiatePay, negotiationCooldownRemaining, tenureUntilNegotiationEligible])
 
   // Handle negotiation button click
   const handleNegotiatePay = () => {
@@ -615,9 +625,10 @@ export default function Careers() {
               const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
               const isCurrent = state.job?.title === j.title
               const canApply = eligibility.canApply
+              const isLocked = !canApply && !isCurrent
 
               return (
-                <div key={j.title} className={`glass p-5 ${!canApply ? 'card-locked' : ''} ${isCurrent ? 'card-active' : ''}`}>
+                <div key={j.title} className={`glass p-5 ${isLocked ? 'card-locked' : ''} ${isCurrent ? 'card-active' : ''}`}>
                   <h4 className="font-bold text-sm">{j.title}</h4>
                   <p className="text-emerald-600 font-bold">${Math.round(j.base * state.city.p * 0.8)}/mo</p>
                   <div className="subcat-banner mt-1">
