@@ -12,10 +12,11 @@ export class GameController {
   @Post('build-ledger')
   buildLedger(
     @Body() body: { state: any; paySave?: number; payDebt?: number },
-  ): { ledger: any[] } {
+  ): { ledger: any[]; events: any[] } {
     const { state, paySave = 0, payDebt = 0 } = body;
     const ledger = this.ledgerService.buildLedger(state, paySave, payDebt);
-    return { ledger };
+    const events = this.ledgerService.extractStatementEvents(state);
+    return { ledger, events };
   }
 
   @Post(':id/spin-reward')

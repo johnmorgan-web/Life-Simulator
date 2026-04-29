@@ -2484,6 +2484,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
 	const stateRef = useRef(state)
 	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
+	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
+	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
 
 	useEffect(() => {
 		stateRef.current = state
@@ -2511,6 +2513,37 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		refreshPeerSnapshots()
 	}, [])
 
+	function enqueueLedgerEventNotifications(events: any[]) {
+		if (!Array.isArray(events) || events.length === 0) return
+
+		const fresh = events
+			.filter((event: any) => event && typeof event === 'object')
+			.map((event: any, idx: number) => ({
+				id: String(event.id || `stmt-event-${event.year || stateRef.current.year}-${event.month || stateRef.current.month}-${idx}`),
+				title: String(event.title || 'Life Event'),
+				amount: Number(event.amount || 0),
+				type: event.type === 'in' ? 'in' : 'out',
+				icon: String(event.icon || '🗞️'),
+				desc: String(event.desc || ''),
+				trigger: String(event.trigger || 'general'),
+				month: Number(event.month || stateRef.current.month),
+				year: Number(event.year || stateRef.current.year),
+			}))
+			.filter((event: any) => {
+				const key = `${event.id}:${event.month}:${event.year}`
+				if (seenLedgerEventKeysRef.current.has(key)) return false
+				seenLedgerEventKeysRef.current.add(key)
+				return true
+			})
+
+		if (!fresh.length) return
+		setLedgerEventNotifications((prev: any[]) => [...prev, ...fresh])
+	}
+
+	function dequeueLedgerEventNotification() {
+		setLedgerEventNotifications((prev: any[]) => prev.slice(1))
+	}
+
 	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
 		const buildState = stateOverride ?? state
 		try {
@@ -2522,6 +2555,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			if (!response.ok) return
 			const result = await response.json()
 			dispatch({ type: 'INIT_LEDGER', payload: result.ledger })
+			enqueueLedgerEventNotifications(result.events)
 		} catch (e) {
 			console.error('Failed to build ledger from server', e)
 		}
@@ -3080,7 +3114,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
 			{children}
 		</GameContext.Provider>
 	)

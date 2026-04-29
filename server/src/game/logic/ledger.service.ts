@@ -483,4 +483,29 @@ export class LedgerService {
 
     return ledger;
   }
+
+  extractStatementEvents(state: any): any[] {
+    const month = Number(state?.month || 0);
+    const year = Number(state?.year || 0);
+    const source = Array.isArray(state?.eventHistory) ? state.eventHistory : [];
+
+    return source
+      .filter((entry: any) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const eventMonth = Number(entry.month || 0);
+        const eventYear = Number(entry.year || 0);
+        return eventMonth === month && eventYear === year;
+      })
+      .map((entry: any, idx: number) => ({
+        id: String(entry.id || `evt-${year}-${month}-${idx}`),
+        title: String(entry.title || 'Life Event'),
+        amount: Number(entry.amount || 0),
+        type: entry.type === 'in' ? 'in' : 'out',
+        icon: String(entry.icon || '🗞️'),
+        desc: String(entry.desc || ''),
+        trigger: String(entry.trigger || 'general'),
+        month,
+        year,
+      }));
+  }
 }
