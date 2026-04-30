@@ -1241,6 +1241,7 @@ const initialState: State = {
 	achievementsUnlocked: [] as string[],
 	achievementHistory: [] as any[],
 	rewardTokens: 0,
+	rewardCategoryQueue: [] as string[],
 	lastAchievementCategory: null as string | null,
 	unlockedThemes: ['default'],
 	activeTheme: 'default',
@@ -1270,8 +1271,8 @@ function calculateDynamicAPR(creditScore: number): number {
 // Salary bonus multiplier based on credit score (0-15% bonus)
 function calculateCreditBonus(creditScore: number): number {
 	if (creditScore < 300) return 0
-	if (creditScore >= 800) return 0.15
-	return ((creditScore - 300) / 550) * 0.15
+	if (creditScore >= 800) return 0.05
+	return ((creditScore - 300) / 550) * 0.05
 }
 
 // Pay negotiation modifier based on credit score, tenure, and job compatibility
@@ -1437,6 +1438,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
 		achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
 		rewardTokens: Number(data.rewardTokens ?? 0),
+		rewardCategoryQueue: Array.isArray(data.rewardCategoryQueue) ? data.rewardCategoryQueue : [],
 		lastAchievementCategory: data.lastAchievementCategory ?? null,
 		unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
 		activeTheme: data.activeTheme ?? 'default',
@@ -2367,10 +2369,15 @@ function reducer(state: State, action: any) {
 			const achievementsUnlocked = Array.from(new Set([...(state.achievementsUnlocked || []), ...unlockedNow.map((a: any) => a.id)]))
 			const achievementHistory = [...(state.achievementHistory || [])]
 			let rewardTokens = Number(state.rewardTokens || 0)
+			const rewardCategoryQueue = Array.isArray(state.rewardCategoryQueue) ? [...state.rewardCategoryQueue] : []
 			let lastAchievementCategory = state.lastAchievementCategory || null
 			for (const ach of unlockedNow) {
-				rewardTokens += Number(ach.tokenReward || 1)
+				const awardedTokens = Math.max(1, Number(ach.tokenReward || 1))
+				rewardTokens += awardedTokens
 				lastAchievementCategory = ach.category
+				for (let i = 0; i < awardedTokens; i += 1) {
+					rewardCategoryQueue.push(ach.category)
+				}
 				achievementHistory.unshift({ id: ach.id, title: ach.title, category: ach.category, month: nextMonth, year: nextYear })
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏆 Achievement unlocked: ${ach.title} (+${ach.tokenReward || 1} reward spin)` })
 			}
@@ -2436,6 +2443,7 @@ function reducer(state: State, action: any) {
 				achievementsUnlocked,
 				achievementHistory: achievementHistory.slice(0, 40),
 				rewardTokens,
+				rewardCategoryQueue,
 				lastAchievementCategory,
 				celebration,
 				skippedPaymentThisMonth: false
@@ -3026,6 +3034,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			achievementsUnlocked: [],
 			achievementHistory: [],
 			rewardTokens: 0,
+			rewardCategoryQueue: [],
 			lastAchievementCategory: null,
 			unlockedThemes: ['default'],
 			activeTheme: 'default',

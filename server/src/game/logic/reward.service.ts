@@ -29,6 +29,94 @@ export class RewardService {
     return Math.round(value * 100) / 100;
   }
 
+  private getAccessibleLiquidity(state: any): number {
+    return this.round2(Number(state?.check || 0) + Number(state?.savings || 0));
+  }
+
+  private getRewardTierByLiquidity(state: any): 'starter' | 'growth' | 'established' | 'elite' {
+    const liquidity = this.getAccessibleLiquidity(state);
+    if (liquidity < 10_000) return 'starter';
+    if (liquidity < 50_000) return 'growth';
+    if (liquidity < 250_000) return 'established';
+    return 'elite';
+  }
+
+  private getTierCaps(tier: 'starter' | 'growth' | 'established' | 'elite') {
+    if (tier === 'starter') {
+      return { maxCash: 600, maxStockShares: 1, allowVehicle: false };
+    }
+    if (tier === 'growth') {
+      return { maxCash: 1200, maxStockShares: 3, allowVehicle: false };
+    }
+    if (tier === 'established') {
+      return { maxCash: 3000, maxStockShares: 6, allowVehicle: true };
+    }
+    return { maxCash: Number.POSITIVE_INFINITY, maxStockShares: Number.POSITIVE_INFINITY, allowVehicle: true };
+  }
+
+  private applyTierFilterToPool(state: any, pool: RewardPrize[]): RewardPrize[] {
+    const tier = this.getRewardTierByLiquidity(state);
+    const caps = this.getTierCaps(tier);
+
+    return pool.filter((prize) => {
+      if ((prize as any).kind === 'theme') return true;
+      if ((prize as any).kind === 'vehicle') return caps.allowVehicle;
+      if ((prize as any).kind === 'cash') {
+        return Number((prize as any).value || 0) <= caps.maxCash;
+      }
+      if ((prize as any).kind === 'stock') {
+        return Number((prize as any).shares || 0) <= caps.maxStockShares;
+      }
+      return true;
+    });
+  }
+
+  private hasAnyCredential(state: any, requiredCredentials: string[]): boolean {
+    const credentials = new Set(
+      Array.isArray(state?.credentials)
+        ? state.credentials.map((c: any) => String(c))
+        : [],
+    );
+    return requiredCredentials.some((cred) => credentials.has(cred));
+  }
+
+  private requiredCredentialsForVehicle(vehicle: any): string[] {
+    if (!Array.isArray(vehicle?.requiredCredentials)) return [];
+    return vehicle.requiredCredentials.map((cred: any) => String(cred)).filter((cred: string) => !!cred);
+  }
+
+  private canOperateVehicle(state: any, vehicle: any): boolean {
+    const requiredCredentials = this.requiredCredentialsForVehicle(vehicle);
+    if (requiredCredentials.length === 0) return true;
+    return this.hasAnyCredential(state, requiredCredentials);
+  }
+
+  private eligibleRewardVehicleIds(state: any): string[] {
+    return rewardWheelVehicleGrantPool.filter((vehicleId) => {
+      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === vehicleId);
+      if (!vehicle) return false;
+      return this.canOperateVehicle(state, vehicle);
+    });
+  }
+
+  private applyVehicleLicenseFilterToPool(state: any, pool: RewardPrize[]): RewardPrize[] {
+    const eligibleVehicleIds = this.eligibleRewardVehicleIds(state);
+
+    return pool.filter((prize) => {
+      if ((prize as any).kind !== 'vehicle') return true;
+
+      const explicitVehicleId = (prize as any).vehicleId;
+      if (explicitVehicleId) {
+        const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === explicitVehicleId);
+        if (!vehicle) return false;
+        return this.canOperateVehicle(state, vehicle);
+      }
+
+      // Generic vehicle prize is only valid if at least one eligible vehicle can be granted.
+      return eligibleVehicleIds.length > 0;
+    });
+  }
+
   private buildHydratedState(name: string, state: Record<string, any> = {}): Partial<GameState> {
     return {
       ...this.gameService.getInitialState(name),
@@ -92,15 +180,36 @@ export class RewardService {
   }
 
   private spinRewardPrize(state: any): RewardPrize {
-    const category = state.lastAchievementCategory || 'wealth';
+    const queue = Array.isArray(state.rewardCategoryQueue) ? state.rewardCategoryQueue : [];
+    const category = queue[0] || state.lastAchievementCategory || 'wealth';
     const pool = rewardWheelPrizePools[category] || rewardWheelPrizePools.default;
-    const chosen = this.chooseWeightedPrize(pool as RewardPrize[]);
+    const tierFilteredPool = this.applyTierFilterToPool(state, pool as RewardPrize[]);
+    const licenseFilteredPool = this.applyVehicleLicenseFilterToPool(state, tierFilteredPool);
+    const fallbackNonVehiclePool = tierFilteredPool.filter((p: any) => p.kind !== 'vehicle');
+    const effectivePool =
+      licenseFilteredPool.length > 0
+        ? licenseFilteredPool
+        : fallbackNonVehiclePool.length > 0
+          ? fallbackNonVehiclePool
+          : (pool as RewardPrize[]);
+    const chosen = this.chooseWeightedPrize(effectivePool);
 
     if ((chosen as any).kind === 'vehicle') {
-      const randomVehicleId =
-        rewardWheelVehicleGrantPool[
-          Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)
-        ];
+      const explicitVehicleId = (chosen as any).vehicleId;
+      if (explicitVehicleId) {
+        return chosen;
+      }
+
+      const eligibleVehicleIds = this.eligibleRewardVehicleIds(state);
+      if (eligibleVehicleIds.length === 0) {
+        const nonVehiclePool = effectivePool.filter((p: any) => p.kind !== 'vehicle');
+        if (nonVehiclePool.length > 0) {
+          return this.chooseWeightedPrize(nonVehiclePool);
+        }
+        return { kind: 'cash', value: 250, weight: 1, label: '$250 fallback bonus' } as RewardPrize;
+      }
+
+      const randomVehicleId = eligibleVehicleIds[Math.floor(Math.random() * eligibleVehicleIds.length)];
       return { ...(chosen as any), vehicleId: randomVehicleId } as RewardPrize;
     }
 
@@ -117,6 +226,12 @@ export class RewardService {
       : ['default'];
     const logs = Array.isArray(state.logs) ? [...state.logs] : [];
     const rewardHistory = Array.isArray(state.rewardHistory) ? [...state.rewardHistory] : [];
+    const rewardCategoryQueue = Array.isArray(state.rewardCategoryQueue)
+      ? [...state.rewardCategoryQueue]
+      : [];
+    const consumedCategory = rewardCategoryQueue.length > 0
+      ? String(rewardCategoryQueue.shift() || 'general')
+      : String(state.lastAchievementCategory || 'general');
 
     if ((prize as any).kind === 'cash') {
       check = this.round2(check + Number((prize as any).value || 0));
@@ -174,7 +289,7 @@ export class RewardService {
       month: state.month,
       year: state.year,
       label: (prize as any).label || (prize as any).kind,
-      category: state.lastAchievementCategory || 'general',
+      category: consumedCategory,
     });
 
     return {
@@ -185,6 +300,11 @@ export class RewardService {
       ownsVehicle,
       unlockedThemes: Array.from(new Set(unlockedThemes)),
       rewardTokens: Math.max(0, Number(state.rewardTokens || 0) - 1),
+      rewardCategoryQueue,
+      lastAchievementCategory:
+        rewardCategoryQueue.length > 0
+          ? String(rewardCategoryQueue[0])
+          : state.lastAchievementCategory || null,
       rewardHistory: rewardHistory.slice(0, 40),
       logs,
     };

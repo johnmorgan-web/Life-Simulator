@@ -122,6 +122,7 @@ export class GameService {
       achievementsUnlocked: [],
       achievementHistory: [],
       rewardTokens: 0,
+      rewardCategoryQueue: [],
       lastAchievementCategory: null,
       unlockedThemes: ['default'],
       activeTheme: 'default',

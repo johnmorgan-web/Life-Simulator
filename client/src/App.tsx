@@ -362,12 +362,6 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     setPendingPayments(null)
   }
 
-  const handleSkipPayment = () => {
-    const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
-    setPendingPayments({ savings, debt: 0, skipped: true })
-    setShowSkipPaymentConfirm(true)
-  }
-
   const handleConfirmSkipPayment = () => {
     if (pendingPayments) {
       processMonth(pendingPayments.savings, 0, true)
@@ -526,15 +520,6 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase hover:bg-slate-800">
                 Begin Next Month
               </button>
-              {state.debt > 0 && (
-                <button
-                  onClick={handleSkipPayment}
-                  className="flex-1 bg-amber-600 text-white py-4 rounded-2xl font-bold uppercase hover:bg-amber-700"
-                  title="Skip payment this month (credit score will be impacted)"
-                >
-                  ⚠️ Skip Payment
-                </button>
-                 )}
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { achievementRules, cosmeticThemes, rewardWheelPrizePools, type AchievementRule, type RewardPrize } from '../constants/achievements.constants'
+import vehicleDatabase from '../constants/vehicleDatabase.constants'
 
 type GenericState = Record<string, unknown>
 
@@ -25,6 +26,51 @@ type TierStack = {
 }
 
 const wheelPalette = ['#f97316', '#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#ef4444', '#14b8a6', '#8b5cf6']
+
+function getLiquidityTier(check: number, savings: number): 'starter' | 'growth' | 'established' | 'elite' {
+  const liquidity = Number(check || 0) + Number(savings || 0)
+  if (liquidity < 10000) return 'starter'
+  if (liquidity < 50000) return 'growth'
+  if (liquidity < 250000) return 'established'
+  return 'elite'
+}
+
+function filterPrizePoolByTier(pool: RewardPrize[], tier: 'starter' | 'growth' | 'established' | 'elite') {
+  const caps = tier === 'starter'
+    ? { maxCash: 600, maxStockShares: 1, allowVehicle: false }
+    : tier === 'growth'
+      ? { maxCash: 1200, maxStockShares: 3, allowVehicle: false }
+      : tier === 'established'
+        ? { maxCash: 3000, maxStockShares: 6, allowVehicle: true }
+        : { maxCash: Number.POSITIVE_INFINITY, maxStockShares: Number.POSITIVE_INFINITY, allowVehicle: true }
+
+  return pool.filter((prize) => {
+    if (prize.kind === 'theme') return true
+    if (prize.kind === 'vehicle') return caps.allowVehicle
+    if (prize.kind === 'cash') return Number(prize.value || 0) <= caps.maxCash
+    if (prize.kind === 'stock') return Number(prize.shares || 0) <= caps.maxStockShares
+    return true
+  })
+}
+
+function canOperateVehicleByCredentials(vehicleId: string, credentials: string[]) {
+  const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === vehicleId)
+  if (!vehicle) return false
+  const requiredCredentials = Array.isArray((vehicle as any).requiredCredentials)
+    ? (vehicle as any).requiredCredentials.map((cred: any) => String(cred)).filter((cred: string) => !!cred)
+    : []
+  if (requiredCredentials.length === 0) return true
+  const owned = new Set((credentials || []).map((c) => String(c)))
+  return requiredCredentials.some((cred: string) => owned.has(cred))
+}
+
+function filterPrizePoolByVehicleLicense(pool: RewardPrize[], credentials: string[]) {
+  return pool.filter((prize) => {
+    if (prize.kind !== 'vehicle') return true
+    if (!prize.vehicleId) return true
+    return canOperateVehicleByCredentials(prize.vehicleId, credentials)
+  })
+}
 
 function weightedChoiceIndex(pool: RewardPrize[]) {
   const totalWeight = pool.reduce((sum, p) => sum + Number(p.weight || 1), 0)
@@ -131,13 +177,20 @@ export default function Rewards() {
   const unlockedSet = new Set<string>(Array.isArray(typedState.achievementsUnlocked) ? typedState.achievementsUnlocked as string[] : [])
   const unlockedThemes = Array.isArray(state.unlockedThemes) ? state.unlockedThemes : ['default']
   const rewardHistory: RewardHistoryEntry[] = Array.isArray(state.rewardHistory) ? state.rewardHistory as RewardHistoryEntry[] : []
-  const wheelCategory = String(state.lastAchievementCategory || 'default')
-  const prizePool = (rewardWheelPrizePools[wheelCategory] || rewardWheelPrizePools.default) as RewardPrize[]
-  const segmentAngle = prizePool.length > 0 ? 360 / prizePool.length : 360
+  const rewardCategoryQueue = Array.isArray((state as any).rewardCategoryQueue) ? (state as any).rewardCategoryQueue as string[] : []
+  const queuedCategory = rewardCategoryQueue[0] || null
+  const wheelCategory = String(queuedCategory || state.lastAchievementCategory || 'default')
+  const basePool = (rewardWheelPrizePools[wheelCategory] || rewardWheelPrizePools.default) as RewardPrize[]
+  const liquidityTier = getLiquidityTier(Number(state.check || 0), Number(state.savings || 0))
+  const credentials = Array.isArray((state as any).credentials) ? ((state as any).credentials as string[]) : []
+  const tierPool = filterPrizePoolByTier(basePool, liquidityTier)
+  const prizePool = filterPrizePoolByVehicleLicense(tierPool, credentials)
+  const activePrizePool = prizePool.length > 0 ? prizePool : basePool
+  const segmentAngle = activePrizePool.length > 0 ? 360 / activePrizePool.length : 360
 
   const findPrizeIndex = (prize: any) => {
-    if (!prize || prizePool.length === 0) return -1
-    return prizePool.findIndex((candidate: any) => {
+    if (!prize || activePrizePool.length === 0) return -1
+    return activePrizePool.findIndex((candidate: any) => {
       if (candidate.kind !== prize.kind) return false
       if (candidate.kind === 'cash') return Number(candidate.value) === Number(prize.value)
       if (candidate.kind === 'theme') return String(candidate.value) === String(prize.value)
@@ -149,13 +202,13 @@ export default function Rewards() {
   }
 
   const handleAnimatedSpin = async () => {
-    if (isSpinning || Number(state.rewardTokens || 0) <= 0 || prizePool.length === 0) return
+    if (isSpinning || Number(state.rewardTokens || 0) <= 0 || activePrizePool.length === 0) return
     setIsSpinning(true)
 
     const result = await spinRewardWheel()
     const selectedPrize = result?.prize
     let winningIndex = findPrizeIndex(selectedPrize)
-    if (winningIndex < 0) winningIndex = weightedChoiceIndex(prizePool)
+    if (winningIndex < 0) winningIndex = weightedChoiceIndex(activePrizePool)
 
     const centerAngle = (winningIndex * segmentAngle) + (segmentAngle / 2)
     const normalizedCurrent = ((wheelRotation % 360) + 360) % 360
@@ -210,6 +263,14 @@ export default function Rewards() {
     return stacks.sort((a, b) => a.category.localeCompare(b.category))
   }, [typedState, unlockedSet])
 
+  const liquidity = Number(state.check || 0) + Number(state.savings || 0)
+  const tierMeta = {
+    starter: { label: 'Starter', next: 10000 },
+    growth: { label: 'Growth', next: 50000 },
+    established: { label: 'Established', next: 250000 },
+    elite: { label: 'Elite', next: null as number | null }
+  }[liquidityTier]
+
   return (
     <div className="space-y-6">
       <div className="glass p-6">
@@ -242,7 +303,7 @@ export default function Rewards() {
                 className={`roulette-wheel ${isSpinning ? 'roulette-wheel-spinning' : ''}`}
                 style={{
                   transform: `rotate(${wheelRotation}deg)`,
-                  backgroundImage: wheelGradient(prizePool)
+                  backgroundImage: wheelGradient(activePrizePool)
                 }}
               />
               <div className="roulette-center-dot" />
@@ -259,8 +320,21 @@ export default function Rewards() {
 
           <div>
             <p className="text-xs uppercase font-bold text-slate-500 mb-2">Current Prize Pool ({wheelCategory})</p>
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <p><span className="font-bold">Roulette tier:</span> {tierMeta.label} • Liquidity ${liquidity.toLocaleString()}</p>
+              <p className="mt-1">
+                {tierMeta.next
+                  ? `Next tier at $${tierMeta.next.toLocaleString()} (need $${Math.max(0, tierMeta.next - liquidity).toLocaleString()} more)`
+                  : 'Top tier reached. Full roulette pool unlocked.'}
+              </p>
+              <p className="mt-1">
+                {queuedCategory
+                  ? `Next spin category from queue: ${queuedCategory}`
+                  : 'No category queue pending; using latest achievement category fallback.'}
+              </p>
+            </div>
             <div className="space-y-2 mb-3">
-              {prizePool.map((prize, idx) => (
+              {activePrizePool.map((prize, idx) => (
                 <div key={`${prize.label}-${idx}`} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm flex items-center gap-3">
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-full"
@@ -293,7 +367,7 @@ export default function Rewards() {
           >
             Quick Spin (No Animation)
           </button>
-          <span className="text-xs text-slate-500">Prize pool adapts to your latest achievement category.</span>
+          <span className="text-xs text-slate-500">Prize pool now follows queued achievement categories one token at a time.</span>
         </div>
         <div className="space-y-2">
           {rewardHistory.slice(0, 8).map((entry, idx) => (

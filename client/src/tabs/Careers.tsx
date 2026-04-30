@@ -51,13 +51,29 @@ function calculateJobCompatibilityScore(job: Job, credentials: string[], transit
   return Math.max(0, Math.min(100, score))
 }
 
+function buildPrereqChain(credName: string | null, courses: any[]): any[] {
+  if (!credName) return []
+  const chain: any[] = []
+  let current: string | null = credName
+  const seen = new Set<string>()
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const course = courses.find((c: any) => c.n === current)
+    if (!course) break
+    chain.unshift(course)
+    current = course.prereq ?? null
+  }
+  return chain
+}
+
 type SortKey = 'best-match' | 'certificates' | 'transit' | 'highest-pay' | 'lowest-pay' | 'alpha' | 'highest-edu' | 'lowest-edu'
-type CareerView = 'recommended' | 'all'
+type CareerView = 'recommended' | 'all' | 'tree'
 
 export default function Careers() {
-  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility } = useGame()
+  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
   const [view, setView] = useState<CareerView>('all')
+  const [goalJobTitle, setGoalJobTitle] = useState<string>('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all')
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null)
@@ -238,6 +254,10 @@ export default function Careers() {
     })
   }, [recommendations, selectedCategory, selectedSubcategory])
 
+  const goalJob = useMemo(() => (jobBoard as Job[]).find(j => j.title === goalJobTitle) ?? null, [goalJobTitle, jobBoard])
+  const eduChain = useMemo(() => buildPrereqChain(goalJob?.req ?? null, academyCourses as any[]), [goalJob, academyCourses])
+  const certChain = useMemo(() => buildPrereqChain(goalJob?.certReq ?? null, academyCourses as any[]), [goalJob, academyCourses])
+
   return (
     <div>
       {/* Current Job Section */}
@@ -293,6 +313,16 @@ export default function Careers() {
           }`}
         >
           💼 All Jobs
+        </button>
+        <button
+          onClick={() => setView('tree')}
+          className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+            view === 'tree'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          🗺️ Career Path
         </button>
       </div>
 
@@ -674,6 +704,152 @@ export default function Careers() {
             )}
           </div>
         </>
+      )}
+
+      {/* Career Path Planner */}
+      {view === 'tree' && (
+        <div className="space-y-6">
+          <div className="glass p-6">
+            <h3 className="font-bold text-xl mb-2">🗺️ Career Path Planner</h3>
+            <p className="text-sm text-slate-600 mb-4">Select any job to see the full roadmap — education prerequisites, certification chains, transit level, and experience requirements.</p>
+            <select
+              value={goalJobTitle}
+              onChange={e => setGoalJobTitle(e.target.value)}
+              className="w-full p-3 border rounded-xl font-bold text-slate-800 bg-white"
+            >
+              <option value="">— Select a target job —</option>
+              {[...jobBoard].sort((a: Job, b: Job) => a.title.localeCompare(b.title)).map((j: Job) => (
+                <option key={j.title} value={j.title}>{j.title} · ${Math.round(j.base * state.city.p * 0.8).toLocaleString()}/mo</option>
+              ))}
+            </select>
+          </div>
+
+          {!goalJob && (
+            <div className="glass p-12 text-center">
+              <p className="text-5xl mb-4">🗺️</p>
+              <p className="font-bold text-xl text-slate-700">Pick a destination</p>
+              <p className="text-sm text-slate-500 mt-2">Choose a target job above to see exactly what you need to get there.</p>
+            </div>
+          )}
+
+          {goalJob && (() => {
+            const eligibility = getJobEligibility(state, goalJob)
+            const allNeeded = [...eduChain, ...certChain].filter((c: any) => !state.credentials.includes(c.n) && state.activeEdu !== c.n)
+            const totalMonths = allNeeded.reduce((s: number, c: any) => s + c.m, 0)
+            const totalCost = allNeeded.reduce((s: number, c: any) => s + c.c * c.m, 0)
+            return (
+              <div className="space-y-4">
+                {/* Target job header */}
+                <div className={`glass p-6 border-l-4 ${eligibility.canApply ? 'border-emerald-500' : 'border-amber-500'}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-500 mb-1">Target Position</p>
+                      <h3 className="text-2xl font-bold text-slate-900">{goalJob.title}</h3>
+                      <p className="text-emerald-600 font-bold text-lg">${Math.round(goalJob.base * state.city.p * 0.8).toLocaleString()}/mo net</p>
+                    </div>
+                    <span className={`px-4 py-2 rounded-full font-bold text-sm ${eligibility.canApply ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {eligibility.canApply ? '✓ Eligible Now' : '⚠ Not Yet Eligible'}
+                    </span>
+                  </div>
+                  {allNeeded.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-3 gap-4">
+                      <div><p className="text-xs text-slate-500">Credentials Still Needed</p><p className="text-2xl font-bold text-rose-600">{allNeeded.length}</p></div>
+                      <div><p className="text-xs text-slate-500">Time to Complete</p><p className="text-2xl font-bold text-slate-900">{totalMonths} mo</p></div>
+                      <div><p className="text-xs text-slate-500">Total Cost</p><p className="text-2xl font-bold text-rose-600">${totalCost.toLocaleString()}</p></div>
+                    </div>
+                  )}
+                  {allNeeded.length === 0 && (eduChain.length > 0 || certChain.length > 0) && (
+                    <p className="mt-3 text-sm font-bold text-emerald-600">✓ All credential requirements met!</p>
+                  )}
+                </div>
+
+                {/* Education path */}
+                <div className="glass p-6">
+                  <p className="text-xs font-bold uppercase text-slate-500 mb-4">📚 Education Requirement</p>
+                  {eduChain.length === 0 ? (
+                    <p className="text-sm font-bold text-emerald-600">✓ No education required</p>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {eduChain.map((course: any, i: number) => {
+                        const owned = state.credentials.includes(course.n)
+                        const inProgress = state.activeEdu === course.n
+                        return (
+                          <div key={course.n} className="flex items-center gap-2">
+                            <div className={`rounded-xl px-4 py-3 border-2 min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
+                              <div className="text-sm font-bold text-slate-900">{course.icon} {course.n}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">{course.m} mo · ${course.c}/mo</div>
+                              <div className={`text-[10px] font-bold mt-1 ${owned ? 'text-emerald-600' : inProgress ? 'text-amber-600' : 'text-rose-600'}`}>
+                                {owned ? '✓ Owned' : inProgress ? '⏳ In Progress' : '✗ Needed'}
+                              </div>
+                            </div>
+                            {i < eduChain.length - 1 && <span className="text-slate-400 text-xl font-bold">→</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cert path */}
+                <div className="glass p-6">
+                  <p className="text-xs font-bold uppercase text-slate-500 mb-4">🏅 Certificate Requirement</p>
+                  {certChain.length === 0 ? (
+                    <p className="text-sm font-bold text-emerald-600">✓ No certificate required</p>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {certChain.map((course: any, i: number) => {
+                        const owned = state.credentials.includes(course.n)
+                        const inProgress = state.activeEdu === course.n
+                        return (
+                          <div key={course.n} className="flex items-center gap-2">
+                            <div className={`rounded-xl px-4 py-3 border-2 min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
+                              <div className="text-sm font-bold text-slate-900">{course.icon} {course.n}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">{course.m} mo · ${course.c}/mo</div>
+                              <div className={`text-[10px] font-bold mt-1 ${owned ? 'text-emerald-600' : inProgress ? 'text-amber-600' : 'text-rose-600'}`}>
+                                {owned ? '✓ Owned' : inProgress ? '⏳ In Progress' : '✗ Needed'}
+                              </div>
+                            </div>
+                            {i < certChain.length - 1 && <span className="text-slate-400 text-xl font-bold">→</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Transit + Feeder Role */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="glass p-6">
+                    <p className="text-xs font-bold uppercase text-slate-500 mb-3">🚌 Transit Requirement</p>
+                    <div className={`rounded-xl px-4 py-3 border-2 ${state.transit.level >= goalJob.tReq ? 'bg-emerald-50 border-emerald-400' : 'bg-rose-50 border-rose-300'}`}>
+                      <p className="font-bold">Level {goalJob.tReq} required</p>
+                      <p className="text-xs text-slate-500 mt-1">Current: Level {state.transit.level}</p>
+                      <p className={`text-xs font-bold mt-1 ${state.transit.level >= goalJob.tReq ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {state.transit.level >= goalJob.tReq ? '✓ Met' : `✗ Need ${goalJob.tReq - state.transit.level} more level(s)`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="glass p-6">
+                    <p className="text-xs font-bold uppercase text-slate-500 mb-3">💼 Experience Requirement</p>
+                    {!goalJob.expReq ? (
+                      <div className="rounded-xl px-4 py-3 border-2 bg-emerald-50 border-emerald-400">
+                        <p className="font-bold text-emerald-700">✓ No feeder role required</p>
+                      </div>
+                    ) : (
+                      <div className={`rounded-xl px-4 py-3 border-2 ${eligibility.experienceMet ? 'bg-emerald-50 border-emerald-400' : 'bg-amber-50 border-amber-300'}`}>
+                        <p className="font-bold">{goalJob.expReq.roles.join(' or ')}</p>
+                        <p className="text-xs text-slate-500 mt-1">{goalJob.expReq.minMonths} months required</p>
+                        <p className={`text-xs font-bold mt-1 ${eligibility.experienceMet ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {eligibility.experienceMet ? '✓ Met' : '⏳ Gain experience first'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
       )}
 
       {/* Negotiation Modal */}

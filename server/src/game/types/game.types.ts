@@ -242,6 +242,7 @@ export interface GameState {
   unlockedThemes: string[];
   activeTheme: string;
   rewardTokens: number;
+  rewardCategoryQueue: string[];
   lastAchievementCategory?: string | null;
 
   // Financials
