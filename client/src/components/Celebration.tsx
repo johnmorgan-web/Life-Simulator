@@ -34,7 +34,7 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
 
     // Trigger confetti
     const isTherapistCelebration = event === 'rainbow'
-    const duration = isTherapistCelebration ? 3500 : 5000
+    const duration = isTherapistCelebration ? 500 : 1000
     const end = Date.now() + duration
     let frameCount = 0
 
