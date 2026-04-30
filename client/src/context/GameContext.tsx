@@ -1,5 +1,5 @@
 // During migration we re-export the existing JS implementation to avoid duplication.
-import React, { createContext, useContext, useEffect, useReducer } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import cityData from '../constants/cityData.constants'
 import rawJobBoard from '../constants/jobBoard.constants'
 import lifeEvents from '../constants/lifeEvents.constants'
@@ -9,25 +9,178 @@ import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
-import { achievementRules, rewardWheelPrizePools, rewardWheelVehicleGrantPool } from '../constants/achievements.constants'
-import type { Job, Application, LifeEvent } from '@server/types/models.types'
+import { achievementRules } from '../constants/achievements.constants'
+import type { Job, LifeEvent } from '@server/types/models.types'
+import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta'])
+const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username'])
+const APPEND_ONLY_STATE_KEYS = new Set([
+	'logs',
+	'eventHistory',
+	'careerHistory',
+	'credentialHistory',
+	'applications',
+	'achievementHistory',
+	'rewardHistory',
+	'subscriptionBadges',
+	'vehicleHistory',
+])
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
+let cachedUserSnapshots: any[] = []
+
+function setCachedUserSnapshots(users: any[]) {
+	cachedUserSnapshots = Array.isArray(users) ? users : []
+}
+
 function getRegisteredUserCount() {
-	try {
-		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-		return Math.max(1, Array.isArray(users) ? users.length : 1)
-	} catch (e) {
-		return 1
-	}
+	return Math.max(1, Array.isArray(cachedUserSnapshots) ? cachedUserSnapshots.length : 1)
 }
 
 function capacityScaleForUsers(registeredUsers: number) {
 	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 2x.
 	return Math.min(2, Math.max(1, 0.7 + registeredUsers * 0.3))
+}
+
+async function authenticateUser(username: string, password: string) {
+	const payload = JSON.stringify({ username, password })
+	const headers = { 'Content-Type': 'application/json' }
+
+	const loginResponse = await fetch(`${API_BASE_URL}/users/login`, {
+		method: 'POST',
+		headers,
+		body: payload
+	})
+
+	if (!loginResponse.ok) return null
+	return loginResponse.json()
+}
+
+async function registerUser(username: string, name: string, password: string) {
+	const payload = JSON.stringify({ username, name, password })
+	const headers = { 'Content-Type': 'application/json' }
+
+	const registerResponse = await fetch(`${API_BASE_URL}/users`, {
+		method: 'POST',
+		headers,
+		body: payload
+	})
+
+	if (!registerResponse.ok) return null
+	return registerResponse.json()
+}
+
+async function fetchUserById(id: string) {
+	const response = await fetch(`${API_BASE_URL}/users/${id}`)
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function fetchAllUsers() {
+	const response = await fetch(`${API_BASE_URL}/users`)
+	if (!response.ok) return []
+	const users = await response.json()
+	return Array.isArray(users) ? users : []
+}
+
+async function persistUserState(id: string, state: any) {
+	const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(state),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function spinRewardWheelForUser(id: string) {
+	const response = await fetch(`${API_BASE_URL}/game/${id}/spin-reward`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function evaluateApplicationsOnServer(state: any) {
+	const applications = Array.isArray(state?.applications) ? state.applications : []
+	const jobTitles: string[] = Array.from(
+		new Set(
+			applications
+				.map((app: any) => String(app?.job?.title || '').trim())
+				.filter((title: string) => !!title),
+		),
+	)
+	const compactState = buildApplicationsRequestState(state, jobTitles)
+
+	const response = await fetch(`${API_BASE_URL}/game/evaluate-applications`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: compactState }),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function applyForJobOnServer(state: any, jobTitle: string) {
+	const compactState = buildApplicationsRequestState(state, [jobTitle])
+
+	const response = await fetch(`${API_BASE_URL}/game/apply-job`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: compactState, jobTitle }),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+function buildApplicationsRequestState(source: any, relevantJobTitles: string[] = []) {
+	const snapshot = source || {}
+	const requestedTitles = Array.from(
+		new Set(
+			relevantJobTitles
+				.map((title: string) => String(title || '').trim())
+				.filter((title: string) => !!title),
+		),
+	)
+
+	const compactJobMarket = requestedTitles.reduce((acc: Record<string, any>, title: string) => {
+		const slot = snapshot?.jobMarket?.[title]
+		if (!slot || typeof slot !== 'object') return acc
+		acc[title] = {
+			capacity: Number(slot.capacity || 0),
+			occupied: Number(slot.occupied || 0),
+		}
+		return acc
+	}, {})
+
+	return {
+		month: Number(snapshot.month || 0),
+		year: Number(snapshot.year || 0),
+		credit: Number(snapshot.credit || 0),
+		tenure: Number(snapshot.tenure || 0),
+		credentials: Array.isArray(snapshot.credentials) ? snapshot.credentials : [],
+		transit: {
+			level: Number(snapshot?.transit?.level || 0),
+		},
+		job: snapshot?.job?.title
+			? {
+				title: snapshot.job.title,
+			}
+			: null,
+		careerHistory: Array.isArray(snapshot.careerHistory)
+			? snapshot.careerHistory.map((entry: any) => ({
+				title: entry?.title,
+				months: Number(entry?.months || 0),
+			}))
+			: [],
+		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
+		jobMarket: compactJobMarket,
+	}
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -395,10 +548,10 @@ function writeSharedRealEstateMarket(market: Record<string, any[]>) {
 
 function getUserCityCounts(liveSnapshot?: any) {
 	const userCityMap = new Map<string, string>()
-	for (const user of listSavedUsers()) {
-		const snapshot = loadStateForUser(user)
+	for (const snapshot of cachedUserSnapshots) {
+		const username = String(snapshot?.username || snapshot?.currentUser || '').trim()
 		const cityName = snapshot?.city?.name
-		if (cityName) userCityMap.set(user, cityName)
+		if (username && cityName) userCityMap.set(username, cityName)
 	}
 	if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
 		userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name))
@@ -733,50 +886,6 @@ function generateAchievementUnlocks(snapshot: any) {
 		}
 	}
 	return unlockedNow
-}
-
-function addOrUpdateHolding(portfolio: any[], ticker: string, shares: number, price: number) {
-	const next = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : []
-	const idx = next.findIndex((h: any) => h.ticker === ticker)
-	const totalCost = round2(shares * price)
-	if (idx >= 0) {
-		const existing = next[idx]
-		const existingShares = Number(existing.shares || 0)
-		const existingAvg = Number(existing.avgCost || price)
-		const totalShares = existingShares + shares
-		const avgCost = totalShares > 0 ? round2(((existingShares * existingAvg) + totalCost) / totalShares) : round2(price)
-		next[idx] = { ...existing, shares: totalShares, avgCost }
-	} else {
-		next.push({ ticker, shares, avgCost: round2(price) })
-	}
-	return next
-}
-
-function chooseWeightedPrize(pool: any[]) {
-	const totalWeight = pool.reduce((sum, p) => sum + Number(p.weight || 1), 0)
-	let roll = Math.random() * totalWeight
-	let chosen = pool[pool.length - 1]
-	for (const p of pool) {
-		roll -= Number(p.weight || 1)
-		if (roll <= 0) {
-			chosen = p
-			break
-		}
-	}
-	return chosen
-}
-
-function spinRewardPrize(state: any, forcedPrize?: any) {
-	const category = state.lastAchievementCategory || 'wealth'
-	const pool = rewardWheelPrizePools[category] || rewardWheelPrizePools.default
-	const chosen = forcedPrize || chooseWeightedPrize(pool)
-
-	if (chosen.kind === 'vehicle') {
-		const randomVehicleId = rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)]
-		return { ...chosen, vehicleId: randomVehicleId }
-	}
-
-	return chosen
 }
 
 function scoreStockSignal(asset: any, price: number, prevPrice: number, portfolioValue: number, positionValue: number) {
@@ -1297,172 +1406,42 @@ function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, cur
 	return Math.round(baseMaintenance * 100) / 100
 }
 
-// Save and load helpers (localStorage) - supports named saves + autosave
-interface SaveFile {
-	name: string
-	timestamp: number
-	isAutoSave: boolean
-}
-
-function saveStateForUser(user: string, state: any, saveName?: string) {
-	try {
-		const isAutoSave = !saveName || saveName === '__autosave__'
-		const fileName = saveName || '__autosave__'
-		
-		// Save the game state
-		localStorage.setItem(`life-sim:${user}:${fileName}`, JSON.stringify(state))
-		
-		// Update saves index for this user
-		const savesKey = `life-sim:saves:${user}`
-		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
-		
-		// Remove existing entry if it's being overwritten
-		saves = saves.filter(s => s.name !== fileName)
-		
-		// Add new save
-		saves.push({
-			name: fileName,
-			timestamp: Date.now(),
-			isAutoSave
-		})
-		
-		// Keep only last 5 saves, prioritize autosave
-		if (saves.length > 5) {
-			const autoSave = saves.find(s => s.isAutoSave)
-			const nonAutoSaves = saves.filter(s => !s.isAutoSave)
-			const keptNonAuto = nonAutoSaves.slice(-4)
-			saves = autoSave ? [autoSave, ...keptNonAuto] : keptNonAuto
-			
-			// Delete removed saves from storage
-			for (const save of saves.filter(s => s.isAutoSave === false)) {
-				const saveIndex = saves.indexOf(save)
-				if (saveIndex >= 5) {
-					localStorage.removeItem(`life-sim:${user}:${save.name}`)
-				}
-			}
-		}
-		
-		localStorage.setItem(savesKey, JSON.stringify(saves))
-		
-		// maintain user index
-		const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-		if (!users.includes(user)) {
-			users.push(user)
-			localStorage.setItem('life-sim-keys', JSON.stringify(users))
-		}
-		
-		return true
-	} catch (e) {
-		console.error('Save failed', e)
-		return false
+function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
+	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
+	const marketPrices = normalizeMarketPrices(data.marketPrices)
+	const realEstateState = normalizeRealEstateState(data)
+	return {
+		...data,
+		...realEstateState,
+		currentUser,
+		entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
+		subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
+		subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
+		subscriptionBadges: data.subscriptionBadges ?? [],
+		entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
+		happiness: data.happiness ?? 70,
+		workPenaltyPercent: data.workPenaltyPercent ?? 0,
+		marketPrices,
+		marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+		portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+		marketLearningLevel: data.marketLearningLevel ?? 'adult',
+		marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
+		realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
+		realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
+		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
+		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
+		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
+		totalGasPaid: Number(data.totalGasPaid ?? 0),
+		totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
+		maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
+		achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
+		achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
+		rewardTokens: Number(data.rewardTokens ?? 0),
+		lastAchievementCategory: data.lastAchievementCategory ?? null,
+		unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
+		activeTheme: data.activeTheme ?? 'default',
+		rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : [],
 	}
-}
-
-function loadStateForUser(user: string, saveName?: string) {
-	try {
-		const fileName = saveName || '__autosave__'
-		const raw = localStorage.getItem(`life-sim:${user}:${fileName}`)
-		if (!raw) return null
-		return JSON.parse(raw)
-	} catch (e) {
-		console.error('Load failed', e)
-		return null
-	}
-}
-
-function listSavedUsers() {
-	try {
-		return JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-	} catch (e) {
-		return []
-	}
-}
-
-function listSavesForUser(user: string): SaveFile[] {
-	try {
-		const saves = JSON.parse(localStorage.getItem(`life-sim:saves:${user}`) || '[]')
-		// Sort: autosave first, then by timestamp descending
-		return saves.sort((a: SaveFile, b: SaveFile) => {
-			if (a.isAutoSave) return -1
-			if (b.isAutoSave) return 1
-			return b.timestamp - a.timestamp
-		})
-	} catch (e) {
-		return []
-	}
-}
-
-function deleteSaveForUser(user: string, saveName: string) {
-	try {
-		localStorage.removeItem(`life-sim:${user}:${saveName}`)
-		const savesKey = `life-sim:saves:${user}`
-		let saves: SaveFile[] = JSON.parse(localStorage.getItem(savesKey) || '[]')
-		saves = saves.filter(s => s.name !== saveName)
-		localStorage.setItem(savesKey, JSON.stringify(saves))
-		return true
-	} catch (e) {
-		console.error('Delete save failed', e)
-		return false
-	}
-}
-
-function renameSaveForUser(user: string, oldName: string, newName: string) {
-	try {
-		// Check name doesn't already exist
-		const saves = listSavesForUser(user)
-		if (saves.some(s => s.name === newName)) {
-			return false // Name already exists
-		}
-		
-		// Copy state to new name
-		const state = loadStateForUser(user, oldName)
-		if (!state) return false
-		
-		// Save with new name
-		saveStateForUser(user, state, newName)
-		
-		// Delete old
-		deleteSaveForUser(user, oldName)
-		return true
-	} catch (e) {
-		console.error('Rename save failed', e)
-		return false
-	}
-}
-
-// Deterministic seasonal + noise multiplier based on year/month/category/cityName
-function variableMultiplier(year: number, month: number, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
-	const seasonal: Record<string, number[]> = {
-		utilities: [0.02, 0.03, 0.02, 0.00, -0.01, -0.02, 0.03, 0.03, 0.01, 0.00, 0.01, 0.04],
-		food: [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.00, 0.01, 0.00, 0.00, 0.03, 0.04],
-		gas: [0.01, 0.01, 0.00, 0.00, 0.00, 0.03, 0.04, 0.03, 0.01, 0.00, 0.00, 0.00],
-		car: [0.02, 0.02, 0.01, 0.00, 0.00, -0.01, -0.01, 0.00, 0.01, 0.02, 0.02, 0.02],
-		entertainment: [0.00, 0.02, 0.03, 0.02, 0.01, 0.00, -0.01, 0.00, 0.01, 0.02, 0.03, 0.04]
-	}
-
-	const m = Math.max(1, Math.min(12, Math.floor(month)))
-	const season = (seasonal[category] && seasonal[category][m - 1]) || 0
-
-	// Build a seed from year, month, category, and city name to ensure reproducibility across playthroughs
-	let catHash = 0
-	for (let i = 0; i < category.length; i++) catHash = (catHash * 31 + category.charCodeAt(i)) >>> 0
-	let cityHash = 0
-	for (let i = 0; i < cityName.length; i++) cityHash = (cityHash * 31 + cityName.charCodeAt(i)) >>> 0
-	const seed = (year * 100 + m) ^ catHash ^ cityHash
-	const rnd = mulberry32(seed)()
-	// deterministic noise in [-0.02, 0.02]
-	const noise = rnd * 0.04 - 0.02
-
-	let adjust = season + noise
-	if (adjust > 0.05) adjust = 0.05
-	if (adjust < -0.05) adjust = -0.05
-
-	return 1 + adjust
-}
-
-function variableCost(base: number, month: number, year: number, cityMultiplier = 1, category: 'utilities' | 'food' | 'gas' | 'car' | 'entertainment', cityName: string = '') {
-	const mult = variableMultiplier(year, month, category, cityName)
-	return fix(base * cityMultiplier * mult)
 }
 
 function transitStateByName(name: string) {
@@ -1675,6 +1654,8 @@ function reducer(state: State, action: any) {
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
+			let lastNegotiationMonth = state.lastNegotiationMonth
+			let lastNegotiationYear = state.lastNegotiationYear
 			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'achievement' | 'rainbow' | null
 			
 			// Credit tracking
@@ -1766,6 +1747,8 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Started job: ${state.pendingJob.title}` })
 				// reset tenure and start times and set new job start
 				tenure = 0
+				lastNegotiationMonth = null
+				lastNegotiationYear = null
 				// Trigger celebration for job acceptance/promotion
 				celebration = isPromotion ? 'promotion' : 'job-accepted'
 			} else {
@@ -2424,6 +2407,8 @@ function reducer(state: State, action: any) {
 				pendingJob: pendingJobToApply,
 				jobStartMonth: state.pendingJob ? nextMonth : state.jobStartMonth,
 				jobStartYear: state.pendingJob ? nextYear : state.jobStartYear,
+				lastNegotiationMonth,
+				lastNegotiationYear,
 				lastAutoBumpMonth: newLastAutoBumpMonth,
 				lastAutoBumpYear: newLastAutoBumpYear,
 				entertainmentSpending: nextEntertainmentBudgets.entertainmentBudget,
@@ -2584,65 +2569,6 @@ function reducer(state: State, action: any) {
 				logs
 			}
 		}
-		case 'SPIN_REWARD_WHEEL': {
-			if (Number(state.rewardTokens || 0) <= 0) return state
-			const prize = spinRewardPrize(state, action.payload?.forcedPrize)
-			let check = Number(state.check || 0)
-			let portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
-			let garage = Array.isArray(state.garage) ? [...state.garage] : []
-			let ownsVehicle = state.ownsVehicle
-			let unlockedThemes = Array.isArray(state.unlockedThemes) ? [...state.unlockedThemes] : ['default']
-			const logs = [...state.logs]
-			const rewardHistory = Array.isArray(state.rewardHistory) ? [...state.rewardHistory] : []
-
-			if (prize.kind === 'cash') {
-				check = round2(check + Number(prize.value || 0))
-				logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: ${prize.label}` })
-			} else if (prize.kind === 'theme') {
-				if (!unlockedThemes.includes(prize.value)) unlockedThemes.push(prize.value)
-				logs.push({ date: `${state.month}/${state.year}`, msg: `🎨 Reward wheel: unlocked theme ${prize.value}` })
-			} else if (prize.kind === 'stock') {
-				const marketPrice = Number(state.marketPrices?.[prize.ticker] || 0)
-				if (marketPrice > 0 && Number(prize.shares || 0) > 0) {
-					portfolio = addOrUpdateHolding(portfolio, prize.ticker, Number(prize.shares), marketPrice)
-					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: granted ${prize.shares} ${prize.ticker} shares` })
-				}
-			} else if (prize.kind === 'vehicle') {
-				const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === prize.vehicleId)
-				if (vehicle) {
-					const rewardCar = {
-						id: `reward-${prize.vehicleId}-${Date.now()}`,
-						vehicleId: vehicle.id,
-						vehicleName: vehicle.name,
-						purchasePrice: vehicle.newPrice,
-						currentValue: vehicle.newPrice,
-						condition: 'new',
-						financed: false,
-						monthsRemaining: 0,
-						monthlyPayment: 0,
-						purchaseMonth: state.month,
-						purchaseYear: state.year,
-						for_sale: false
-					}
-					garage.push(rewardCar)
-					if (!ownsVehicle) ownsVehicle = rewardCar
-					logs.push({ date: `${state.month}/${state.year}`, msg: `🎁 Reward wheel: gifted vehicle ${vehicle.name}` })
-				}
-			}
-
-			rewardHistory.unshift({ month: state.month, year: state.year, label: prize.label || prize.kind, category: state.lastAchievementCategory || 'general' })
-			return {
-				...state,
-				check,
-				portfolio,
-				garage,
-				ownsVehicle,
-				unlockedThemes: Array.from(new Set(unlockedThemes)),
-				rewardTokens: Math.max(0, Number(state.rewardTokens || 0) - 1),
-				rewardHistory: rewardHistory.slice(0, 40),
-				logs
-			}
-		}
 		case 'SET_STATE':
 			return { ...state, ...action.payload }
 		default:
@@ -2652,296 +2578,232 @@ function reducer(state: State, action: any) {
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
+	const stateRef = useRef(state)
+	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
+	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
+	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
+	const dirtyStateKeysRef = useRef<Set<string>>(new Set())
+	const trackedStateRef = useRef<any>(initialState)
+	const savedStateRef = useRef<any>(initialState)
+
+	useEffect(() => {
+		stateRef.current = state
+	}, [state])
+
+	useEffect(() => {
+		const previous = trackedStateRef.current || {}
+		const current = state || {}
+		const allKeys = new Set([...Object.keys(previous), ...Object.keys(current)])
+		for (const key of allKeys) {
+			if (NON_PERSISTED_STATE_KEYS.has(key) || CLIENT_ONLY_STATE_KEYS.has(key)) continue
+			if (previous[key] !== current[key]) dirtyStateKeysRef.current.add(key)
+		}
+		trackedStateRef.current = current
+	}, [state])
+
+	function resetDirtyTracking(snapshot: any) {
+		const normalized = snapshot || {}
+		trackedStateRef.current = normalized
+		savedStateRef.current = normalized
+		dirtyStateKeysRef.current.clear()
+	}
+
+	function sameEntry(a: any, b: any) {
+		if (a === b) return true
+		if (a == null || b == null) return false
+		if (typeof a !== 'object' || typeof b !== 'object') return a === b
+		return JSON.stringify(a) === JSON.stringify(b)
+	}
+
+	function buildPartialStateUpdate(snapshot: any) {
+		const source = snapshot || {}
+		const baseline = savedStateRef.current || {}
+		const payload: Record<string, any> = {}
+		const appendPayload: Record<string, any[]> = {}
+		const keys = Array.from(dirtyStateKeysRef.current)
+
+		for (const key of keys) {
+			if (NON_PERSISTED_STATE_KEYS.has(key) || CLIENT_ONLY_STATE_KEYS.has(key)) continue
+			if (!(key in source)) continue
+			const value = source[key]
+			if (value === undefined) continue
+			const previousValue = baseline[key]
+
+			if (APPEND_ONLY_STATE_KEYS.has(key) && Array.isArray(value) && Array.isArray(previousValue)) {
+				const baselineLength = previousValue.length
+				const canAppend = value.length >= baselineLength && (baselineLength === 0 || sameEntry(value[baselineLength - 1], previousValue[baselineLength - 1]))
+
+				if (canAppend) {
+					const appended = value.slice(baselineLength)
+					if (appended.length > 0) appendPayload[key] = appended
+					continue
+				}
+			}
+
+			payload[key] = value
+		}
+
+		if (Object.keys(appendPayload).length > 0) {
+			payload._append = appendPayload
+		}
+
+		return Object.keys(payload).length > 0 ? payload : null
+	}
+
+	async function refreshPeerSnapshots() {
+		try {
+			const users = await fetchAllUsers()
+			setCachedUserSnapshots(users)
+			setPeerSnapshots(users)
+		} catch (e) {
+			console.error('Failed to refresh user snapshots', e)
+		}
+	}
+
+	const cityUserCounts = useMemo(() => getUserCityCounts(state), [peerSnapshots, state.currentUser, state.city?.name])
+	const affluenceComparison = useMemo(() => getAffluenceComparison({ currentState: state, peerSnapshots }), [peerSnapshots, state])
 
 	useEffect(() => {
 		buildLedger()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
-	function buildLedger(paySave = 0, payDebt = 0) {
-		const ledger: any[] = []
-		let id = 0
+	useEffect(() => {
+		refreshPeerSnapshots()
+	}, [])
 
-		// Start with previous balance after payments
-		let bal = state.check - paySave - payDebt;
-		ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true })
-		
-		// Get current job and calculate net salary
-		const job = state.pendingJob || state.job
-		const applyLedgerDecimalVariance = (amount: number, key: string) => {
-			if (amount <= 0) return 0
-			const seedText = `${state.year}-${state.month}-${state.city.name}-${job.title}-${key}`
-			let hash = 0
-			for (let i = 0; i < seedText.length; i++) hash = (hash * 31 + seedText.charCodeAt(i)) >>> 0
-			const offset = ((hash % 91) - 45) / 100 // deterministic +/- $0.45 variance
-			return fix(Math.max(0.01, amount + offset))
-		}
-		const grossSalary = fix(job.base * state.city.p)
-		const baseNetSalary = fix(grossSalary * 0.8)
-		const workPenaltyPercent = Math.max(0, Math.min(0.35, state.workPenaltyPercent || 0))
-		const netSalary = applyLedgerDecimalVariance(fix(baseNetSalary * (1 - workPenaltyPercent)), 'net-salary') // 80% after taxes + attendance adjustment
-		
-		// INCOME
-		bal = fix(bal + netSalary)
-		ledger.push({ id: id++, desc: `Net Salary: ${job.title}${workPenaltyPercent > 0 ? ` (${(workPenaltyPercent * 100).toFixed(1)}% attendance impact)` : ''}`, amt: netSalary, type: 'inc', bal, done: false })
+	function enqueueLedgerEventNotifications(events: any[]) {
+		if (!Array.isArray(events) || events.length === 0) return
 
-		const realEstateIncome = Math.max(0, Number(state.realEstateLastMonthIncome || 0))
-		const realEstateExpenses = Math.max(0, Number(state.realEstateLastMonthExpenses || 0))
-		const realEstatePropertyBreakdown = Array.isArray(state.realEstateLastMonthPropertyBreakdown)
-			? state.realEstateLastMonthPropertyBreakdown
-			: []
-		if (realEstateIncome > 0) {
-			if (state.luxuryServices?.housekeeper) {
-				bal = fix(bal + realEstateIncome)
-				ledger.push({
-					id: id++,
-					desc: 'Rental Income (Managed Portfolio)',
-					amt: realEstateIncome,
-					type: 'inc',
-					bal,
-					done: false,
-					details: realEstatePropertyBreakdown
-						.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
-						.map((entry: any) => `${entry.propertyName} (${entry.cityName}): $${Math.round(Number(entry.grossIncome || 0)).toLocaleString()}`)
-				})
-			} else {
-				const incomeRows = realEstatePropertyBreakdown.filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
-				if (incomeRows.length > 0) {
-					for (const entry of incomeRows) {
-						const grossIncome = Math.max(0, Number(entry.grossIncome || 0))
-						bal = fix(bal + grossIncome)
-						ledger.push({
-							id: id++,
-							desc: `Rental Income: ${entry.propertyName} (${entry.cityName})`,
-							amt: grossIncome,
-							type: 'inc',
-							bal,
-							done: false
-						})
-					}
-				} else {
-					bal = fix(bal + realEstateIncome)
-					ledger.push({ id: id++, desc: 'Rental Income (Last Month)', amt: realEstateIncome, type: 'inc', bal, done: false })
-				}
-			}
-		}
-		if (realEstateExpenses > 0) {
-			bal = fix(bal - realEstateExpenses)
-			ledger.push({ id: id++, desc: 'Rental Operating Costs (Last Month)', amt: realEstateExpenses, type: 'out', bal, done: false })
-		}
-		
-		// HOUSING - Dynamic rent based on 30% of salary
-		const rent = applyLedgerDecimalVariance(fix(netSalary * gameValues.rentPercentOfSalary * state.city.r), 'rent')
-		bal = fix(bal - rent)
-		ledger.push({ id: id++, desc: `Housing/Rent Payment`, amt: rent, type: 'out', bal, done: false })
-		const mortgagePayment = Math.max(
-			0,
-			Number(state.house?.mortgagePayment ?? state.house?.monthlyPayment ?? state.house?.mortgage ?? 0)
-		)
-		const housingPaymentForUtilities = mortgagePayment > 0 ? mortgagePayment : rent
-		
-		// TRANSPORTATION
-		// If chauffeur hired, no gas/transit cost (chauffeur covers it)
-		if (!state.luxuryServices.chauffer) {
-			// Transit cost
-			const transitCost = applyLedgerDecimalVariance(state.transit.cost, `transit-${state.transit.name}`)
-			bal = fix(bal - transitCost)
-			ledger.push({ id: id++, desc: `Transit: ${state.transit.name}`, amt: transitCost, type: 'out', bal, done: false })
-			
-			// Gas cost (if not using L1 Walk/Bike and no vehicle owned - vehicle costs handled separately)
-			if (state.transit.level > 1 && !(state.garage && state.garage.length > 0)) {
-				const gas = variableCost(gameValues.gasCostPercentOfSalary * 0.5, state.month, state.year, state.city.p, 'gas', state.city.name)
-				const carMaint = variableCost(gameValues.carMaintenance, state.month, state.year, state.city.p, 'car', state.city.name)
-				const gasAndMaint = applyLedgerDecimalVariance(fix(gas + carMaint), 'gas-maint-no-vehicle')
-				bal = fix(bal - gasAndMaint)
-				ledger.push({ id: id++, desc: 'Gas & Car Maintenance', amt: gasAndMaint, type: 'out', bal, done: false })
-			}
-		} else {
-			// Chauffeur cost handled in luxury services section
-		}
-		
-		// UTILITIES & PHONE (utilities track your rent/mortgage burden and vary seasonally)
-		const utilitiesBase = fix(housingPaymentForUtilities * 0.12)
-		const utilities = variableCost(utilitiesBase, state.month, state.year, 1, 'utilities', state.city.name)
-		const phoneInternet = gameValues.phoneInternetBase
-		const totalUtilities = applyLedgerDecimalVariance(fix(utilities + phoneInternet), 'utilities-phone')
-		bal = fix(bal - totalUtilities)
-		ledger.push({ id: id++, desc: 'Utilities & Phone/Internet', amt: totalUtilities, type: 'out', bal, done: false })
-		
-		// FOOD - If personal chef hired, no food costs (chef provides meals)
-		if (!state.luxuryServices.chef) {
-			const foodCost = applyLedgerDecimalVariance(variableCost(gameValues.FoodCostPercentOfSalary * 0.8, state.month, state.year, state.city.p, 'food', state.city.name), 'food')
-			bal = fix(bal - foodCost)
-			ledger.push({ id: id++, desc: 'Food & Groceries', amt: foodCost, type: 'out', bal, done: false })
-		}
-		
-		// ENTERTAINMENT
-		const entertainmentCap = entertainmentCapForSalary(job, state.city)
-		const adjustedEntertainment = autoAdjustEntertainmentBudgets(
-			state.entertainmentSpending || 0,
-			state.subscriptionEntertainmentSpending || 0,
-			state.year,
-			state.month,
-			job.title,
-			state.city.name,
-			entertainmentCap
-		)
-
-		if (adjustedEntertainment.entertainmentBudget > 0) {
-			const entertainmentCost = applyLedgerDecimalVariance(
-				variableCost(adjustedEntertainment.entertainmentBudget, state.month, state.year, 1, 'entertainment', state.city.name),
-				'entertainment-general'
-			)
-			bal = fix(bal - entertainmentCost)
-			ledger.push({ id: id++, desc: 'Entertainment', amt: entertainmentCost, type: 'out', bal, done: false })
-		}
-
-		if (adjustedEntertainment.subscriptionBudget > 0) {
-			const subscriptionCost = applyLedgerDecimalVariance(
-				variableCost(adjustedEntertainment.subscriptionBudget, state.month, state.year, 1, 'entertainment', `${state.city.name}-subs`),
-				'entertainment-subscriptions'
-			)
-			bal = fix(bal - subscriptionCost)
-			ledger.push({ id: id++, desc: 'Subscription Entertainment', amt: subscriptionCost, type: 'out', bal, done: false })
-		}
-
-		const stockInvestDebit = fix(Number(state.stockInvestedLastMonth || 0))
-		if (stockInvestDebit > 0) {
-			bal = fix(bal - stockInvestDebit)
-			ledger.push({ id: id++, desc: 'Stock Investments (Cost Basis)', amt: stockInvestDebit, type: 'out', bal, done: false })
-		}
-		
-		// EDUCATION - If currently studying
-		if (state.activeEdu) {
-			const course = academyCourses.find(c => c.n === state.activeEdu)
-			const cost = applyLedgerDecimalVariance(course ? course.c : 1000, `tuition-${state.activeEdu}`)
-			bal = fix(bal - cost)
-			ledger.push({ id: id++, desc: `Tuition: ${state.activeEdu}`, amt: cost, type: 'out', bal, done: false })
-		}
-		
-		// VEHICLE COSTS - Monthly payment, gas, maintenance
-		if (state.garage && state.garage.length > 0) {
-			state.garage.forEach((g: any) => {
-				const vehicle = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
-				if (!vehicle) return
-
-				// Loan payment
-				if (g.monthsRemaining > 0) {
-					const payment = applyLedgerDecimalVariance(g.monthlyPayment, `vehicle-payment-${g.id}`)
-					bal = fix(bal - payment)
-					ledger.push({ id: id++, desc: `Vehicle Loan Payment: ${g.vehicleName}`, amt: payment, type: 'out', bal, done: false })
-				}
-
-				if (!state.luxuryServices.chauffer) {
-					// Monthly gas for this vehicle
-					const gasCost = calculateMonthlyGasCost(g)
-					if (gasCost > 0) {
-						const adjustedGasCost = applyLedgerDecimalVariance(gasCost, `vehicle-gas-${g.id}`)
-						bal = fix(bal - adjustedGasCost)
-						ledger.push({ id: id++, desc: `Gas: ${g.vehicleName}`, amt: adjustedGasCost, type: 'out', bal, done: false })
-					}
-
-					// Monthly maintenance for this vehicle
-					const maintCost = calculateMonthlyMaintenanceCost(g, state.month, state.year)
-					if (maintCost > 0) {
-						const adjustedMaintCost = applyLedgerDecimalVariance(maintCost, `vehicle-maint-${g.id}`)
-						bal = fix(bal - adjustedMaintCost)
-						ledger.push({ id: id++, desc: `Maintenance: ${g.vehicleName}`, amt: adjustedMaintCost, type: 'out', bal, done: false })
-					}
-				}
+		const fresh = events
+			.filter((event: any) => event && typeof event === 'object')
+			.map((event: any, idx: number) => ({
+				id: String(event.id || `stmt-event-${event.year || stateRef.current.year}-${event.month || stateRef.current.month}-${idx}`),
+				title: String(event.title || 'Life Event'),
+				amount: Number(event.amount || 0),
+				type: event.type === 'in' ? 'in' : 'out',
+				icon: String(event.icon || '🗞️'),
+				desc: String(event.desc || ''),
+				trigger: String(event.trigger || 'general'),
+				month: Number(event.month || stateRef.current.month),
+				year: Number(event.year || stateRef.current.year),
+			}))
+			.filter((event: any) => {
+				const key = `${event.id}:${event.month}:${event.year}`
+				if (seenLedgerEventKeysRef.current.has(key)) return false
+				seenLedgerEventKeysRef.current.add(key)
+				return true
 			})
-		}
-		
-		// LUXURY SERVICES
-		let luxuryCosts = 0
-		const luxuryServicesList: string[] = []
-		const luxuryLineItems: Array<{ desc: string; amt: number }> = []
-		const netMonthlyIncome = totalMonthlyIncomeForLuxuryPricing(state)
-		const propertyCount = Array.isArray(state.investmentProperties) ? state.investmentProperties.length : 0
-		const luxuryServiceConfigs = [
-			{ id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
-			{ id: 'housekeeper', label: 'Housekeeper', varianceKey: 'luxury-housekeeper' },
-			{ id: 'chauffer', label: 'Chauffeur', varianceKey: 'luxury-chauffeur' },
-			{ id: 'therapist', label: 'Therapist', varianceKey: 'luxury-therapist' },
-			{ id: 'trainer', label: 'Trainer', varianceKey: 'luxury-trainer' },
-			{ id: 'concierge', label: 'Concierge', varianceKey: 'luxury-concierge' },
-			{ id: 'accountant', label: 'Accountant', varianceKey: 'luxury-accountant' }
-		]
 
-		for (const cfg of luxuryServiceConfigs) {
-			if (!(state.luxuryServices as any)?.[cfg.id]) continue
-			const baseCost = calculateLuxuryServiceMonthlyPay(cfg.id, netMonthlyIncome, { propertyCount })
-			const adjustedCost = applyLedgerDecimalVariance(baseCost, cfg.varianceKey)
-			luxuryCosts += adjustedCost
-			luxuryServicesList.push(`${cfg.label}: $${adjustedCost}`)
-			luxuryLineItems.push({ desc: `Luxury Service: ${cfg.label}`, amt: adjustedCost })
-		}
-		
-		if (luxuryCosts > 0) {
-			if (state.luxuryServices.housekeeper) {
-				bal = fix(bal - luxuryCosts)
-				ledger.push({ 
-					id: id++, 
-					desc: `Luxury Services (${luxuryServicesList.length})`, 
-					amt: luxuryCosts, 
-					type: 'out', 
-					bal, 
-					done: false,
-					details: luxuryServicesList
-				})
-			} else {
-				for (const line of luxuryLineItems) {
-					bal = fix(bal - line.amt)
-					ledger.push({
-						id: id++,
-						desc: line.desc,
-						amt: line.amt,
-						type: 'out',
-						bal,
-						done: false
-					})
-				}
-			}
-		}
-
-		if (state.luxuryServices?.accountant) {
-			const first = ledger[0]
-			const others = ledger.slice(1)
-			const totalDebits = fix(others.reduce((sum, row) => row?.type === 'out' ? sum + Number(row?.amt || 0) : sum, 0))
-			const nonDebitRows = others.filter((row) => row?.type !== 'out')
-
-			let runningBal = Number(first?.bal || 0)
-			const simplified: any[] = [{ ...first, id: 0, bal: runningBal, done: true }]
-
-			if (totalDebits > 0) {
-				runningBal = fix(runningBal - totalDebits)
-				simplified.push({
-					id: simplified.length,
-					desc: 'Accountant Summary: Total Debits',
-					amt: totalDebits,
-					type: 'out',
-					bal: runningBal,
-					done: false,
-					details: ['All debit items auto-summed by Accountant service']
-				})
-			}
-
-			for (const row of nonDebitRows) {
-				if (row?.type === 'in') runningBal = fix(runningBal + Number(row?.amt || 0))
-				simplified.push({
-					...row,
-					id: simplified.length,
-					bal: runningBal,
-					done: false
-				})
-			}
-
-			ledger.length = 0
-			ledger.push(...simplified)
-		}
-		
-		dispatch({ type: 'INIT_LEDGER', payload: ledger })
+		if (!fresh.length) return
+		setLedgerEventNotifications((prev: any[]) => [...prev, ...fresh])
 	}
+
+	function dequeueLedgerEventNotification() {
+		setLedgerEventNotifications((prev: any[]) => prev.slice(1))
+	}
+
+	function buildLedgerRequestState(source: any) {
+		const snapshot = source || {}
+		const month = Number(snapshot.month || 0)
+		const year = Number(snapshot.year || 0)
+
+		const statementEvents = Array.isArray(snapshot.eventHistory)
+			? snapshot.eventHistory
+					.filter((entry: any) => Number(entry?.month || 0) === month && Number(entry?.year || 0) === year)
+					.map((entry: any) => ({
+						id: entry?.id,
+						title: entry?.title,
+						amount: entry?.amount,
+						type: entry?.type,
+						icon: entry?.icon,
+						desc: entry?.desc,
+						trigger: entry?.trigger,
+						month,
+						year,
+					}))
+			: []
+
+		const garage = Array.isArray(snapshot.garage)
+			? snapshot.garage.map((vehicle: any) => ({
+					id: vehicle?.id,
+					vehicleId: vehicle?.vehicleId,
+					vehicleName: vehicle?.vehicleName,
+					purchaseMonth: vehicle?.purchaseMonth,
+					purchaseYear: vehicle?.purchaseYear,
+					monthlyPayment: vehicle?.monthlyPayment,
+					monthsRemaining: vehicle?.monthsRemaining,
+				}))
+			: []
+
+		const realEstateBreakdown = Array.isArray(snapshot.realEstateLastMonthPropertyBreakdown)
+			? snapshot.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
+					propertyName: entry?.propertyName,
+					cityName: entry?.cityName,
+					grossIncome: entry?.grossIncome,
+				}))
+			: []
+
+		return {
+			check: snapshot.check,
+			month,
+			year,
+			city: snapshot.city
+				? {
+						name: snapshot.city.name,
+						p: snapshot.city.p,
+						r: snapshot.city.r,
+				  }
+				: null,
+			job: snapshot.job,
+			pendingJob: snapshot.pendingJob,
+			workPenaltyPercent: snapshot.workPenaltyPercent,
+			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
+			realEstateLastMonthExpenses: snapshot.realEstateLastMonthExpenses,
+			realEstateLastMonthPropertyBreakdown: realEstateBreakdown,
+			house: snapshot.house
+				? {
+						mortgagePayment: snapshot.house.mortgagePayment,
+						monthlyPayment: snapshot.house.monthlyPayment,
+						mortgage: snapshot.house.mortgage,
+				  }
+				: null,
+			luxuryServices: snapshot.luxuryServices || {},
+			transit: snapshot.transit
+				? {
+						name: snapshot.transit.name,
+						cost: snapshot.transit.cost,
+						level: snapshot.transit.level,
+				  }
+				: null,
+			garage,
+			entertainmentSpending: snapshot.entertainmentSpending,
+			subscriptionEntertainmentSpending: snapshot.subscriptionEntertainmentSpending,
+			stockInvestedLastMonth: snapshot.stockInvestedLastMonth,
+			activeEdu: snapshot.activeEdu,
+			investmentPropertyCount: Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties.length : 0,
+			statementEvents,
+		}
+	}
+
+	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
+		const buildState = stateOverride ?? state
+		try {
+			const requestState = buildLedgerRequestState(buildState)
+			const response = await fetch(`${API_BASE_URL}/game/build-ledger`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ state: requestState, paySave, payDebt }),
+			})
+			if (!response.ok) return
+			const result = await response.json()
+			dispatch({ type: 'INIT_LEDGER', payload: result.ledger })
+			enqueueLedgerEventNotifications(result.events)
+		} catch (e) {
+			console.error('Failed to build ledger from server', e)
+		}
+	}
+
 
 	function checkRow(id: number, value: number, expectedCheck?: number) {
 		const tx = state.ledger.find((t: any) => t.id === id)
@@ -2952,59 +2814,51 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false) {
+		const priorMonth = state.month
+		const priorYear = state.year
 		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt, skippedPayment } })
-		// Rebuild ledger after state has updated from the reducer and then save
-		setTimeout(() => {
-			buildLedger(paySave, payDebt)
-			// allow reducer to settle then save
+
+		// Rebuild ledger and persist only after reducer has advanced month/year,
+		// so Previous Balance includes all post-month event effects.
+		const finalizeMonth = () => {
+			const latest = stateRef.current
+			const advanced = latest.month !== priorMonth || latest.year !== priorYear
+			if (!advanced) {
+				setTimeout(finalizeMonth, 0)
+				return
+			}
+
+			buildLedger(paySave, payDebt, latest)
 			setTimeout(() => {
-				saveGame()
+				saveGame(latest)
 			}, 60)
-		}, 0)
+		}
+
+		setTimeout(finalizeMonth, 0)
 	}
 
-	function evaluateApplications() {
-		const apps = [...state.applications]
-		const results: any[] = []
-		const logs = [...state.logs]
-		let changed = false
+	async function evaluateApplications(stateOverride?: any) {
+		const snapshot = stateOverride ?? state
+		const result = await evaluateApplicationsOnServer(snapshot)
+		if (!result) {
+			dispatch({ type: 'SET_STATE', payload: { applicationResults: [] } })
+			return []
+		}
 
-		apps.forEach(app => {
-			if (app.status === 'pending' && app.decisionMonth === state.month && app.decisionYear === state.year) {
-				const eligibility = getJobEligibility(state, app.job)
-				if (!eligibility.canApply) {
-					app.status = 'rejected'
-					results.push({ id: app.id, status: 'rejected', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title} (requirements changed or no openings)` })
-					changed = true
-					return
-				}
-
-				let accepted = false
-				if (app.score >= 75) accepted = Math.random() < 0.95
-				else if (app.score >= 60) accepted = Math.random() < 0.65
-				else if (app.score >= 50) accepted = Math.random() < 0.40
-				else accepted = Math.random() < 0.15
-
-				if (accepted) {
-					app.status = 'accepted'
-					results.push({ id: app.id, status: 'accepted', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Hired for ${app.job.title}` })
-				} else {
-					app.status = 'rejected'
-					results.push({ id: app.id, status: 'rejected', title: app.job.title, job: app.job })
-					logs.push({ date: `${state.month}/${state.year}`, msg: `Application rejected for ${app.job.title}` })
-				}
-				changed = true
-			}
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				applications: Array.isArray(result.applications) ? result.applications : snapshot.applications,
+				logs: Array.isArray(result.logEntries)
+					? [...(Array.isArray(snapshot.logs) ? snapshot.logs : []), ...result.logEntries]
+					: Array.isArray(result.logs)
+						? result.logs
+						: snapshot.logs,
+				applicationResults: Array.isArray(result.applicationResults) ? result.applicationResults : [],
+			},
 		})
 
-		if (changed) {
-			dispatch({ type: 'SET_STATE', payload: { applications: apps, logs, applicationResults: results } })
-		} else {
-			dispatch({ type: 'SET_STATE', payload: { applicationResults: [] } })
-		}
-		return results
+		return Array.isArray(result.applicationResults) ? result.applicationResults : []
 	}
 
 	function acceptJob(appId: string) {
@@ -3024,96 +2878,69 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	function openSettlement() {
-		evaluateApplications()
+	async function openSettlement() {
+		await evaluateApplications()
 		dispatch({ type: 'SET_STATE', payload: { showSettlement: true } })
-		// Save after opening settlement so job application results are persisted
 		setTimeout(() => {
-			saveGame()
+			saveGame(stateRef.current)
 		}, 60)
 	}
 
 	// --- Save / Load / Auth ---
 
-	function saveGame(saveName?: string) {
-		const u = state.currentUser
-		if (!u) return false
-		const snapshot = { ...state, currentUser: u }
-		return saveStateForUser(u, snapshot, saveName)
-	}
-
-	function loadGame(saveName?: string) {
-		const u = state.currentUser
-		if (!u) return false
-		const data = loadStateForUser(u, saveName)
-		if (!data) return false
-		const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-		const marketPrices = normalizeMarketPrices(data.marketPrices)
-		const realEstateState = normalizeRealEstateState(data)
-		dispatch({
-			type: 'SET_STATE',
-			payload: {
-				...data,
-				...realEstateState,
-				currentUser: u,
-				entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-				subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-				subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-				subscriptionBadges: data.subscriptionBadges ?? [],
-				entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-				happiness: data.happiness ?? 70,
-				workPenaltyPercent: data.workPenaltyPercent ?? 0,
-				marketPrices,
-				marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-				portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-				marketLearningLevel: data.marketLearningLevel ?? 'adult',
-				marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-				realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-				realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-				autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-				stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-				stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-				totalGasPaid: Number(data.totalGasPaid ?? 0),
-				totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-				maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-				achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-				achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-				rewardTokens: Number(data.rewardTokens ?? 0),
-				lastAchievementCategory: data.lastAchievementCategory ?? null,
-				unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
-				activeTheme: data.activeTheme ?? 'default',
-				rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-			}
-		})
+	async function saveGame(stateOverride?: any) {
+		const snapshot = stateOverride ?? state
+		if (!snapshot?.id) return false
+		const payload = buildPartialStateUpdate(snapshot)
+		if (!payload) return true
+		if (!('currentUser' in payload) && snapshot.currentUser) {
+			payload.currentUser = snapshot.currentUser
+		}
+		const saved = await persistUserState(snapshot.id, payload)
+		if (!saved) return false
+		resetDirtyTracking(snapshot)
+		await refreshPeerSnapshots()
 		return true
 	}
 
-	function listSaves() {
-		return listSavedUsers()
+	async function spinRewardWheel() {
+		if (!state.id) return null
+		const result = await spinRewardWheelForUser(state.id)
+		if (!result?.user) return null
+
+		const normalized = normalizeLoadedUserState(
+			result.user,
+			state,
+			result.user.username || state.currentUser || state.username || 'player',
+		)
+
+		resetDirtyTracking(normalized)
+		dispatch({ type: 'SET_STATE', payload: normalized })
+		buildLedger(0, 0, normalized)
+		await refreshPeerSnapshots()
+		return result
 	}
 
-	function getSavesForCurrentUser() {
-		const u = state.currentUser
-		if (!u) return []
-		return listSavesForUser(u)
-	}
-
-	function deleteSave(saveName: string) {
-		const u = state.currentUser
-		if (!u) return false
-		return deleteSaveForUser(u, saveName)
-	}
-
-	function renameSave(oldName: string, newName: string) {
-		const u = state.currentUser
-		if (!u) return false
-		return renameSaveForUser(u, oldName, newName)
+	async function loadGame() {
+		if (!state.id || !state.currentUser) return false
+		const data = await fetchUserById(state.id)
+		if (!data) return false
+		const normalized = normalizeLoadedUserState(data, state, state.currentUser)
+		resetDirtyTracking(normalized)
+		dispatch({
+			type: 'SET_STATE',
+			payload: normalized,
+		})
+		await refreshPeerSnapshots()
+		return true
 	}
 
 	function newGame() {
 		const defaultBudgets = comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3])
 		const startingMarketPrices = initializeMarketPrices()
 		const freshState = {
+			id: state.id,
+			username: state.username || state.currentUser,
 			check: 1200.0,
 			savings: 0,
 			debt: 0,
@@ -3207,82 +3034,85 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
 		freshState.realEstateMarket = seededSharedMarket.market
 		freshState.realEstateMarketMeta = seededSharedMarket.meta
+		resetDirtyTracking(freshState)
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
-		// Build the initial month's ledger
-		setTimeout(() => {
-			buildLedger(0, 0)
-		}, 60)
+		// Build the initial month's ledger from the server
+		buildLedger(0, 0, freshState)
+		saveGame(freshState)
 		
 		return true
 	}
 
-	function login(user: string, _password?: string) {
-		const data = loadStateForUser(user)
-		if (data) {
-			const fallbackBudgets = comfortableEntertainmentDefaults(data.job || state.job, data.city || state.city)
-			const marketPrices = normalizeMarketPrices(data.marketPrices)
-			const realEstateState = normalizeRealEstateState(data)
-			dispatch({
-				type: 'SET_STATE',
-				payload: {
-					...data,
-					...realEstateState,
-					currentUser: user,
-					entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
-					subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
-					subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
-					subscriptionBadges: data.subscriptionBadges ?? [],
-					entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
-					happiness: data.happiness ?? 70,
-					workPenaltyPercent: data.workPenaltyPercent ?? 0,
-					marketPrices,
-					marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
-					portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
-					marketLearningLevel: data.marketLearningLevel ?? 'adult',
-					marketUsePlainLanguage: data.marketUsePlainLanguage ?? false,
-					realEstateLearningLevel: data.realEstateLearningLevel ?? 'adult',
-					realEstateUsePlainLanguage: data.realEstateUsePlainLanguage ?? false,
-					autoInvest: normalizeAutoInvestConfig(data.autoInvest),
-					stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
-					stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
-					totalGasPaid: Number(data.totalGasPaid ?? 0),
-					totalUtilitiesPaid: Number(data.totalUtilitiesPaid ?? 0),
-					maxMonthlyLuxuryEventSpend: Number(data.maxMonthlyLuxuryEventSpend ?? 0),
-					achievementsUnlocked: Array.isArray(data.achievementsUnlocked) ? data.achievementsUnlocked : [],
-					achievementHistory: Array.isArray(data.achievementHistory) ? data.achievementHistory : [],
-					rewardTokens: Number(data.rewardTokens ?? 0),
-					lastAchievementCategory: data.lastAchievementCategory ?? null,
-					unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? data.unlockedThemes : ['default'],
-					activeTheme: data.activeTheme ?? 'default',
-					rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : []
-				}
-			})
-			return true
+	async function login(username: string, password?: string) {
+		const normalizedUsername = String(username || '').trim()
+		const normalizedPassword = String(password || '')
+		if (!normalizedUsername || !normalizedPassword) return false
+
+		let data: any = null
+		try {
+			data = await authenticateUser(normalizedUsername, normalizedPassword)
+		} catch (e) {
+			console.error('Authentication request failed', e)
+			return false
 		}
-		// No save yet, create a new slot with current initial-like state but set currentUser
-		const firstSnapshot = { ...state, currentUser: user }
-		saveStateForUser(user, firstSnapshot)
-		const seededSharedMarket = syncSharedRealEstateMarket(firstSnapshot, false)
+
+		if (!data) return false
+
 		dispatch({
 			type: 'SET_STATE',
-			payload: {
-				...firstSnapshot,
-				realEstateMarket: seededSharedMarket.market,
-				realEstateMarketMeta: seededSharedMarket.meta
-			}
+			payload: (() => {
+				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+				resetDirtyTracking(normalized)
+				return normalized
+			})()
 		})
+
+		buildLedger(0, 0, data)
+		refreshPeerSnapshots()
+
+		return true
+	}
+
+	async function createUser(username: string, name: string, password?: string) {
+		const normalizedUsername = String(username || '').trim()
+		const normalizedName = String(name || '').trim()
+		const normalizedPassword = String(password || '')
+		if (!normalizedUsername || !normalizedName || !normalizedPassword) return false
+
+		let data: any = null
+		try {
+			data = await registerUser(normalizedUsername, normalizedName, normalizedPassword)
+		} catch (e) {
+			console.error('Registration request failed', e)
+			return false
+		}
+
+		if (!data) return false
+
+		dispatch({
+			type: 'SET_STATE',
+			payload: (() => {
+				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+				resetDirtyTracking(normalized)
+				return normalized
+			})()
+		})
+
+		buildLedger(0, 0, data)
+		refreshPeerSnapshots()
+
 		return true
 	}
 
 	function logout() {
+		resetDirtyTracking({})
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
 	}
 
 	useEffect(() => {
 		if (!state.currentUser) return
-		// Persist cosmetic unlocks/theme selection immediately so refresh/load keeps them.
-		saveStateForUser(state.currentUser, { ...state, currentUser: state.currentUser })
+		saveGame()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [state.currentUser, state.unlockedThemes, state.activeTheme])
 
@@ -3294,102 +3124,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}, 3500)
 	}
 
-	function scoreApplication(job: Job) {
-		let score = 50
-		const eligibility = getJobEligibility(state, job)
-		// Education requirement (±20 points)
-		if (job.req) {
-			if (state.credentials.includes(job.req)) score += 20
-			else score -= 15
-		} else score += 10
-		
-		// Certificate requirement (±15 points)
-		if (job.certReq) {
-			if (state.credentials.includes(job.certReq)) score += 15
-			else score -= 10
-		} else score += 5
-		
-		// Credit score (±10 points)
-		if (state.credit >= 740) score += 10
-		else if (state.credit >= 670) score += 5
-		else if (state.credit < 580) score -= 10
-		
-		// Job tenure/stability (±15 points)
-		if (state.tenure >= 12) score += 15
-		else if (state.tenure >= 6) score += 10
-		else if (state.tenure >= 3) score += 5
+	async function applyForJob(job: Job) {
+		const result = await applyForJobOnServer(state, job.title)
+		if (!result) return
 
-		// Required prior role experience (±20 points)
-		if (job.expReq) {
-			if (eligibility.experienceMet) score += 20
-			else score -= 20
-		}
-
-		// Market openings influence (±10 points)
-		if (eligibility.openings <= 0) score -= 10
-		else if (eligibility.openings <= 3) score += 2
-		else score += 6
-		
-		// Career history (±10 points)
-		if (state.careerHistory.length > 3) score += 10
-		else if (state.careerHistory.length > 0) score += 5
-		
-		// Credentials count bonus (±10 points)
-		if (state.credentials.length > 0) score += 10
-		
-		score = Math.max(0, Math.min(100, score))
-		score += Math.random() * 20 - 10
-		return Math.round(score)
-	}
-
-	function applyForJob(job: Job) {
-		const existingPending = state.applications.some((a: any) => a.job?.title === job.title && a.status === 'pending')
-		if (existingPending) {
-			dispatch({ type: 'SET_STATE', payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Already applied: ${job.title}` }] } })
-			return
-		}
-
-		const eligibility = getJobEligibility(state, job)
-		if (!eligibility.canApply) {
-			const blocks: string[] = []
-			if (!eligibility.educationMet) blocks.push(`education (${job.req})`)
-			if (!eligibility.certificationMet) blocks.push(`certification (${job.certReq})`)
-			if (!eligibility.transitMet) blocks.push(`transit level ${job.tReq}`)
-			if (!eligibility.experienceMet) blocks.push(`experience (${eligibility.experienceDetail})`)
-			if (!eligibility.capacityMet) blocks.push('no openings')
-			dispatch({
-				type: 'SET_STATE',
-				payload: { logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Application blocked for ${job.title}: ${blocks.join(', ')}` }] }
-			})
-			return
-		}
-
-		const score = scoreApplication(job)
-		const appliedMonth = state.month
-		const appliedYear = state.year
-		const decisionMonth = appliedMonth + 1 + Math.floor(Math.random() * 3)
-		let dMonth = decisionMonth
-		let dYear = appliedYear
-		if (dMonth > 12) {
-			dYear += Math.floor(dMonth / 12)
-			dMonth = dMonth % 12 || 12
-		}
-
-		// Adjust job base pay to be a random +- value up to 5% to add some variability to offers
-		const variability = job.base * 0.05
-		const adjustedBase = job.base + (Math.random() * variability * 2 - variability)
-		const offeredJob = { ...job, base: adjustedBase }
-		const app: Application = {
-			id: `app_${Date.now()}`,
-			job: offeredJob,
-			appliedMonth,
-			appliedYear,
-			decisionMonth: dMonth,
-			decisionYear: dYear,
-			score,
-			status: 'pending'
-		}
-		dispatch({ type: 'APPLY_JOB', payload: app })
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				applications: Array.isArray(result.applications) ? result.applications : state.applications,
+				logs: Array.isArray(result.logEntries)
+					? [...(Array.isArray(state.logs) ? state.logs : []), ...result.logEntries]
+					: Array.isArray(result.logs)
+						? result.logs
+						: state.logs,
+			},
+		})
 	}
 
 	function refreshRealEstateMarket() {
@@ -3524,7 +3273,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, listSaves, getSavesForCurrentUser, deleteSave, renameSave, newGame, login, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
 			{children}
 		</GameContext.Provider>
 	)

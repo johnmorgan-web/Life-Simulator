@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Delete } from '@nestjs/common';
 import { UserService } from './user.service';
 
 @Controller('users')
@@ -6,8 +6,13 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  async createUser(@Body() body: { name: string }) {
-    return this.userService.createUser(body.name);
+  async createUser(@Body() body: { username: string; name: string; password: string }) {
+    return this.userService.createUser(body.username, body.name, body.password);
+  }
+
+  @Post('login')
+  async loginUser(@Body() body: { username: string; password: string }) {
+    return this.userService.loginUser(body.username, body.password);
   }
 
   @Get()
@@ -15,23 +20,28 @@ export class UserController {
     return this.userService.listAllUsers();
   }
 
-  @Get(':name')
-  async getUser(@Param('name') name: string) {
-    return this.userService.getUserByName(name);
+  @Get(':id')
+  async getUser(@Param('id') id: string) {
+    return this.userService.getUserById(id);
   }
 
-  @Post(':name/process-month')
-  async processMonth(@Param('name') name: string) {
-    return this.userService.processMonth(name);
+  @Patch(':id')
+  async updateUser(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.userService.updateUser(id, body);
   }
 
-  @Post(':name/action')
-  async applyAction(@Param('name') name: string, @Body() action: any) {
-    return this.userService.applyAction(name, action);
+  @Post(':id/process-month')
+  async processMonth(@Param('id') id: string) {
+    return this.userService.processMonth(id);
   }
 
-  @Delete(':name')
-  async deleteUser(@Param('name') name: string) {
-    return this.userService.deleteUser(name);
+  @Post(':id/action')
+  async applyAction(@Param('id') id: string, @Body() action: any) {
+    return this.userService.applyAction(id, action);
+  }
+
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string) {
+    return this.userService.deleteUser(id);
   }
 }

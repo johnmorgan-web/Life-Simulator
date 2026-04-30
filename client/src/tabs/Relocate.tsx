@@ -4,35 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import countries from '../constants/countries.constants'
 //import countryBoundaries from '../constants/countryBoundaries.constants'
 
-function getCityUserCounts(currentUser?: string | null, currentCityName?: string | null) {
-  const counts: Record<string, number> = {}
-  let savedCityName: string | null = null
-
-  try {
-    const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-    if (Array.isArray(users)) {
-      for (const user of users) {
-        const snapshot = JSON.parse(localStorage.getItem(`life-sim:${user}:__autosave__`) || 'null')
-        const cityName = snapshot?.city?.name
-        if (cityName) counts[cityName] = (counts[cityName] || 0) + 1
-        if (currentUser && user === currentUser) savedCityName = cityName || null
-      }
-    }
-  } catch {
-    return currentCityName ? { [currentCityName]: 1 } : {}
-  }
-
-  if (currentUser && currentCityName) {
-    if (savedCityName && savedCityName !== currentCityName && counts[savedCityName]) {
-      counts[savedCityName] -= 1
-      if (counts[savedCityName] <= 0) delete counts[savedCityName]
-    }
-    counts[currentCityName] = Math.max(1, Number(counts[currentCityName] || 0) + (savedCityName === currentCityName ? 0 : 1))
-  }
-
-  return counts
-}
-
 function getSupplyPressure(usersInCity: number, city: any) {
   const demandBase = 1 + Math.min(0.45, (Math.max(1, usersInCity) - 1) * 0.07)
   const multiplier = Math.max(0.75, Math.min(1.9, demandBase * (0.9 + (Number(city?.p || 1) - 1) * 0.6)))
@@ -44,7 +15,7 @@ function getSupplyPressure(usersInCity: number, city: any) {
 }
 
 export default function Relocate() {
-  const { state, dispatch, cityData, calculateRelocationCost } = useGame()
+  const { state, dispatch, cityData, calculateRelocationCost, cityUserCounts } = useGame()
   const [selected, setSelected] = useState<any | null>(null)
   const rotationRef = useRef(0)
   const tiltRef = useRef(0)
@@ -61,7 +32,6 @@ export default function Relocate() {
   const [selectedTransit, setSelectedTransit] = useState<'public' | 'personal' | 'luxury'>('public')
 
   const cities = (cityData as City[])
-  const cityUserCounts = useMemo(() => getCityUserCounts(state.currentUser, state.city?.name || null), [state.currentUser, state.city?.name])
   const selectedCityInsights = useMemo(() => {
     if (!selected) return null
     const usersInCity = Math.max(0, Number(cityUserCounts[selected.name] || 0))

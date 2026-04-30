@@ -163,7 +163,7 @@ function eventDialogCopy(event: any) {
 }
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses, ledgerEventNotifications, dequeueLedgerEventNotification } = useGame()
   const activeTheme = cosmeticThemes[state.activeTheme || 'default'] || cosmeticThemes.default
   const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
@@ -173,7 +173,6 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
   const [eventPopup, setEventPopup] = useState<any | null>(null)
   const [achievementToast, setAchievementToast] = useState<{ title: string; category: string } | null>(null)
-  const previousEventCountRef = useRef(Array.isArray(state.eventHistory) ? state.eventHistory.length : 0)
   const previousAchievementCountRef = useRef(Array.isArray(state.achievementHistory) ? state.achievementHistory.length : 0)
   
   // Calculate dynamic APR based on credit score
@@ -204,13 +203,11 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   }, [activeTheme.accent, activeTheme.bg])
 
   useEffect(() => {
-    const history = Array.isArray(state.eventHistory) ? state.eventHistory : []
-    if (history.length > previousEventCountRef.current && !state.showSettlement) {
-      const latestEvent = history[history.length - 1]
-      if (latestEvent) setEventPopup(latestEvent)
-    }
-    previousEventCountRef.current = history.length
-  }, [state.eventHistory, state.showSettlement])
+    const queued = Array.isArray(ledgerEventNotifications) ? ledgerEventNotifications : []
+    if (!queued.length || state.showSettlement || !!eventPopup) return
+    setEventPopup(queued[0])
+    dequeueLedgerEventNotification()
+  }, [ledgerEventNotifications, state.showSettlement, eventPopup, dequeueLedgerEventNotification])
 
   useEffect(() => {
     const history = Array.isArray(state.achievementHistory) ? state.achievementHistory : []

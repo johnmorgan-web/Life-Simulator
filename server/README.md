@@ -31,6 +31,20 @@
 $ npm install
 ```
 
+## Database
+
+The server now uses SQLite through TypeORM.
+
+- Default database file: `server/data/life-simulator.sqlite`
+- Optional override: set `SQLITE_DB_PATH` to an absolute or relative sqlite file path
+- Schema sync: enabled via TypeORM `synchronize: true` for rapid development
+
+Example:
+
+```bash
+set SQLITE_DB_PATH=C:\devel\Life-Simulator\server\data\life-simulator.sqlite
+```
+
 ## Compile and run the project
 
 ```bash

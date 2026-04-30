@@ -1,11 +1,8 @@
 
 import { useGame } from '../context/GameContext'
-import SaveManager from './SaveManager'
-import { getAffluenceComparisonFromState } from '../utils/affluence'
 
 export default function Header({ state, onVerify, verifyEnabled }: any) {
-  const { logout } = useGame()
-  const affluence = getAffluenceComparisonFromState(state)
+  const { logout, affluenceComparison: affluence } = useGame()
   const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
   const currentWidth = Math.min(100, (affluence.currentAffluence / meterMax) * 100)
   const averageWidth = Math.min(100, (affluence.average / meterMax) * 100)
@@ -61,7 +58,6 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <SaveManager />
             <button onClick={() => logout()} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
             <button onClick={onVerify} disabled={!verifyEnabled} className={`px-6 py-3 rounded-xl text-sm font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
           </div>

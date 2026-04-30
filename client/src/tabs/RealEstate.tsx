@@ -19,34 +19,6 @@ function checkPrerequisitesMet(amenity: string, installedAmenities: string[]): {
   return { met: missing.length === 0, missing }
 }
 
-function getCityUserCounts(currentUser?: string | null, currentCityName?: string | null) {
-  const counts: Record<string, number> = {}
-  let savedCityName: string | null = null
-  try {
-    const users = JSON.parse(localStorage.getItem('life-sim-keys') || '[]')
-    if (Array.isArray(users)) {
-      for (const user of users) {
-        const snapshot = JSON.parse(localStorage.getItem(`life-sim:${user}:__autosave__`) || 'null')
-        const cityName = snapshot?.city?.name
-        if (cityName) counts[cityName] = (counts[cityName] || 0) + 1
-        if (currentUser && user === currentUser) savedCityName = cityName || null
-      }
-    }
-  } catch {
-    return currentCityName ? { [currentCityName]: 1 } : {}
-  }
-
-  if (currentUser && currentCityName) {
-    if (savedCityName && savedCityName !== currentCityName && counts[savedCityName]) {
-      counts[savedCityName] -= 1
-      if (counts[savedCityName] <= 0) delete counts[savedCityName]
-    }
-    counts[currentCityName] = Math.max(1, Number(counts[currentCityName] || 0) + (savedCityName === currentCityName ? 0 : 1))
-  }
-
-  return counts
-}
-
 function getSupplyPressure(usersInCity: number, city: any) {
   const demandBase = 1 + Math.min(0.45, (Math.max(1, usersInCity) - 1) * 0.07)
   const multiplier = Math.max(0.75, Math.min(1.9, demandBase * (0.9 + (Number(city?.p || 1) - 1) * 0.6)))
@@ -102,7 +74,7 @@ function propertyConditionTrend(property: any, currentMonth: number, currentYear
 }
 
 export default function RealEstate() {
-  const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty } = useGame()
+  const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts } = useGame()
   const learningLevel: LearningLevel = state.realEstateLearningLevel || 'adult'
   const usePlainLanguage = !!state.realEstateUsePlainLanguage
   const [selectedCity, setSelectedCity] = useState(state.city?.name || cityData?.[0]?.name || '')
@@ -119,7 +91,6 @@ export default function RealEstate() {
   const cityRestockTimers = Array.isArray(marketMeta?.pendingListingTimersByCity?.[selectedCity]) ? marketMeta.pendingListingTimersByCity[selectedCity] : []
   const nextListingMonths = cityRestockTimers.length ? Math.min(...cityRestockTimers.map((n: number) => Number(n || 0)).filter((n: number) => n > 0)) : null
 
-  const cityUserCounts = useMemo(() => getCityUserCounts(state.currentUser, state.city?.name || null), [state.currentUser, state.city?.name])
   const selectedCityInsights = useMemo(() => {
     const city = (Array.isArray(cityData) ? cityData : []).find((c: any) => c.name === selectedCity)
     const usersInCity = Math.max(0, Number(cityUserCounts[selectedCity] || 0))
