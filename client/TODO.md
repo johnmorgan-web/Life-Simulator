@@ -10,9 +10,7 @@
 # Base game logic upgrades
 
 * User accounts
-    * Maintain data between updates
-    * Users can take jobs before other users get them
-      * Need to create a classroom/grouping system
+  * Need to create a classroom/grouping system (classroom code?)
 * Story
   * After account creation, show why they have the starting balance
   * Can maybe be used as a tutorial to show how to play
@@ -48,11 +46,9 @@
 
 
 ## Transit
-
 * Show vehicle icon on header or background or something (mouse cursor)
 
 # New page ideas
-
 * Store
   * Buy items to decorate website
     * Dark mode?
@@ -64,7 +60,10 @@
 
 * Location/city/country view
 
-
 * "Home" page
   * Rooms?
   * Upgrade house 
+
+# Website
+## Deployment
+* Github actions push docker container and trigger deploy
