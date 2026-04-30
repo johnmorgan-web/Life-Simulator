@@ -16,7 +16,6 @@ export type WealthStats = {
   investedStocks: number
   carsOwned: number
   luxuryServicesOwned: number
-  houseLevel: number
 }
 
 function toNumber(value: any) {
@@ -67,8 +66,7 @@ export function getWealthStats(snapshot: any): WealthStats {
     savings: Math.round(toNumber(snapshot?.savings) * 100) / 100,
     investedStocks: Math.round(estimateInvestedStocks(snapshot) * 100) / 100,
     carsOwned: Array.isArray(snapshot?.garage) ? snapshot.garage.length : 0,
-    luxuryServicesOwned: countLuxuryServices(snapshot),
-    houseLevel: Math.max(0, Math.floor(toNumber(snapshot?.house?.level)))
+    luxuryServicesOwned: countLuxuryServices(snapshot)
   }
 }
 
@@ -80,8 +78,7 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
       savings: 0,
       investedStocks: 0,
       carsOwned: 0,
-      luxuryServicesOwned: 0,
-      houseLevel: 0
+      luxuryServicesOwned: 0
     }
   }
 
@@ -92,7 +89,6 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     acc.investedStocks += peer.stats.investedStocks
     acc.carsOwned += peer.stats.carsOwned
     acc.luxuryServicesOwned += peer.stats.luxuryServicesOwned
-    acc.houseLevel += peer.stats.houseLevel
     return acc
   }, {
     annualIncome: 0,
@@ -100,8 +96,7 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     savings: 0,
     investedStocks: 0,
     carsOwned: 0,
-    luxuryServicesOwned: 0,
-    houseLevel: 0
+    luxuryServicesOwned: 0
   })
 
   const count = peers.length
@@ -111,8 +106,7 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     savings: Math.round((totals.savings / count) * 100) / 100,
     investedStocks: Math.round((totals.investedStocks / count) * 100) / 100,
     carsOwned: Math.round((totals.carsOwned / count) * 10) / 10,
-    luxuryServicesOwned: Math.round((totals.luxuryServicesOwned / count) * 10) / 10,
-    houseLevel: Math.round((totals.houseLevel / count) * 10) / 10
+    luxuryServicesOwned: Math.round((totals.luxuryServicesOwned / count) * 10) / 10
   }
 }
 
@@ -122,14 +116,9 @@ export function computeAffluence(snapshot: any) {
   const check = toNumber(snapshot.check)
   const save = toNumber(snapshot.savings)
   const debt = toNumber(snapshot.debt)
-  const houseValue = toNumber(snapshot.house?.value)
-
-  const inventoryValue = Array.isArray(snapshot.inventory)
-    ? snapshot.inventory.reduce((sum: number, item: any) => sum + toNumber(item?.price), 0)
-    : 0
 
   const vehicleAssets = estimateVehicleAssets(snapshot.garage)
-  const total = check + save + houseValue + inventoryValue + vehicleAssets - debt
+  const total = check + save + vehicleAssets - debt
   return Math.round(total * 100) / 100
 }
 

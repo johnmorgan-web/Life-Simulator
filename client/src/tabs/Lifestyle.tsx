@@ -1,12 +1,9 @@
 import { useGame } from '../context/GameContext'
 import lifestyleExpenses from '../constants/lifestyleExpenses.constants'
-import housingModels from '../constants/housing.constants'
-import storeItems from '../constants/store.constants'
 import { useEffect, useRef, useState } from 'react'
 
 export default function Lifestyle() {
   const { state, dispatch, buildLedger, getLuxuryServiceMonthlyPay } = useGame()
-  const [tab, setTab] = useState<'Overview' | 'House' | 'Store'>('Overview')
   const [showHappinessTooltip, setShowHappinessTooltip] = useState(false)
   const [entTierFlash, setEntTierFlash] = useState(false)
   const [subTierFlash, setSubTierFlash] = useState(false)
@@ -79,7 +76,6 @@ export default function Lifestyle() {
     : 0
   const netWorth = Number(state.check || 0)
     + Number(state.savings || 0)
-    + Number(state.house?.value || 0)
     + portfolioMarketValue
     + realEstateEquity
     - Number(state.debt || 0)
@@ -233,80 +229,9 @@ export default function Lifestyle() {
     }
   }, [subscriptionTier.name])
 
-  // House purchase handler - pull from savings first, then checking
-  const buyHouse = (model: any) => {
-    let totalNeeded = model.price
-    let newSave = state.savings
-    let newCheck = state.check
-    
-    if (newSave >= totalNeeded) {
-      // Pull entirely from savings
-      newSave = Math.round((newSave - totalNeeded) * 100) / 100
-    } else {
-      // Use all savings, pull remainder from checking
-      const fromSavings = newSave
-      const fromChecking = totalNeeded - fromSavings
-      if (newCheck < fromChecking) return // Can't afford
-      newSave = 0
-      newCheck = Math.round((newCheck - fromChecking) * 100) / 100
-    }
-    
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, house: { model: model.id, level: 1, value: model.price } } })
-  }
-
-  // Upgrade house - pull from savings first, then checking
-  const upgradeHouse = () => {
-    if (!state.house?.model) return
-    const model = housingModels.find((m: any) => m.id === state.house.model)
-    if (!model) return
-    const upgradeCost = model.baseUpgrade * (state.house.level || 1)
-    
-    let newSave = state.savings
-    let newCheck = state.check
-    
-    if (newSave >= upgradeCost) {
-      newSave = Math.round((newSave - upgradeCost) * 100) / 100
-    } else {
-      const fromSavings = newSave
-      const fromChecking = upgradeCost - fromSavings
-      if (newCheck < fromChecking) return
-      newSave = 0
-      newCheck = Math.round((newCheck - fromChecking) * 100) / 100
-    }
-    
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, house: { ...state.house, level: (state.house.level || 0) + 1, value: state.house.value + upgradeCost } } })
-  }
-
-  // Store purchase - pull from savings first, then checking
-  const buyItem = (item: any) => {
-    let newSave = state.savings
-    let newCheck = state.check
-    
-    if (newSave >= item.price) {
-      newSave = Math.round((newSave - item.price) * 100) / 100
-    } else {
-      const fromSavings = newSave
-      const fromChecking = item.price - fromSavings
-      if (newCheck < fromChecking) return
-      newSave = 0
-      newCheck = Math.round((newCheck - fromChecking) * 100) / 100
-    }
-    
-    const newInv = [...(state.inventory || []), item]
-    dispatch({ type: 'SET_STATE', payload: { check: newCheck, savings: newSave, inventory: newInv } })
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex gap-2">
-        <button className={`px-3 py-2 rounded ${tab === 'Overview' ? 'bg-emerald-600 text-white' : 'bg-slate-200'}`} onClick={() => setTab('Overview')}>Overview</button>
-        <button className={`px-3 py-2 rounded ${tab === 'House' ? 'bg-emerald-600 text-white' : 'bg-slate-200'}`} onClick={() => setTab('House')}>House</button>
-        <button className={`px-3 py-2 rounded ${tab === 'Store' ? 'bg-emerald-600 text-white' : 'bg-slate-200'}`} onClick={() => setTab('Store')}>Store</button>
-      </div>
-
-      {tab === 'Overview' && (
-        <div className="space-y-8">
-          {/* Current Lifestyle Info */}
+    <div className="space-y-8">
+      {/* Current Lifestyle Info */}
           <div className="glass p-6 mb-6">
             <h3 className="font-bold text-lg mb-4">📊 Current Lifestyle</h3>
             <div className="grid grid-cols-4 gap-4">
@@ -627,116 +552,5 @@ export default function Lifestyle() {
             </ul>
           </div>
         </div>
-      )}
-
-      {tab === 'House' && (
-        <div className="space-y-6">
-          <h3 className="font-bold text-lg">🏡 Houses</h3>
-          <div className="grid grid-cols-3 gap-4">
-            {housingModels.map((m: any) => {
-              const canAfford = state.savings + state.check >= m.price
-              return (
-                <div key={m.id} className={`glass p-4 ${!canAfford ? 'opacity-60' : ''}`}>
-                  <h4 className="font-bold">{m.name}</h4>
-                  <p className="text-xs text-slate-600 mb-2">Rooms: {m.rooms} • Size: {m.size}</p>
-                  <pre className="text-xs font-mono whitespace-pre-wrap text-emerald-600 mb-2">{m.visual}</pre>
-                  <p className="mt-2 font-bold text-emerald-600">${m.price.toLocaleString()}</p>
-                  <button onClick={() => buyHouse(m)} disabled={!canAfford} className={`mt-3 w-full py-2 rounded text-white ${canAfford ? 'bg-emerald-600' : 'bg-slate-400 cursor-not-allowed'}`}>Buy</button>
-                </div>
-              )
-            })}
-          </div>
-          <div className="glass p-6">
-            <h4 className="font-bold text-lg mb-4">🏠 Your Property</h4>
-            {state.house?.model ? (
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm font-bold mb-2">Current Property</p>
-                  <pre className="text-sm font-mono whitespace-pre-wrap text-emerald-600 mb-4">
-                    {housingModels.find(m => m.id === state.house.model)?.visual}
-                  </pre>
-                </div>
-                <div className="space-y-3">
-                  <div className="bg-slate-50 p-3 rounded-lg">
-                    <p className="text-xs text-slate-500 font-bold">Model</p>
-                    <p className="text-sm font-bold">{state.house.model}</p>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-lg">
-                    <p className="text-xs text-slate-500 font-bold">Upgrade Level</p>
-                    <p className="text-sm font-bold">{state.house.level}</p>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-lg">
-                    <p className="text-xs text-slate-500 font-bold">Total Value</p>
-                    <p className="text-sm font-bold text-emerald-600">${state.house.value?.toLocaleString()}</p>
-                  </div>
-                  <button onClick={upgradeHouse} className="w-full py-2 rounded bg-sky-600 text-white text-sm font-bold">Upgrade Property</button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">You do not own a house yet. Select a property above to get started!</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {tab === 'Store' && (
-        <div className="space-y-6">
-          <h3 className="font-bold text-lg">🛒 Store - Furnishings & Decor</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {storeItems.map(item => {
-              const canAfford = state.savings + state.check >= item.price
-              return (
-                <div key={item.id} className={`glass p-4 ${!canAfford ? 'opacity-60' : ''}`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="text-3xl mb-1">{item.icon}</p>
-                      <p className="font-bold">{item.name}</p>
-                      <p className="text-xs text-slate-600">{item.description}</p>
-                    </div>
-                  </div>
-                  <div className="border-t border-slate-200 pt-3 mt-3">
-                    <p className="font-bold text-emerald-600 mb-2">${item.price.toLocaleString()}</p>
-                    <button 
-                      disabled={!canAfford}
-                      onClick={() => buyItem(item)} 
-                      className={`w-full py-2 rounded text-white text-sm font-bold ${canAfford ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-400 cursor-not-allowed'}`}
-                    >
-                      {canAfford ? 'Add to Home' : 'Unaffordable'}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="glass p-6">
-            <h4 className="font-bold text-lg mb-4">📦 Home Inventory</h4>
-            {state.inventory && state.inventory.length > 0 ? (
-              <div className="space-y-2">
-                {state.inventory.map((it: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{it.icon}</span>
-                      <div>
-                        <p className="font-bold">{it.name}</p>
-                        <p className="text-xs text-slate-600">{it.description}</p>
-                      </div>
-                    </div>
-                    <p className="font-bold text-slate-700">${it.price}</p>
-                  </div>
-                ))}
-                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 mt-4">
-                  <p className="text-xs text-slate-600">Total Items Invested:</p>
-                  <p className="font-bold text-emerald-600">
-                    ${state.inventory.reduce((sum: number, item: any) => sum + item.price, 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">No items yet. Browse the store to decorate your home!</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+      )
+    }
