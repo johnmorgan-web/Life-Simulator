@@ -15,6 +15,9 @@ export class UserStateEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   passwordHash!: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  isAdmin!: boolean;
+
   // Keep the full game snapshot so client-side fields can migrate server-side incrementally.
   @Column({ type: 'simple-json' })
   state!: Record<string, any>;

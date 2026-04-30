@@ -16,7 +16,7 @@ import { getAffluenceComparison } from '../utils/affluence'
 type State = any
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta'])
-const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username'])
+const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username', 'isAdmin', 'authToken'])
 const APPEND_ONLY_STATE_KEYS = new Set([
 	'logs',
 	'eventHistory',
@@ -85,6 +85,44 @@ async function fetchAllUsers() {
 	if (!response.ok) return []
 	const users = await response.json()
 	return Array.isArray(users) ? users : []
+}
+
+async function fetchAdminUsers(authToken: string) {
+	const response = await fetch(`${API_BASE_URL}/users/admin/list`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${authToken}`,
+		},
+	})
+	if (!response.ok) return null
+	const users = await response.json()
+	return Array.isArray(users) ? users : []
+}
+
+async function adminUpdateUserById(
+	targetUserId: string,
+	authToken: string,
+	changes: {
+		checking: number
+		savings: number
+		debt: number
+		isAdmin: boolean
+		username?: string
+		name?: string
+		password?: string
+	},
+) {
+	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}`, {
+		method: 'PATCH',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${authToken}`,
+		},
+		body: JSON.stringify(changes),
+	})
+	if (!response.ok) return null
+	return response.json()
 }
 
 async function persistUserState(id: string, state: any) {
@@ -1205,6 +1243,7 @@ const initialState: State = {
 	lastAutoBumpYear: 2026,
 	// Authentication / save
 	currentUser: null as string | null,
+	isAdmin: false,
 	// Vehicle state - comprehensive ownership and financing tracking
 	ownsVehicle: null as any, // primary vehicle (for UI/backcompat)
 	garage: [] as any[], // array of vehicles owned/leased
@@ -1411,6 +1450,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		...data,
 		...realEstateState,
 		currentUser,
+		isAdmin: Boolean(data.isAdmin),
 		entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
 		subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
 		subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
@@ -2981,6 +3021,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			lastAutoBumpMonth: 2,
 			lastAutoBumpYear: 2026,
 			currentUser: state.currentUser,
+			authToken: state.authToken,
 			ownsVehicle: null,
 			garage: [],
 			marketPrices: startingMarketPrices,
@@ -3014,7 +3055,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			lastAchievementCategory: null,
 			unlockedThemes: ['default'],
 			activeTheme: 'default',
-			rewardHistory: []
+			rewardHistory: [],
+			isAdmin: Boolean(state.isAdmin)
 		}
 		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
 		freshState.realEstateMarket = seededSharedMarket.market
@@ -3092,7 +3134,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	function logout() {
 		resetDirtyTracking({})
-		dispatch({ type: 'SET_STATE', payload: { currentUser: null } })
+		dispatch({ type: 'SET_STATE', payload: { currentUser: null, isAdmin: false, authToken: null } })
+	}
+
+	async function listUsersForAdmin() {
+		if (!state.id || !state.isAdmin || !state.authToken) return null
+		return fetchAdminUsers(String(state.authToken))
+	}
+
+	async function saveUserAsAdmin(
+		targetUserId: string,
+		changes: {
+			checking: number
+			savings: number
+			debt: number
+			isAdmin: boolean
+			username?: string
+			name?: string
+			password?: string
+		},
+	) {
+		if (!state.id || !state.isAdmin || !state.authToken) return null
+		return adminUpdateUserById(targetUserId, String(state.authToken), changes)
 	}
 
 	useEffect(() => {
@@ -3258,7 +3321,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
 			{children}
 		</GameContext.Provider>
 	)

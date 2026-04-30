@@ -238,6 +238,8 @@ export interface GameState {
   showSettlement: boolean;
   username?: string | null;
   currentUser?: string | null;
+  isAdmin?: boolean;
+  authToken?: string;
   name: string;
   unlockedThemes: string[];
   activeTheme: string;

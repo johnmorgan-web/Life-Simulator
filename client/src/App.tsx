@@ -16,6 +16,7 @@ import Bank from './tabs/Bank'
 import StockMarket from './tabs/StockMarket'
 import Rewards from './tabs/Rewards'
 import RealEstate from './tabs/RealEstate'
+import Admin from './tabs/Admin'
 import { cosmeticThemes } from './constants/achievements.constants'
 import { stockMarketAssets } from './constants/stockMarket.constants'
 
@@ -35,6 +36,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'stocks') return <StockMarket />
   if (tab === 'real-estate') return <RealEstate />
   if (tab === 'rewards') return <Rewards />
+  if (tab === 'admin') return <Admin />
   return <div className="p-6">Unknown tab</div>
 }
 
