@@ -1,6 +1,5 @@
 # Bugs
 * Overpayment on savings/debt
-* Tooltip not escaping wrapper
 * Auto-investment for stocks
 * Duplicate code for achievements
 

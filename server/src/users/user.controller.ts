@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Delete, Headers } from '@nestjs/common';
 import { UserService } from './user.service';
 
 @Controller('users')
@@ -18,6 +18,37 @@ export class UserController {
   @Get()
   async listUsers() {
     return this.userService.listAllUsers();
+  }
+
+  @Post('admin/list')
+  async listUsersForAdmin(@Headers('authorization') authorization?: string) {
+    return this.userService.listUsersForAdmin(authorization);
+  }
+
+  @Patch('admin/:targetUserId')
+  async adminUpdateUser(
+    @Param('targetUserId') targetUserId: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Body()
+    body: {
+      checking?: number;
+      savings?: number;
+      debt?: number;
+      isAdmin?: boolean;
+      username?: string;
+      name?: string;
+      password?: string;
+    },
+  ) {
+    return this.userService.adminUpdateUser(authorization, targetUserId, {
+      checking: body.checking,
+      savings: body.savings,
+      debt: body.debt,
+      isAdmin: body.isAdmin,
+      username: body.username,
+      name: body.name,
+      password: body.password,
+    });
   }
 
   @Get(':id')

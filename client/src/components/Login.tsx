@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useGame } from '../context/GameContext'
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
 
 export default function Login() {
   const { login, createUser } = useGame()
@@ -9,8 +10,6 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isCreateMode, setIsCreateMode] = useState(false)
-
-  const passwordRules = /^(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,8 +25,8 @@ export default function Login() {
         return
       }
 
-      if (!passwordRules.test(password)) {
-        setError('Password must be at least 8 characters and include 1 number and 1 symbol.')
+      if (!isPasswordValid(password)) {
+        setError(PASSWORD_POLICY_MESSAGE)
         return
       }
 
@@ -78,7 +77,7 @@ export default function Login() {
               <label className="block text-sm font-bold text-slate-600 mb-1">Retype Password</label>
               <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type="password" className="w-full p-3 border rounded" placeholder="Retype password" />
             </div>
-            <p className="mb-4 text-xs text-slate-500">Must be 8+ characters with at least 1 number and 1 symbol.</p>
+            <p className="mb-4 text-xs text-slate-500">{PASSWORD_POLICY_MESSAGE}</p>
           </>
         ) : null}
         {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}

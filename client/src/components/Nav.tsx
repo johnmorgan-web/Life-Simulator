@@ -10,6 +10,7 @@ export default function Nav({ tab, setTab }: any) {
 
   const tabs = [
     { id: 'academy', label: '🏛️ Academy' },
+    ...(state.isAdmin ? [{ id: 'admin', label: '🛡️ Admin' }] : []),
     { id: 'bank', label: '🏦 Bank' },
     { id: 'careers', label: '💼 Careers' },
     { id: 'ledger', label: '📓 Journal' },
