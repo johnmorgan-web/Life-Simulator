@@ -829,7 +829,6 @@ function achievementMetricValue(rule: any, snapshot: any) {
 	const netWorth = round2(
 		Number(snapshot.check || 0)
 		+ Number(snapshot.savings || 0)
-		+ Number(snapshot.house?.value || 0)
 		+ marketValue
 		+ realEstateEquityValue(snapshot)
 		- Number(snapshot.debt || 0)
@@ -1210,9 +1209,6 @@ const initialState: State = {
 	ownsVehicle: null as any, // primary vehicle (for UI/backcompat)
 	garage: [] as any[], // array of vehicles owned/leased
 	vehicleHistory: [] as any[], // Array of previously owned vehicles
-	// Housing & inventory
-	house: { model: null, level: 0, value: 0 },
-	inventory: [] as any[],
 	realEstateMarket: getSharedRealEstateMarket(),
 	realEstateMarketMeta: readSharedRealEstateMeta() || defaultRealEstateMeta(),
 	investmentProperties: [] as any[],
@@ -2360,7 +2356,6 @@ function reducer(state: State, action: any) {
 				logs,
 				luxuryServices: state.luxuryServices,
 				calculationStreak: state.calculationStreak,
-				house: state.house,
 				totalGasPaid,
 				totalUtilitiesPaid,
 				maxMonthlyLuxuryEventSpend
@@ -2744,14 +2739,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				}))
 			: []
 
-		const realEstateBreakdown = Array.isArray(snapshot.realEstateLastMonthPropertyBreakdown)
-			? snapshot.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
-					propertyName: entry?.propertyName,
-					cityName: entry?.cityName,
-					grossIncome: entry?.grossIncome,
-				}))
-			: []
-
 		return {
 			check: snapshot.check,
 			month,
@@ -2767,15 +2754,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			pendingJob: snapshot.pendingJob,
 			workPenaltyPercent: snapshot.workPenaltyPercent,
 			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
-			realEstateLastMonthExpenses: snapshot.realEstateLastMonthExpenses,
-			realEstateLastMonthPropertyBreakdown: realEstateBreakdown,
-			house: snapshot.house
-				? {
-						mortgagePayment: snapshot.house.mortgagePayment,
-						monthlyPayment: snapshot.house.monthlyPayment,
-						mortgage: snapshot.house.mortgage,
-				  }
-				: null,
 			luxuryServices: snapshot.luxuryServices || {},
 			transit: snapshot.transit
 				? {
@@ -3019,8 +2997,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			},
 			stockInvestedThisMonth: 0,
 			stockInvestedLastMonth: 0,
-			house: { model: null, level: 0, value: 0 },
-			inventory: [],
 			realEstateMarket: {},
 			realEstateMarketMeta: defaultRealEstateMeta(),
 			investmentProperties: [],

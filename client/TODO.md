@@ -20,18 +20,14 @@
 
 # Tab page upgrades
 ## Academy
-* Tree diagram
 * Internship, associated probability modifier
 
 ## Careers
-* Tree diagram
 * Career page update to show (continue career, look for new job)
 
 ## Ledger
-* Remove skip payment
 
 ## Bank
-* Add withdraw from savings function
 
 ## Relocate
 
@@ -39,7 +35,6 @@
 
 
 ## Rewards
-* Tier system for rewards
   * Don't give luxary cars to someone without licenses
 
 ## Resume
