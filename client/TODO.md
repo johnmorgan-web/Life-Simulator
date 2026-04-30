@@ -1,19 +1,14 @@
 # Bugs
 * Overpayment on savings/debt
+* Tooltip not escaping wrapper
+* Auto-investment for stocks
+* Duplicate code for achievements
 
-* Unable to close reconciliation modal
-* Missing types everywhere
-* Fire luxury services when can longer afford
-* Change transit level is no longer to meet requirements for level
-* Drop credit score when input of wrong answer and check
-* Resets credit score to 850 even with debt
-* Payment towards debt bringing up pay raise celebration
+# Base game logic downgrades
+* Remove house and store
 
 # Base game logic upgrades
-* Random events/encounters
-  * Car breaking down
- 
-  * Can't work for the month (sick, business shut down, weather)
+
 * User accounts
     * Maintain data between updates
     * Users can take jobs before other users get them
@@ -27,27 +22,27 @@
 
 # Tab page upgrades
 ## Academy
-
-
+* Tree diagram
 * Internship, associated probability modifier
 
 ## Careers
-
-  * Career page update to show (continue career, look for new job)
-  * Increase types of required certifications for jobs...more than one cert
-  * Need to add job requirements if looking to build promotion system or prior experience
-  * Sort jobs into industry categories
+* Tree diagram
+* Career page update to show (continue career, look for new job)
 
 ## Ledger
-  * Increase number of monthly bills
-  * Auto apply subscriptions as time goes on
+* Remove skip payment
+
+## Bank
+* Add withdraw from savings function
 
 ## Relocate
 
 * Include international cities and potentially disable certain modes of transportation 
 
-* Sort buttons (pay, ratios, move cost)
-* Fix issue with relocation changing job immediately and not whencity state changes
+
+## Rewards
+* Tier system for rewards
+  * Don't give luxary cars to someone without licenses
 
 ## Resume
 
@@ -60,7 +55,6 @@
 
 * Store
   * Buy items to decorate website
-    * Background colors
     * Dark mode?
   * Medicine
     * Can cure sickness so can work again
