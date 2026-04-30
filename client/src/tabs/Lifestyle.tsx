@@ -327,27 +327,27 @@ export default function Lifestyle() {
                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Happiness</p>
                 <div className="flex items-center gap-2">
                   <p className="text-xl font-bold text-slate-800">{happiness}%</p>
-                  <button
-                    onMouseEnter={() => setShowHappinessTooltip(true)}
-                    onMouseLeave={() => setShowHappinessTooltip(false)}
-                    className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold cursor-help"
-                  >
-                    ?
-                  </button>
+                  <div className="relative">
+                    <button
+                      onMouseEnter={() => setShowHappinessTooltip(true)}
+                      onMouseLeave={() => setShowHappinessTooltip(false)}
+                      className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold cursor-help"
+                    >
+                      ?
+                    </button>
+                    {showHappinessTooltip && (
+                      <div className="absolute z-50 bottom-full mb-2 right-0 w-72 rounded-lg bg-slate-900 text-white text-[11px] p-3 shadow-xl">
+                        <p className="font-bold mb-1">Happiness Drivers</p>
+                        <p>Improves with concierge, housekeeper, trainer, therapist, and healthy leisure spending.</p>
+                        <p className="mt-1">Drops with debt, long low-pay stagnation, high-pay stress, stale purchases, and underspending.</p>
+                        <p className="mt-2 font-bold">Current projected leisure modifier: {projectedHappinessModifier >= 0 ? '+' : ''}{projectedHappinessModifier}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
                   <div className={`${happinessTone} h-2 rounded-full`} style={{ width: `${happiness}%` }} />
                 </div>
-                {showHappinessTooltip && (
-                  <div className="relative">
-                    <div className="absolute z-20 mt-2 w-72 rounded-lg bg-slate-900 text-white text-[11px] p-3 shadow-xl">
-                      <p className="font-bold mb-1">Happiness Drivers</p>
-                      <p>Improves with concierge, housekeeper, trainer, therapist, and healthy leisure spending.</p>
-                      <p className="mt-1">Drops with debt, long low-pay stagnation, high-pay stress, stale purchases, and underspending.</p>
-                      <p className="mt-2 font-bold">Current projected leisure modifier: {projectedHappinessModifier >= 0 ? '+' : ''}{projectedHappinessModifier}</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
