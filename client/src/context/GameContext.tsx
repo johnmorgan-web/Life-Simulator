@@ -1575,7 +1575,9 @@ function reducer(state: State, action: any) {
 		case 'CHECK_ROW': {
 			const { id, done, newCheck, expectedCheck } = action.payload
 			const ledger = state.ledger.map((tx: any) => (tx.id === id ? { ...tx, done } : tx))
-			let resultingCheck = newCheck ?? state.check
+			const lastLedgerRow = state.ledger[state.ledger.length - 1]
+			const isLastRow = lastLedgerRow && lastLedgerRow.id === id
+			let resultingCheck = (isLastRow && newCheck !== undefined) ? newCheck : state.check
 			let newDebt = state.debt
 			let credit = state.credit
 			let calculationStreak = state.calculationStreak
