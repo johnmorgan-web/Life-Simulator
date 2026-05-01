@@ -48,7 +48,7 @@ export default function Login() {
   }
 
   return (
-    <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
+    <div className="min-h-screen bg-white/50 flex items-start sm:items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="glass p-8 rounded-xl w-full max-w-sm">
         <img src="/LedgerLegends.png" alt="Ledger Legends" className="w-full mb-4 rounded-xl" />
         <h2 className="text-2xl font-small mb-4 ">
