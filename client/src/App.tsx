@@ -423,28 +423,32 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
         ['--app-bg' as any]: activeTheme.bg
       }}
     >
-      {!state.currentUser && <Login />}
-      <Celebration 
-        event={state.celebration} 
-        onComplete={handleCelebrationComplete} 
-      />
-      {achievementToast && (
-        <div className="fixed top-5 right-5 z-50 max-w-sm bg-white border border-emerald-200 shadow-xl rounded-2xl px-4 py-3">
-          <p className="text-[10px] uppercase font-bold tracking-wide text-emerald-600">Achievement Unlocked</p>
-          <p className="text-sm font-bold text-slate-900">{achievementToast.title}</p>
-          <p className="text-xs text-slate-500 mt-1">Category: {achievementToast.category} • Reward spin added</p>
-        </div>
-      )}
-      <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
-      <main className="flex-1 overflow-hidden p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-12 gap-7">
-        <Nav tab={tab} setTab={setTab} />
-        <div 
-          className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"
-          style={{ minHeight: 'calc(100vh - 130px)'}}>
-          <TabContent tab={tab} />
-        </div>
-      </main>
-
+        { !state.currentUser ? (
+          <Login />
+        ) : (
+          <>
+            <Celebration 
+              event={state.celebration} 
+              onComplete={handleCelebrationComplete} 
+            />
+            {achievementToast && (
+              <div className="fixed top-5 right-5 z-50 max-w-sm bg-white border border-emerald-200 shadow-xl rounded-2xl px-4 py-3">
+                <p className="text-[10px] uppercase font-bold tracking-wide text-emerald-600">Achievement Unlocked</p>
+                <p className="text-sm font-bold text-slate-900">{achievementToast.title}</p>
+                <p className="text-xs text-slate-500 mt-1">Category: {achievementToast.category} • Reward spin added</p>
+              </div>
+            )}
+            <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
+            <main className="flex-1 overflow-hidden p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-12 gap-7">
+              <Nav tab={tab} setTab={setTab} />
+              <div 
+                className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"
+                style={{ minHeight: 'calc(100vh - 130px)'}}>
+                <TabContent tab={tab} />
+              </div>
+            </main>
+          </>
+        )}
       {state.showSettlement && (
         <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
           <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl relative">
