@@ -5,7 +5,6 @@
 * Duplicate code for achievements
 
 # Base game logic downgrades
-* Remove house and store
 
 # Base game logic upgrades
 
@@ -35,7 +34,7 @@
 
 
 ## Rewards
-  * Don't give luxary cars to someone without licenses
+  * Don't give luxury cars to someone without licenses
 
 ## Resume
 

@@ -4,6 +4,14 @@ import { stockMarketAssets, stockMarketGlossary, autoInvestProfiles } from '../c
 
 type LearningLevel = 'elementary' | 'middle-school' | 'high-school' | 'adult'
 
+function roundShareQuantity(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
+function formatShareQuantity(value: number) {
+  return roundShareQuantity(value).toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
+}
+
 function toCurrency(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 }
@@ -118,7 +126,7 @@ function generateRecommendation(asset: any, price: number, prevPrice: number, po
 }
 
 export default function StockMarket() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch, saveGame } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
 
   const marketPrices = state.marketPrices || {}
@@ -142,6 +150,9 @@ export default function StockMarket() {
 
   const confirmAutoInvestSettings = () => {
     dispatch({ type: 'SET_STATE', payload: { autoInvest: autoInvestDraft } })
+    setTimeout(() => {
+      saveGame()
+    }, 60)
   }
 
   const resetAutoInvestSettings = () => {
@@ -188,7 +199,7 @@ export default function StockMarket() {
   }, [signalsByTicker])
 
   const handleBuy = (ticker: string) => {
-    const shares = Math.max(0, Math.floor(Number(shareInputs[ticker] || 0)))
+    const shares = Math.max(0, roundShareQuantity(Number(shareInputs[ticker] || 0)))
     if (shares <= 0) return
     const signal = signalsByTicker[ticker]
     if (signal?.recommendation === 'Sell') {
@@ -199,7 +210,7 @@ export default function StockMarket() {
   }
 
   const handleSell = (ticker: string) => {
-    const shares = Math.max(0, Math.floor(Number(shareInputs[ticker] || 0)))
+    const shares = Math.max(0, roundShareQuantity(Number(shareInputs[ticker] || 0)))
     if (shares <= 0) return
     dispatch({ type: 'SELL_STOCK', payload: { ticker, shares } })
   }
@@ -362,6 +373,7 @@ export default function StockMarket() {
       <div className="glass p-6">
         <h3 className="font-bold text-lg mb-3">Trade Desk</h3>
         <p className="text-xs text-slate-500 mb-3">Orders may fill slightly above or below quote prices to simulate ceiling/floor executions.</p>
+        <p className="text-xs text-slate-500 mb-3">Share quantity supports fractional trades up to 0.001 shares.</p>
         <div className="space-y-3">
           {stockMarketAssets.map((asset) => {
             const price = Number(marketPrices[asset.ticker] || asset.basePrice)
@@ -375,7 +387,7 @@ export default function StockMarket() {
             const positionGain = positionValue - investedAmount
             const positionGainPct = investedAmount > 0 ? (positionGain / investedAmount) * 100 : 0
             const inputShares = Number(shareInputs[asset.ticker] || 0)
-            const estimatedCost = Math.max(0, Math.floor(inputShares)) * price
+            const estimatedCost = Math.max(0, roundShareQuantity(inputShares)) * price
             const signal = signalsByTicker[asset.ticker] || generateRecommendation(asset, price, prevPrice, portfolioStats.marketValue, positionValue)
 
             return (
@@ -408,7 +420,7 @@ export default function StockMarket() {
                 </div>
 
                 <div className="mt-2 text-xs text-slate-600">
-                  Owned: <span className="font-bold">{ownedShares} shares</span>
+                  Owned: <span className="font-bold">{formatShareQuantity(ownedShares)} shares</span>
                   {' '}| Position Value: <span className="font-bold">{toCurrency(positionValue)}</span>
                 </div>
 
@@ -428,9 +440,9 @@ export default function StockMarket() {
                   <input
                     type="number"
                     min="0"
-                    step="1"
+                    step="0.001"
                     value={shareInputs[asset.ticker] || ''}
-                    onChange={(e) => setShareInputs((prev) => ({ ...prev, [asset.ticker]: Number(e.target.value) }))}
+                    onChange={(e) => setShareInputs((prev) => ({ ...prev, [asset.ticker]: roundShareQuantity(Number(e.target.value) || 0) }))}
                     placeholder="Shares"
                     className="w-28 p-2 border rounded"
                   />

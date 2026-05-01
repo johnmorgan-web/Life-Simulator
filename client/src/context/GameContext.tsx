@@ -432,6 +432,14 @@ function round2(value: number) {
 	return Math.round(value * 100) / 100
 }
 
+function roundShareQuantity(value: number) {
+	return Math.round(value * 1000) / 1000
+}
+
+function formatShareQuantity(value: number) {
+	return roundShareQuantity(value).toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
+}
+
 function hashString(value: string) {
 	let hash = 0
 	for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0
@@ -975,21 +983,23 @@ function applyAutoInvestCycle(
 	for (const [ticker, adjustedWeight] of adjustedAllocEntries) {
 		const allocation = adjustedWeightTotal > 0 ? (maxInvest * Number(adjustedWeight || 0)) / adjustedWeightTotal : 0
 		const marketPrice = Number(marketPrices[ticker] || 0)
-		if (marketPrice <= 0 || allocation <= 0) continue
+		if (marketPrice <= 0 || allocation <= 0 || newCheck <= 0) continue
 		const price = executionPriceWithSlippage(marketPrice, `${ticker}-${month}-${year}-${profile.id}-auto`)
+		if (price <= 0) continue
 
-		const shares = Math.floor(allocation / price)
+		const budget = Math.min(allocation, newCheck)
+		const shares = roundShareQuantity(budget / price)
 		if (shares <= 0) continue
 
 		const cost = round2(shares * price)
-		if (cost > newCheck) continue
+		if (cost > newCheck || cost <= 0) continue
 
 		const idx = nextPortfolio.findIndex((h: any) => h.ticker === ticker)
 		if (idx >= 0) {
 			const existing = nextPortfolio[idx]
 			const existingShares = Number(existing.shares || 0)
 			const existingAvg = Number(existing.avgCost || price)
-			const totalShares = existingShares + shares
+			const totalShares = roundShareQuantity(existingShares + shares)
 			const avgCost = totalShares > 0 ? round2(((existingShares * existingAvg) + cost) / totalShares) : round2(price)
 			nextPortfolio[idx] = { ...existing, shares: totalShares, avgCost }
 		} else {
@@ -998,7 +1008,7 @@ function applyAutoInvestCycle(
 
 		newCheck = round2(newCheck - cost)
 		investedAmount = round2(investedAmount + cost)
-		tradeSummary.push(`${shares} ${ticker} @ ${price.toFixed(2)}`)
+		tradeSummary.push(`${formatShareQuantity(shares)} ${ticker} @ ${price.toFixed(2)}`)
 	}
 
 	if (tradeSummary.length > 0) {
@@ -2496,7 +2506,7 @@ function reducer(state: State, action: any) {
 		}
 		case 'BUY_STOCK': {
 			const { ticker, shares } = action.payload || {}
-			const quantity = Math.max(0, Math.floor(Number(shares || 0)))
+			const quantity = Math.max(0, roundShareQuantity(Number(shares || 0)))
 			if (!ticker || quantity <= 0) return state
 
 			const asset = stockMarketAssets.find(a => a.ticker === ticker)
@@ -2524,7 +2534,7 @@ function reducer(state: State, action: any) {
 			}
 
 			const fillType = slippageLabel(price, marketPrice)
-			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📈 Bought ${quantity} ${ticker} @ $${price.toFixed(2)} (${fillType}, ${totalCost.toFixed(2)})` }]
+			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📈 Bought ${formatShareQuantity(quantity)} ${ticker} @ $${price.toFixed(2)} (${fillType}, ${totalCost.toFixed(2)})` }]
 			return {
 				...state,
 				check: round2(state.check - totalCost),
@@ -2535,7 +2545,7 @@ function reducer(state: State, action: any) {
 		}
 		case 'SELL_STOCK': {
 			const { ticker, shares } = action.payload || {}
-			const quantity = Math.max(0, Math.floor(Number(shares || 0)))
+			const quantity = Math.max(0, roundShareQuantity(Number(shares || 0)))
 			if (!ticker || quantity <= 0) return state
 
 			const asset = stockMarketAssets.find(a => a.ticker === ticker)
@@ -2549,14 +2559,14 @@ function reducer(state: State, action: any) {
 			}
 
 			const holding = portfolio[idx]
-			const ownedShares = Math.max(0, Math.floor(Number(holding.shares || 0)))
-			const sellShares = Math.min(quantity, ownedShares)
+			const ownedShares = Math.max(0, roundShareQuantity(Number(holding.shares || 0)))
+			const sellShares = roundShareQuantity(Math.min(quantity, ownedShares))
 			if (sellShares <= 0) return state
 
 			const marketPrice = Number(state.marketPrices?.[ticker] || asset.basePrice)
 			const price = executionPriceWithSlippage(marketPrice, `${ticker}-${state.month}-${state.year}-${Date.now()}-sell`)
 			const proceeds = round2(price * sellShares)
-			const remainingShares = ownedShares - sellShares
+			const remainingShares = roundShareQuantity(ownedShares - sellShares)
 			if (remainingShares > 0) {
 				portfolio[idx] = { ...holding, shares: remainingShares }
 			} else {
@@ -2564,7 +2574,7 @@ function reducer(state: State, action: any) {
 			}
 
 			const fillType = slippageLabel(price, marketPrice)
-			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📉 Sold ${sellShares} ${ticker} @ $${price.toFixed(2)} (${fillType}, +$${proceeds.toFixed(2)})` }]
+			const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `📉 Sold ${formatShareQuantity(sellShares)} ${ticker} @ $${price.toFixed(2)} (${fillType}, +$${proceeds.toFixed(2)})` }]
 			return {
 				...state,
 				check: round2(state.check + proceeds),
