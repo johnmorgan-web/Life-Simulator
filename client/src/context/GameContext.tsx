@@ -14,7 +14,7 @@ import type { Job, LifeEvent } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')
 const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta'])
 const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username', 'isAdmin', 'authToken'])
 const APPEND_ONLY_STATE_KEYS = new Set([

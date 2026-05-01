@@ -1,6 +1,9 @@
 import { INestApplication, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { ModulesContainer, NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { AppModule } from './app.module';
 import { AppService } from './app.service';
 
@@ -85,11 +88,28 @@ function collectNestRoutes(app: INestApplication): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const staticDir = path.resolve(process.cwd(), '..', 'client-dist');
+  const indexFile = path.join(staticDir, 'index.html');
+  const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: ['http://localhost:5173'],
+    origin: corsOrigins,
     credentials: true,
   });
+
+  if (fs.existsSync(indexFile)) {
+    app.useStaticAssets(staticDir);
+
+    const expressApp = app.getHttpAdapter().getInstance();
+    expressApp.get(/^(?!\/users(?:\/|$))(?!\/game(?:\/|$))(?!\/api(?:\/|$)).*/, (_req, res) => {
+      res.sendFile(indexFile);
+    });
+  }
+
   await app.init();
 
   const appService = app.get(AppService);
