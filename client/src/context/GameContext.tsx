@@ -33,6 +33,19 @@ type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
 let cachedUserSnapshots: any[] = []
 
+type AuthResult = { ok: true; data: any } | { ok: false; error: string }
+
+async function extractErrorMessage(response: Response, fallback: string) {
+	try {
+		const body = await response.json()
+		if (typeof body?.message === 'string' && body.message.trim()) return body.message.trim()
+		if (Array.isArray(body?.message) && body.message.length) return String(body.message[0] || fallback)
+	} catch {
+		// Ignore parse errors and use fallback message.
+	}
+	return fallback
+}
+
 function setCachedUserSnapshots(users: any[]) {
 	cachedUserSnapshots = Array.isArray(users) ? users : []
 }
@@ -56,12 +69,16 @@ async function authenticateUser(username: string, password: string) {
 		body: payload
 	})
 
-	if (!loginResponse.ok) return null
-	return loginResponse.json()
+	if (!loginResponse.ok) {
+		const error = await extractErrorMessage(loginResponse, 'Invalid credentials or unable to reach server.')
+		return { ok: false, error } as AuthResult
+	}
+	const data = await loginResponse.json()
+	return { ok: true, data } as AuthResult
 }
 
-async function registerUser(username: string, name: string, password: string) {
-	const payload = JSON.stringify({ username, name, password })
+async function registerUser(username: string, password: string) {
+	const payload = JSON.stringify({ username, password })
 	const headers = { 'Content-Type': 'application/json' }
 
 	const registerResponse = await fetch(`${API_BASE_URL}/users`, {
@@ -70,8 +87,12 @@ async function registerUser(username: string, name: string, password: string) {
 		body: payload
 	})
 
-	if (!registerResponse.ok) return null
-	return registerResponse.json()
+	if (!registerResponse.ok) {
+		const error = await extractErrorMessage(registerResponse, 'Unable to create user. Username may already exist.')
+		return { ok: false, error } as AuthResult
+	}
+	const data = await registerResponse.json()
+	return { ok: true, data } as AuthResult
 }
 
 async function fetchUserById(id: string) {
@@ -109,7 +130,6 @@ async function adminUpdateUserById(
 		debt: number
 		isAdmin: boolean
 		username?: string
-		name?: string
 		password?: string
 	},
 ) {
@@ -1207,7 +1227,7 @@ const initialState: State = {
 	activeEdu: null,
 	eduProgress: initializeEduProgress(),
 	ledger: [],
-	name: 'John Morgan',
+	name: 'Player',
 	tenure: 0,
 	logs: [],
 	careerHistory: [],
@@ -1456,10 +1476,18 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
 	const marketPrices = normalizeMarketPrices(data.marketPrices)
 	const realEstateState = normalizeRealEstateState(data)
+	const normalizedName = String(
+		data.username
+		?? currentUser
+		?? fallbackState?.username
+		?? fallbackState?.currentUser
+		?? 'Player'
+	)
 	return {
 		...data,
 		...realEstateState,
 		currentUser,
+		name: normalizedName,
 		isAdmin: Boolean(data.isAdmin),
 		entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
 		subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
@@ -2991,7 +3019,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			activeEdu: null,
 			eduProgress: initializeEduProgress(),
 			ledger: [],
-			name: 'John Morgan',
+			name: state.username || state.currentUser || 'Player',
 			tenure: 0,
 			logs: [],
 			careerHistory: [],
@@ -3086,17 +3114,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	async function login(username: string, password?: string) {
 		const normalizedUsername = String(username || '').trim()
 		const normalizedPassword = String(password || '')
-		if (!normalizedUsername || !normalizedPassword) return false
+		if (!normalizedUsername || !normalizedPassword) {
+			return { ok: false, error: 'Username and password are required.' }
+		}
 
-		let data: any = null
+		let result: AuthResult
 		try {
-			data = await authenticateUser(normalizedUsername, normalizedPassword)
+			result = await authenticateUser(normalizedUsername, normalizedPassword)
 		} catch (e) {
 			console.error('Authentication request failed', e)
-			return false
+			return { ok: false, error: 'Unable to reach server.' }
 		}
 
-		if (!data) return false
+		if (!result.ok) return result
+
+		const data = result.data
 
 		dispatch({
 			type: 'SET_STATE',
@@ -3110,24 +3142,27 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		buildLedger(0, 0, data)
 		refreshPeerSnapshots()
 
-		return true
+		return { ok: true }
 	}
 
-	async function createUser(username: string, name: string, password?: string) {
+	async function createUser(username: string, password?: string) {
 		const normalizedUsername = String(username || '').trim()
-		const normalizedName = String(name || '').trim()
 		const normalizedPassword = String(password || '')
-		if (!normalizedUsername || !normalizedName || !normalizedPassword) return false
-
-		let data: any = null
-		try {
-			data = await registerUser(normalizedUsername, normalizedName, normalizedPassword)
-		} catch (e) {
-			console.error('Registration request failed', e)
-			return false
+		if (!normalizedUsername || !normalizedPassword) {
+			return { ok: false, error: 'Username and password are required.' }
 		}
 
-		if (!data) return false
+		let result: AuthResult
+		try {
+			result = await registerUser(normalizedUsername, normalizedPassword)
+		} catch (e) {
+			console.error('Registration request failed', e)
+			return { ok: false, error: 'Unable to reach server.' }
+		}
+
+		if (!result.ok) return result
+
+		const data = result.data
 
 		dispatch({
 			type: 'SET_STATE',
@@ -3141,7 +3176,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		buildLedger(0, 0, data)
 		refreshPeerSnapshots()
 
-		return true
+		return { ok: true }
 	}
 
 	function logout() {

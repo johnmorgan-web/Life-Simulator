@@ -26,6 +26,7 @@ const APPEND_ONLY_STATE_KEYS = new Set<string>([
 
 const PASSWORD_SALT_ROUNDS = 12;
 const PASSWORD_COMPLEXITY_REGEX = /^(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const USERNAME_CREATE_REGEX = /^[A-Za-z0-9]+$/;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 
 @Injectable()
@@ -99,24 +100,34 @@ export class UserService implements OnModuleInit {
     return user;
   }
 
-  private buildHydratedState(name: string, state: Record<string, any> = {}): Partial<GameState> {
+  private buildHydratedState(
+    state: Record<string, any> = {},
+    usernameFallback?: string | null,
+  ): Partial<GameState> {
+    const { name: _legacyName, ...stateWithoutName } = state;
+    const resolvedName = String(
+      stateWithoutName.username
+      || stateWithoutName.currentUser
+      || usernameFallback
+      || 'Player',
+    );
     // Rebuild a complete shape from defaults + saved fields so omitted keys still exist at runtime.
     return {
-      ...this.gameService.getInitialState(name),
-      ...state,
-      name,
+      ...this.gameService.getInitialState(),
+      ...stateWithoutName,
+      name: resolvedName,
     };
   }
 
-  private buildPersistedState(name: string, state: Partial<GameState>): Record<string, any> {
+  private buildPersistedState(state: Partial<GameState>): Record<string, any> {
     const normalizedState = {
       ...state,
-      name,
     } as Record<string, any>;
 
     const persistedState: Record<string, any> = {};
     for (const [key, value] of Object.entries(normalizedState)) {
       if (NON_PERSISTED_STATE_KEYS.has(key)) continue;
+      if (key === 'name') continue;
       if (value === undefined) continue;
       persistedState[key] = value;
     }
@@ -125,10 +136,11 @@ export class UserService implements OnModuleInit {
   }
 
   private toGameSnapshot(entity: UserStateEntity, authToken?: string): Partial<GameState> & { id: string } {
+    const resolvedName = String(entity.username || (entity.state as any)?.currentUser || 'Player');
     const snapshot: Partial<GameState> & { id: string } = {
       ...(entity.state || {}),
       username: entity.username,
-      name: entity.name,
+      name: resolvedName,
       id: entity.id,
       isAdmin: Boolean(entity.isAdmin),
     };
@@ -141,11 +153,11 @@ export class UserService implements OnModuleInit {
   }
 
   private toHydratedGameSnapshot(entity: UserStateEntity): Partial<GameState> & { id: string } {
-    const hydratedState = this.buildHydratedState(entity.name, entity.state || {});
+    const hydratedState = this.buildHydratedState(entity.state || {}, entity.username);
     return {
       ...hydratedState,
       username: entity.username,
-      name: entity.name,
+      name: String((hydratedState as any).name || entity.username || 'Player'),
       id: entity.id,
       isAdmin: Boolean(entity.isAdmin),
     };
@@ -156,7 +168,7 @@ export class UserService implements OnModuleInit {
     return {
       id: entity.id,
       username: entity.username,
-      name: entity.name,
+      name: String(entity.username || (state as any).currentUser || 'Player'),
       isAdmin: Boolean(entity.isAdmin),
       isPrimaryAdminLocked,
       createdAt: entity.createdAt,
@@ -174,13 +186,13 @@ export class UserService implements OnModuleInit {
    */
   async createUser(
     username: string,
-    name: string,
     password: string,
   ): Promise<(Partial<GameState> & { id: string }) | null> {
     const trimmedUsername = String(username || '').trim();
-    const trimmedName = String(name || '').trim();
     if (!trimmedUsername) throw new BadRequestException('Username is required');
-    if (!trimmedName) throw new BadRequestException('Name is required');
+    if (!USERNAME_CREATE_REGEX.test(trimmedUsername)) {
+      throw new BadRequestException('Username is invalid. Use letters and numbers only (A-Z, a-z, 0-9), with no spaces or special characters');
+    }
     if (!password || !PASSWORD_COMPLEXITY_REGEX.test(password)) {
       throw new BadRequestException('Password must be at least 8 characters and include 1 number and 1 symbol');
     }
@@ -191,14 +203,13 @@ export class UserService implements OnModuleInit {
     const existingUsersCount = await this.userStateRepository.count();
     const id = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
-    const initialState = this.gameService.getInitialState(trimmedName);
+    const initialState = this.gameService.getInitialState();
     const createdUser = this.userStateRepository.create({
       id,
       username: trimmedUsername,
-      name: trimmedName,
       passwordHash,
       isAdmin: existingUsersCount === 0,
-      state: this.buildPersistedState(trimmedName, initialState),
+      state: this.buildPersistedState(initialState),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -262,7 +273,6 @@ export class UserService implements OnModuleInit {
     const nextState: Record<string, any> = {
       ...currentState,
       ...directUpdates,
-      name: user.name,
     };
 
     if (_append && typeof _append === 'object') {
@@ -274,7 +284,7 @@ export class UserService implements OnModuleInit {
       }
     }
 
-    user.state = this.buildPersistedState(user.name, nextState);
+    user.state = this.buildPersistedState(nextState);
     user.updatedAt = new Date();
 
     const updated = await this.userStateRepository.save(user);
@@ -339,7 +349,6 @@ export class UserService implements OnModuleInit {
       debt?: number;
       isAdmin?: boolean;
       username?: string;
-      name?: string;
       password?: string;
     },
   ) {
@@ -399,13 +408,6 @@ export class UserService implements OnModuleInit {
       user.username = username;
     }
 
-    if (changes.name !== undefined) {
-      const nextName = String(changes.name || '').trim();
-      if (!nextName) throw new BadRequestException('Name is required');
-      user.name = nextName;
-      nextState.name = nextName;
-    }
-
     if (changes.password !== undefined) {
       const password = String(changes.password || '');
       if (!PASSWORD_COMPLEXITY_REGEX.test(password)) {
@@ -414,7 +416,7 @@ export class UserService implements OnModuleInit {
       user.passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
     }
 
-    user.state = this.buildPersistedState(user.name, nextState);
+    user.state = this.buildPersistedState(nextState);
     user.updatedAt = new Date();
     const saved = await this.userStateRepository.save(user);
     return this.toAdminUserSummary(saved);

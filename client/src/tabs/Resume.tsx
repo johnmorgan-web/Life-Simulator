@@ -6,7 +6,7 @@ export default function Resume() {
   return (
     <div className="glass p-6">
       <div className="space-y-6">
-        <h2 className="text-3xl font-bold">{state.name}</h2>
+        <h2 className="text-3xl font-bold">{state.currentUser || state.username || 'Player'}</h2>
         <div className="grid grid-cols-2 gap-8">
           <div>
             <h3 className="font-bold border-b text-xs text-slate-400 mb-2 uppercase">Experience</h3>

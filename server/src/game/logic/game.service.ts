@@ -26,7 +26,7 @@ export class GameService {
   /**
    * Get initial game state for a new user
    */
-  getInitialState(name: string): Partial<GameState> {
+  getInitialState(): Partial<GameState> {
     const defaultJob = { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 };
     const defaultCity = cityData[3]; // Chicago
     const entertainmentDefaults = this.entertainmentService.comfortableEntertainmentDefaults(
@@ -35,7 +35,6 @@ export class GameService {
     );
 
     return {
-      name,
       check: 1200.0,
       savings: 0,
       debt: 0,

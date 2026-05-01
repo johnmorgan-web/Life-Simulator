@@ -6,8 +6,8 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  async createUser(@Body() body: { username: string; name: string; password: string }) {
-    return this.userService.createUser(body.username, body.name, body.password);
+  async createUser(@Body() body: { username: string; password: string }) {
+    return this.userService.createUser(body.username, body.password);
   }
 
   @Post('login')
@@ -36,7 +36,6 @@ export class UserController {
       debt?: number;
       isAdmin?: boolean;
       username?: string;
-      name?: string;
       password?: string;
     },
   ) {
@@ -46,7 +45,6 @@ export class UserController {
       debt: body.debt,
       isAdmin: body.isAdmin,
       username: body.username,
-      name: body.name,
       password: body.password,
     });
   }

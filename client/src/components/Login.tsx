@@ -5,11 +5,18 @@ import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolic
 export default function Login() {
   const { login, createUser } = useGame()
   const [username, setUsername] = useState('')
-  const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isCreateMode, setIsCreateMode] = useState(false)
+
+  const handleUsernameChange = (value: string) => {
+    if (isCreateMode) {
+      setUsername(value.replace(/[^A-Za-z0-9]/g, ''))
+      return
+    }
+    setUsername(value)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,11 +27,6 @@ export default function Login() {
     }
 
     if (isCreateMode) {
-      if (!name) {
-        setError('Name is required when creating a user.')
-        return
-      }
-
       if (!isPasswordValid(password)) {
         setError(PASSWORD_POLICY_MESSAGE)
         return
@@ -36,14 +38,14 @@ export default function Login() {
       }
     }
 
-    const ok = isCreateMode
-      ? await createUser(username, name, password)
+    const result = isCreateMode
+      ? await createUser(username, password)
       : await login(username, password)
 
-    if (!ok) {
-      setError(isCreateMode
+    if (!result?.ok) {
+      setError(result?.error || (isCreateMode
         ? 'Unable to create user. Username may already exist.'
-        : 'Invalid credentials or unable to reach server.')
+        : 'Invalid credentials or unable to reach server.'))
     }
   }
 
@@ -56,17 +58,14 @@ export default function Login() {
         </h2>
         <div className="mb-4">
           <label className="block text-sm font-bold text-slate-600 mb-1">Username</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 border rounded" placeholder="Enter your username" />
+          <input value={username} onChange={e => handleUsernameChange(e.target.value)} className="w-full p-3 border rounded" placeholder="Enter your username" />
           {isCreateMode ? (
-            <p className="mt-1 text-xs text-slate-500">Hint: choose a unique name you will remember.</p>
+            <>
+              <p className="mt-1 text-xs text-slate-500">Hint: choose a unique username you will remember.</p>
+              <p className="mt-1 text-xs text-amber-700">For privacy, do not use your real name in your username.</p>
+            </>
           ) : null}
         </div>
-        {isCreateMode ? (
-          <div className="mb-4">
-            <label className="block text-sm font-bold text-slate-600 mb-1">Name</label>
-            <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 border rounded" placeholder="John Morgan" />
-          </div>
-        ) : null}
         <div className="mb-6">
           <label className="block text-sm font-bold text-slate-600 mb-1">Password</label>
           <input value={password} onChange={e => setPassword(e.target.value)} type="password" className="w-full p-3 border rounded" placeholder="Password" />
@@ -88,7 +87,6 @@ export default function Login() {
           type="button"
           onClick={() => {
             setError('')
-            setName('')
             setPassword('')
             setConfirmPassword('')
             setIsCreateMode((prev) => !prev)

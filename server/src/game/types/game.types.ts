@@ -240,7 +240,7 @@ export interface GameState {
   currentUser?: string | null;
   isAdmin?: boolean;
   authToken?: string;
-  name: string;
+  name?: string;
   unlockedThemes: string[];
   activeTheme: string;
   rewardTokens: number;
