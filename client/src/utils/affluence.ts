@@ -130,7 +130,7 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
   const peersByUser = new Map<string, PeerAffluence>()
 
   for (const snapshot of peerSnapshots) {
-    const user = String(snapshot?.username || snapshot?.currentUser || snapshot?.name || '').trim()
+    const user = String(snapshot?.username || snapshot?.currentUser || '').trim()
     if (!user) continue
     peersByUser.set(user, {
       user,
@@ -169,6 +169,6 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
     rank,
     count,
     percentile,
-    topPeers: sorted.slice(0, 5)
+    topPeers: sorted.slice(0, 10)
   }
 }

@@ -1,8 +1,8 @@
 
-export default function Ledger({ ledger, onCheck, format }: any) {
+export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
   const fmt = format || ((n: number) => n.toFixed(2))
-  // show the Auto Check button only during development
-  const showAutoCheck = import.meta.env.DEV || (import.meta.env.VITE_SHOW_AUTO_CHECK === 'true')
+  // show the Auto Check button only during development or for admins
+  const showAutoCheck = isAdmin || import.meta.env.DEV || (import.meta.env.VITE_SHOW_AUTO_CHECK === 'true')
   return (
     <div className="glass p-6">
       <div className="mb-4 flex justify-between items-center">

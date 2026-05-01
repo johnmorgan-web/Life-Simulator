@@ -9,9 +9,6 @@ export class UserStateEntity {
   @Column({ type: 'varchar', length: 80, nullable: true })
   username!: string | null;
 
-  @Column({ type: 'varchar', length: 120 })
-  name!: string;
-
   @Column({ type: 'varchar', length: 255, nullable: true })
   passwordHash!: string | null;
 

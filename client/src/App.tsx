@@ -24,7 +24,7 @@ function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
   const format = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  if (tab === 'ledger') return <Ledger ledger={state.ledger} onCheck={checkRow} format={format} />
+  if (tab === 'ledger') return <Ledger ledger={state.ledger} onCheck={checkRow} format={format} isAdmin={state.isAdmin} />
   if (tab === 'careers') return <Careers />
   if (tab === 'academy') return <Academy />
   if (tab === 'transit') return <Transit />

@@ -5,7 +5,6 @@ import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolic
 type AdminUserRow = {
   id: string
   username: string
-  name: string
   isAdmin: boolean
   isPrimaryAdminLocked?: boolean
   createdAt?: string
@@ -23,7 +22,6 @@ function formatMoney(value: number) {
 type ManageDraft = {
   id: string
   username: string
-  name: string
   password: string
   confirmPassword: string
 }
@@ -31,7 +29,6 @@ type ManageDraft = {
 function rowChanged(current: AdminUserRow, baseline: AdminUserRow) {
   return (
     current.username !== baseline.username
-    || current.name !== baseline.name
     || current.isAdmin !== baseline.isAdmin
     || Number(current.balances.checking) !== Number(baseline.balances.checking)
     || Number(current.balances.savings) !== Number(baseline.balances.savings)
@@ -114,7 +111,6 @@ export default function Admin() {
     setManageDraft({
       id: user.id,
       username: user.username,
-      name: user.name,
       password: '',
       confirmPassword: '',
     })
@@ -124,13 +120,8 @@ export default function Admin() {
     if (!manageDraft) return
 
     const username = String(manageDraft.username || '').trim()
-    const name = String(manageDraft.name || '').trim()
     if (!username) {
       setError('Username is required.')
-      return
-    }
-    if (!name) {
-      setError('Name is required.')
       return
     }
 
@@ -148,7 +139,7 @@ export default function Admin() {
 
     setUsers(prev => prev.map(user => (
       user.id === manageDraft.id
-        ? { ...user, username, name }
+        ? { ...user, username }
         : user
     )))
 
@@ -192,7 +183,6 @@ export default function Admin() {
         debt: Number(row.balances.debt || 0),
         isAdmin: Boolean(row.isAdmin),
         username: row.username,
-        name: row.name,
         password: pendingPasswords[row.id],
       })
 
@@ -221,7 +211,6 @@ export default function Admin() {
           payload: {
             username: selfUpdated.username,
             currentUser: selfUpdated.username,
-            name: selfUpdated.name,
             isAdmin: Boolean(selfUpdated.isAdmin),
             check: Number(selfUpdated.balances?.checking || 0),
             savings: Number(selfUpdated.balances?.savings || 0),
@@ -289,7 +278,6 @@ export default function Admin() {
               <tr key={user.id} className="border-b border-slate-100 align-middle">
                 <td className="py-2 pr-3">
                   <div className="font-semibold">{user.username}</div>
-                  <div className="text-xs text-slate-500">{user.name}</div>
                 </td>
                 <td className="py-2 pr-3">
                   <input
@@ -355,14 +343,6 @@ export default function Admin() {
                 <input
                   value={manageDraft.username}
                   onChange={(e) => setManageDraft({ ...manageDraft, username: e.target.value })}
-                  className="p-2 border rounded"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs uppercase font-semibold text-slate-500">Name</span>
-                <input
-                  value={manageDraft.name}
-                  onChange={(e) => setManageDraft({ ...manageDraft, name: e.target.value })}
                   className="p-2 border rounded"
                 />
               </label>

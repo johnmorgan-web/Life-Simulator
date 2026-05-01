@@ -223,7 +223,7 @@ export default function Bank() {
       </div>
 
       <div className="glass p-6">
-        <h3 className="font-bold text-lg mb-3">🏦 Top Player</h3>
+        <h3 className="font-bold text-lg mb-3">🏦 Top Players</h3>
         <div className="space-y-2">
           {comparison.topPeers.map((peer: any, index: number) => (
             <div key={`${peer.user}-${index}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">

@@ -117,23 +117,33 @@ export class RewardService {
     });
   }
 
-  private buildHydratedState(name: string, state: Record<string, any> = {}): Partial<GameState> {
+  private buildHydratedState(
+    state: Record<string, any> = {},
+    usernameFallback?: string | null,
+  ): Partial<GameState> {
+    const { name: _legacyName, ...stateWithoutName } = state;
+    const resolvedName = String(
+      stateWithoutName.username
+      || stateWithoutName.currentUser
+      || usernameFallback
+      || 'Player',
+    );
     return {
-      ...this.gameService.getInitialState(name),
-      ...state,
-      name,
+      ...this.gameService.getInitialState(),
+      ...stateWithoutName,
+      name: resolvedName,
     };
   }
 
-  private buildPersistedState(name: string, state: Partial<GameState>): Record<string, any> {
+  private buildPersistedState(state: Partial<GameState>): Record<string, any> {
     const normalizedState = {
       ...state,
-      name,
     } as Record<string, any>;
 
     const persistedState: Record<string, any> = {};
     for (const [key, value] of Object.entries(normalizedState)) {
       if (NON_PERSISTED_STATE_KEYS.has(key)) continue;
+      if (key === 'name') continue;
       if (value === undefined) continue;
       persistedState[key] = value;
     }
@@ -314,7 +324,7 @@ export class RewardService {
     const entity = await this.userStateRepository.findOne({ where: { id } });
     if (!entity) throw new NotFoundException('User not found');
 
-    const hydratedState = this.buildHydratedState(entity.name, entity.state || {});
+    const hydratedState = this.buildHydratedState(entity.state || {}, entity.username);
     if (Number((hydratedState as any).rewardTokens || 0) <= 0) {
       throw new BadRequestException('No reward tokens available');
     }
@@ -322,17 +332,17 @@ export class RewardService {
     const prize = this.spinRewardPrize(hydratedState);
     const nextState = this.applyPrizeToState(hydratedState, prize);
 
-    entity.state = this.buildPersistedState(entity.name, nextState);
+    entity.state = this.buildPersistedState(nextState);
     entity.updatedAt = new Date();
     const saved = await this.userStateRepository.save(entity);
 
-    const hydratedSaved = this.buildHydratedState(saved.name, saved.state || {});
+    const hydratedSaved = this.buildHydratedState(saved.state || {}, saved.username);
     return {
       user: {
         ...hydratedSaved,
         id: saved.id,
         username: saved.username,
-        name: saved.name,
+        name: String((hydratedSaved as any).name || saved.username || 'Player'),
       } as Partial<GameState> & { id: string },
       prize,
     };
