@@ -6,6 +6,17 @@ import { stockMarketAssets, autoInvestProfiles } from '../../data/stockMarket.co
 export class MarketService {
   constructor(private utilitiesService: UtilitiesService) {}
 
+  private roundShareQuantity(value: number): number {
+    return Math.round(value * 1000) / 1000;
+  }
+
+  private formatShareQuantity(value: number): string {
+    return this.roundShareQuantity(value)
+      .toFixed(3)
+      .replace(/\.0+$/, '')
+      .replace(/(\.\d*[1-9])0+$/, '$1');
+  }
+
   normalizeMarketPrices(prices: any): Record<string, number> {
     const base = this.initializeMarketPrices();
     if (!prices || typeof prices !== 'object') return base;
@@ -212,24 +223,26 @@ export class MarketService {
       const allocation =
         adjustedWeightTotal > 0 ? (maxInvest * Number(adjustedWeight || 0)) / adjustedWeightTotal : 0;
       const marketPrice = Number(marketPrices[ticker] || 0);
-      if (marketPrice <= 0 || allocation <= 0) continue;
+      if (marketPrice <= 0 || allocation <= 0 || newCheck <= 0) continue;
       const price = this.executionPriceWithSlippage(
         marketPrice,
         `${ticker}-${month}-${year}-${profile.id}-auto`,
       );
+      if (price <= 0) continue;
 
-      const shares = Math.floor(allocation / price);
+      const budget = Math.min(allocation, newCheck);
+      const shares = this.roundShareQuantity(budget / price);
       if (shares <= 0) continue;
 
       const cost = this.utilitiesService.round2(shares * price);
-      if (cost > newCheck) continue;
+      if (cost > newCheck || cost <= 0) continue;
 
       const idx = nextPortfolio.findIndex((h: any) => h.ticker === ticker);
       if (idx >= 0) {
         const existing = nextPortfolio[idx];
         const existingShares = Number(existing.shares || 0);
         const existingAvg = Number(existing.avgCost || price);
-        const totalShares = existingShares + shares;
+        const totalShares = this.roundShareQuantity(existingShares + shares);
         const avgCost =
           totalShares > 0
             ? this.utilitiesService.round2(
@@ -243,7 +256,7 @@ export class MarketService {
 
       newCheck = this.utilitiesService.round2(newCheck - cost);
       investedAmount = this.utilitiesService.round2(investedAmount + cost);
-      tradeSummary.push(`${shares} ${ticker} @ ${price.toFixed(2)}`);
+      tradeSummary.push(`${this.formatShareQuantity(shares)} ${ticker} @ ${price.toFixed(2)}`);
     }
 
     if (tradeSummary.length > 0) {
