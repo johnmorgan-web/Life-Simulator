@@ -1,6 +1,6 @@
 services:
   life-simulator:
-    image: ghcr.io/johnmorgan-web/Life-Simulator:latest
+    image: ghcr.io/johnmorgan-web/life-simulator:latest
     container_name: life-simulator
     restart: unless-stopped
     ports:
