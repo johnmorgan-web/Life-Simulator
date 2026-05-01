@@ -4,7 +4,7 @@ services:
     container_name: life-simulator
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       PORT: 3000
       SQLITE_DB_PATH: /app/data/life-simulator.sqlite
@@ -12,7 +12,4 @@ services:
     mem_limit: 512m
     mem_reservation: 256m
     volumes:
-      - life_simulator_data:/app/data
-
-volumes:
-  life_simulator_data:
+      - ./data:/app/data
