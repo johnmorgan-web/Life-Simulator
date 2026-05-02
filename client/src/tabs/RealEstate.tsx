@@ -423,51 +423,63 @@ export default function RealEstate() {
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2 mt-3">
-                    <button
-                      title="Lean Maintenance: Spend less on upkeep. Lowers ongoing costs but the building condition decays faster over time."
-                      className="px-2 py-1 text-xs rounded bg-slate-200"
-                      onClick={() => setMaintenance(property.id, 0.8)}
-                    >
-                      Lean Maintenance
-                    </button>
-                    <button
-                      title="Balanced Maintenance: Standard upkeep spending. Condition holds roughly steady without over-investing."
-                      className="px-2 py-1 text-xs rounded bg-slate-200"
-                      onClick={() => setMaintenance(property.id, 1)}
-                    >
-                      Balanced Maintenance
-                    </button>
-                    <button
-                      title="Protective Maintenance: Higher spending on upkeep. Significantly slows condition decay and preserves asset value long-term."
-                      className="px-2 py-1 text-xs rounded bg-slate-200"
-                      onClick={() => setMaintenance(property.id, 1.2)}
-                    >
-                      Protective Maintenance
-                    </button>
-                    <button
-                      title="Refresh Plan: Light touch renovation at 55% of standard budget. Cosmetic fixes only — restores some condition with a 76% value recovery rate on dollars spent."
-                      className="px-2 py-1 text-xs rounded bg-indigo-500 text-white"
-                      onClick={() => startRenovation(property.id, 'refresh')}
-                      disabled={Number(property.renovationMonthsRemaining || 0) > 0}
-                    >
-                      Refresh Plan
-                    </button>
-                    <button
-                      title="Modernize Plan: Full renovation at 95% of standard budget. Upgrades systems and finishes — restores more condition with a 92% value recovery rate on dollars spent."
-                      className="px-2 py-1 text-xs rounded bg-indigo-600 text-white"
-                      onClick={() => startRenovation(property.id, 'modernize')}
-                      disabled={Number(property.renovationMonthsRemaining || 0) > 0}
-                    >
-                      Modernize Plan
-                    </button>
-                    <button
-                      title="Signature Reposition: Premium overhaul at 135% of standard budget. Full repositioning of the asset — maximizes condition recovery and achieves a 108% value recovery rate, meaning every dollar spent grows the property's value more than it costs."
-                      className="px-2 py-1 text-xs rounded bg-indigo-800 text-white"
-                      onClick={() => startRenovation(property.id, 'signature')}
-                      disabled={Number(property.renovationMonthsRemaining || 0) > 0}
-                    >
-                      {Number(property.renovationMonthsRemaining || 0) > 0 ? `Renovating (${property.renovationMonthsRemaining} mo)` : 'Signature Reposition'}
-                    </button>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-slate-200"
+                        onClick={() => setMaintenance(property.id, 0.8)}
+                      >
+                        Lean Maintenance
+                      </button>
+                      <span className="tooltip-bubble">Lean Maintenance: Spend less on upkeep. Lowers ongoing costs but the building condition decays faster over time.<span className="tooltip-caret" /></span>
+                    </span>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-slate-200"
+                        onClick={() => setMaintenance(property.id, 1)}
+                      >
+                        Balanced Maintenance
+                      </button>
+                      <span className="tooltip-bubble">Balanced Maintenance: Standard upkeep spending. Condition holds roughly steady without over-investing.<span className="tooltip-caret" /></span>
+                    </span>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-slate-200"
+                        onClick={() => setMaintenance(property.id, 1.2)}
+                      >
+                        Protective Maintenance
+                      </button>
+                      <span className="tooltip-bubble">Protective Maintenance: Higher spending on upkeep. Significantly slows condition decay and preserves asset value long-term.<span className="tooltip-caret" /></span>
+                    </span>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-indigo-500 text-white"
+                        onClick={() => startRenovation(property.id, 'refresh')}
+                        disabled={Number(property.renovationMonthsRemaining || 0) > 0}
+                      >
+                        Refresh Plan
+                      </button>
+                      <span className="tooltip-bubble">Refresh Plan: Light touch renovation at 55% of standard budget. Cosmetic fixes only, restores some condition with a 76% value recovery rate on dollars spent.<span className="tooltip-caret" /></span>
+                    </span>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-indigo-600 text-white"
+                        onClick={() => startRenovation(property.id, 'modernize')}
+                        disabled={Number(property.renovationMonthsRemaining || 0) > 0}
+                      >
+                        Modernize Plan
+                      </button>
+                      <span className="tooltip-bubble">Modernize Plan: Full renovation at 95% of standard budget. Upgrades systems and finishes, restores more condition with a 92% value recovery rate on dollars spent.<span className="tooltip-caret" /></span>
+                    </span>
+                    <span className="tooltip-anchor">
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-indigo-800 text-white"
+                        onClick={() => startRenovation(property.id, 'signature')}
+                        disabled={Number(property.renovationMonthsRemaining || 0) > 0}
+                      >
+                        {Number(property.renovationMonthsRemaining || 0) > 0 ? `Renovating (${property.renovationMonthsRemaining} mo)` : 'Signature Reposition'}
+                      </button>
+                      <span className="tooltip-bubble">Signature Reposition: Premium overhaul at 135% of standard budget. Full repositioning maximizes condition recovery and can add value faster than cost at a 108% recovery rate.<span className="tooltip-caret" /></span>
+                    </span>
                     <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => sellInvestmentProperty(property.id)}>Sell & Relist</button>
                   </div>
                   <details className="mt-3">
@@ -496,16 +508,17 @@ export default function RealEstate() {
                           ? 'Insufficient funds'
                           : titleizeAmenity(amenity)
                         return (
-                          <button
-                            key={amenity}
-                            title={title}
-                            className={`px-2 py-1 text-xs rounded ${isDisabled ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-emerald-100 text-emerald-800 cursor-pointer hover:bg-emerald-200'}`}
-                            onClick={() => !isDisabled && setProjectionModal({ propertyId: property.id, amenity })}
-                            disabled={isDisabled}
-                          >
-                            {titleizeAmenity(amenity)} • {impact?.upgradeTier || 'core'} • {currency(impact?.installCost || 12000)} • +{Math.round(Number(impact?.valueBoost || 0) * 100)}% value
-                            {!preqCheck.met && ` ⚠️ (${preqCheck.missing.map(titleizeAmenity).join(', ')})`}
-                          </button>
+                          <span key={amenity} className="tooltip-anchor">
+                            <button
+                              className={`px-2 py-1 text-xs rounded ${isDisabled ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-emerald-100 text-emerald-800 cursor-pointer hover:bg-emerald-200'}`}
+                              onClick={() => !isDisabled && setProjectionModal({ propertyId: property.id, amenity })}
+                              disabled={isDisabled}
+                            >
+                              {titleizeAmenity(amenity)} • {impact?.upgradeTier || 'core'} • {currency(impact?.installCost || 12000)} • +{Math.round(Number(impact?.valueBoost || 0) * 100)}% value
+                              {!preqCheck.met && ` ⚠️ (${preqCheck.missing.map(titleizeAmenity).join(', ')})`}
+                            </button>
+                            <span className="tooltip-bubble">{title}<span className="tooltip-caret" /></span>
+                          </span>
                         )
                       })}
                     </div>

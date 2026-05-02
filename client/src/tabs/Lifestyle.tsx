@@ -261,7 +261,7 @@ export default function Lifestyle() {
                       ?
                     </button>
                     {showHappinessTooltip && (
-                      <div className="absolute z-50 bottom-full mb-2 right-0 w-72 rounded-lg bg-slate-900 text-white text-[11px] p-3 shadow-xl">
+                      <div className="absolute z-50 bottom-full mb-2 right-0 w-72 max-w-[85vw] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl">
                         <p className="font-bold mb-1">Happiness Drivers</p>
                         <p>Improves with concierge, housekeeper, trainer, therapist, and healthy leisure spending.</p>
                         <p className="mt-1">Drops with debt, long low-pay stagnation, high-pay stress, stale purchases, and underspending.</p>
@@ -410,12 +410,16 @@ export default function Lifestyle() {
                   {entertainmentOptions.map((option, idx) => {
                     const active = idx < activeEntertainmentCount
                     return (
-                      <div
-                        key={option.name}
-                        className={`px-2 py-1 rounded-lg text-xs border transition ${active ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
-                        title={`${option.name} (~$${option.monthlyCost}/mo)`}
-                      >
-                        <span className="mr-1">{option.icon}</span>{option.name}
+                      <div key={option.name} className="tooltip-anchor">
+                        <div
+                          className={`px-2 py-1 rounded-lg text-xs border transition ${active ? 'bg-emerald-100 border-emerald-400 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
+                        >
+                          <span className="mr-1">{option.icon}</span>{option.name}
+                        </div>
+                        <span className="tooltip-bubble">
+                          {option.name} (~${option.monthlyCost}/mo)
+                          <span className="tooltip-caret" />
+                        </span>
                       </div>
                     )
                   })}
@@ -433,12 +437,16 @@ export default function Lifestyle() {
                   {entertainmentOptions.map((option, idx) => {
                     const active = idx < activeEntertainmentCount
                     return (
-                      <span
-                        key={`ent-icon-${option.name}`}
-                        className={`text-base transition ${active ? 'opacity-100 drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'opacity-35'}`}
-                        title={`${option.name} (~$${option.monthlyCost}/mo)`}
-                      >
-                        {option.icon}
+                      <span key={`ent-icon-${option.name}`} className="tooltip-anchor">
+                        <span
+                          className={`text-base transition ${active ? 'opacity-100 drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]' : 'opacity-35'}`}
+                        >
+                          {option.icon}
+                        </span>
+                        <span className="tooltip-bubble">
+                          {option.name} (~${option.monthlyCost}/mo)
+                          <span className="tooltip-caret" />
+                        </span>
                       </span>
                     )
                   })}
@@ -451,11 +459,14 @@ export default function Lifestyle() {
                     return (
                       <div
                         key={option.name}
-                        className={`absolute -translate-x-1/2 top-0 transition-all ${active ? 'opacity-100 scale-110' : 'opacity-35 scale-100'}`}
+                        className={`tooltip-anchor absolute -translate-x-1/2 top-0 transition-all ${active ? 'opacity-100 scale-110' : 'opacity-35 scale-100'}`}
                         style={{ left: `${left}%` }}
-                        title={`${option.name} (~$${option.monthlyCost}/mo)`}
                       >
                         <div className={`text-base ${active ? 'drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]' : ''}`}>{option.icon}</div>
+                        <span className="tooltip-bubble">
+                          {option.name} (~${option.monthlyCost}/mo)
+                          <span className="tooltip-caret" />
+                        </span>
                       </div>
                     )
                   })}
@@ -474,12 +485,16 @@ export default function Lifestyle() {
                   {subscriptionOptions.map((option, idx) => {
                     const active = idx < activeSubscriptionCount
                     return (
-                      <div
-                        key={option.name}
-                        className={`px-2 py-1 rounded-lg text-xs border transition ${active ? 'bg-sky-100 border-sky-400 text-sky-700' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
-                        title={`${option.name} (~$${option.monthlyCost}/mo)`}
-                      >
-                        <span className="mr-1">{option.icon}</span>{option.name}
+                      <div key={option.name} className="tooltip-anchor">
+                        <div
+                          className={`px-2 py-1 rounded-lg text-xs border transition ${active ? 'bg-sky-100 border-sky-400 text-sky-700' : 'bg-slate-100 border-slate-200 text-slate-400'}`}
+                        >
+                          <span className="mr-1">{option.icon}</span>{option.name}
+                        </div>
+                        <span className="tooltip-bubble">
+                          {option.name} (~${option.monthlyCost}/mo)
+                          <span className="tooltip-caret" />
+                        </span>
                       </div>
                     )
                   })}
@@ -501,11 +516,14 @@ export default function Lifestyle() {
                     return (
                       <div
                         key={option.name}
-                        className={`absolute -translate-x-1/2 top-0 transition-all ${active ? 'opacity-100 scale-110' : 'opacity-35 scale-100'}`}
+                        className={`tooltip-anchor absolute -translate-x-1/2 top-0 transition-all ${active ? 'opacity-100 scale-110' : 'opacity-35 scale-100'}`}
                         style={{ left: `${left}%` }}
-                        title={`${option.name} (~$${option.monthlyCost}/mo)`}
                       >
                         <div className={`text-base ${active ? 'drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]' : ''}`}>{option.icon}</div>
+                        <span className="tooltip-bubble">
+                          {option.name} (~${option.monthlyCost}/mo)
+                          <span className="tooltip-caret" />
+                        </span>
                       </div>
                     )
                   })}
