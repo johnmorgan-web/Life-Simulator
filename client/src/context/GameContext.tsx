@@ -55,8 +55,8 @@ function getRegisteredUserCount() {
 }
 
 function capacityScaleForUsers(registeredUsers: number) {
-	// 1 user => 1.0x capacity, 2 => 1.3x, 3 => 1.6x ... capped at 2x.
-	return Math.min(2, Math.max(1, 0.7 + registeredUsers * 0.3))
+	// Keep growth modest so premium jobs stay competitive as users increase.
+	return Math.min(1.35, Math.max(0.9, 0.78 + registeredUsers * 0.12))
 }
 
 async function authenticateUser(username: string, password: string) {
@@ -198,6 +198,9 @@ async function applyForJobOnServer(state: any, jobTitle: string) {
 
 function buildApplicationsRequestState(source: any, relevantJobTitles: string[] = []) {
 	const snapshot = source || {}
+	const cityUserCounts = getUserCityCounts(snapshot)
+	const currentCityName = String(snapshot?.city?.name || '')
+	const cityUserCount = Math.max(1, Number(cityUserCounts[currentCityName] || 1))
 	const requestedTitles = Array.from(
 		new Set(
 			relevantJobTitles
@@ -221,6 +224,10 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		year: Number(snapshot.year || 0),
 		credit: Number(snapshot.credit || 0),
 		tenure: Number(snapshot.tenure || 0),
+		city: {
+			name: currentCityName,
+		},
+		cityUserCount,
 		credentials: Array.isArray(snapshot.credentials) ? snapshot.credentials : [],
 		transit: {
 			level: Number(snapshot?.transit?.level || 0),
@@ -300,14 +307,16 @@ const REQUIREMENT_ALIASES: Record<string, string> = {
 
 function capacityForJob(job: Job, rankInTrack: number) {
 	const baseByCategory: Record<string, number> = {
-		Entry: 60,
-		Skilled: 35,
-		Military: 25,
-		Pro: 15
+		Entry: 36,
+		Skilled: 20,
+		Military: 14,
+		Pro: 8
 	}
-	const base = baseByCategory[job.cat || 'Pro'] || 80
-	const drop = Math.min(55, rankInTrack * 12)
-	return Math.max(3, base - drop)
+	const base = baseByCategory[job.cat || 'Pro'] || 24
+	const drop = Math.min(30, rankInTrack * 6)
+	const salaryPressure = Math.max(0, (Number(job.base || 0) - 5000) / 10000)
+	const scarcityCut = Math.round(salaryPressure * 6)
+	return Math.max(1, base - drop - scarcityCut)
 }
 
 function titleSeed(title: string) {
@@ -420,7 +429,8 @@ function initializeJobMarket(jobs: Job[]): JobMarketState {
 		const baseCapacity = job.capacity || 10
 		const capacity = Math.max(1, Math.round(baseCapacity * scale))
 		const seed = titleSeed(job.title)
-		const fillRate = 0.65 + (seed % 30) / 100
+		const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000))
+		const fillRate = Math.min(0.98, 0.78 + (seed % 15) / 100 + salaryPressure)
 		let occupied = Math.floor(capacity * fillRate)
 		if (occupied >= capacity) occupied = capacity - 1
 		market[job.title] = { capacity, occupied: Math.max(0, occupied) }
@@ -442,6 +452,8 @@ function getJobOpenings(state: State, job: Job) {
 	const slot = state.jobMarket?.[job.title]
 	const registeredUsers = getRegisteredUserCount()
 	const scale = capacityScaleForUsers(registeredUsers)
+	const cityUserCounts = getUserCityCounts(state)
+	const cityUsers = Math.max(1, Number(cityUserCounts[state?.city?.name || ''] || 1))
 
 	// Job capacity generated from progression rank acts as the baseline.
 	const baseCapacity = job.capacity ?? slot?.capacity ?? 1
@@ -450,7 +462,17 @@ function getJobOpenings(state: State, job: Job) {
 	const storedCapacity = slot?.capacity ?? dynamicCapacity
 	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.75)
 	const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75
-	const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * occupiedRatio)))
+	const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000))
+	const monthlyPulseSeed = titleSeed(`${job.title}-${state.month}-${state.year}`)
+	const monthlyPulse = ((monthlyPulseSeed % 9) - 4) / 100
+	const cityCompetitionPressure = (() => {
+		const extraUsers = Math.max(0, cityUsers - 1)
+		if ((job.cat || 'Pro') === 'Entry') return Math.min(0.05, extraUsers * 0.01)
+		return Math.min(0.28, 0.03 + extraUsers * 0.025)
+	})()
+	const marketPressure = Math.max(0, Math.min(0.35, salaryPressure + monthlyPulse + cityCompetitionPressure))
+	const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure))
+	const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * pressuredRatio)))
 
 	return Math.max(0, dynamicCapacity - dynamicOccupied)
 }
