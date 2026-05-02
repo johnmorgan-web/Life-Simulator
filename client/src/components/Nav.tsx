@@ -24,25 +24,27 @@ export default function Nav({ tab, setTab }: any) {
     { id: 'transit', label: `🚗 Transit (${vehicleCount})` }
   ]
   return (
-    <nav className="col-span-2">
-      <div className="space-y-2.5 sticky top-6">
-        <div className="glass px-4 py-3 border border-slate-200 bg-white/80">
+    <nav className="md:col-span-2">
+      <div className="md:space-y-2.5 md:sticky md:top-6">
+        <div className="glass px-3 sm:px-4 py-2.5 sm:py-3 border border-slate-200 bg-white/80 mb-2 md:mb-0">
           <p className="text-[10px] uppercase font-bold tracking-wide text-slate-500">Garage</p>
           <p className="text-sm font-bold text-slate-700">{garageIconStrip}</p>
         </div>
-        {tabs.map(t => {
-          const isRewards = t.id === 'rewards'
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`w-full text-left px-5 py-3.5 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'} flex items-center justify-between text-base font-semibold`}>
-              <span className="leading-tight">{t.label}</span>
-              {isRewards && rewardTokens > 0 ? (
-                <span className="ml-2 min-w-7 h-7 px-2 rounded-full bg-violet-600 text-white text-sm font-bold inline-flex items-center justify-center">
-                  {rewardTokens}
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
+        <div className="mobile-tabs-rail flex md:block gap-2 md:gap-2.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+          {tabs.map(t => {
+            const isRewards = t.id === 'rewards'
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} className={`snap-start shrink-0 md:w-full text-left px-3 sm:px-4 md:px-5 py-2.5 md:py-3.5 glass ${tab === t.id ? 'tab-active' : 'text-slate-500'} flex items-center justify-between text-sm md:text-base font-semibold gap-2`}>
+                <span className="leading-tight min-w-0 flex-1 whitespace-nowrap md:whitespace-normal xl:whitespace-nowrap break-words">{t.label}</span>
+                {isRewards && rewardTokens > 0 ? (
+                  <span className="ml-2 min-w-6 h-6 md:min-w-7 md:h-7 px-2 rounded-full bg-violet-600 text-white text-xs md:text-sm font-bold inline-flex items-center justify-center">
+                    {rewardTokens}
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
       </div>
     </nav>
   )

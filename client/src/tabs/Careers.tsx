@@ -296,8 +296,8 @@ export default function Careers() {
   return (
     <div>
       {/* Current Job Section */}
-      <div className="glass p-6 mb-6 border-l-4 border-emerald-600">
-        <div className="flex justify-between items-start">
+      <div className="glass p-4 sm:p-6 mb-6 border-l-4 border-emerald-600">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
           <div>
             <h3 className="font-bold text-lg text-slate-900 mb-1">Current Position</h3>
             <p className="text-2xl font-bold text-emerald-600 mb-2">{state.job.title}</p>
@@ -310,13 +310,13 @@ export default function Careers() {
           {canNegotiatePay ? (
             <button
               onClick={handleNegotiatePay}
-              className="py-3 px-6 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors"
+              className="w-full sm:w-auto py-3 px-5 sm:px-6 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors"
             >
               💼 Negotiate Pay
             </button>
           ) : (
-            <div className="text-right">
-              <button disabled className="py-3 px-6 bg-slate-300 text-slate-500 rounded-lg font-bold cursor-not-allowed">
+            <div className="text-left sm:text-right w-full sm:w-auto">
+              <button disabled className="w-full sm:w-auto py-3 px-5 sm:px-6 bg-slate-300 text-slate-500 rounded-lg font-bold cursor-not-allowed">
                 Negotiate Cooldown
               </button>
               <p className="text-xs text-slate-500 mt-2">
@@ -328,10 +328,10 @@ export default function Careers() {
       </div>
 
       {/* View Toggle */}
-      <div className="mb-6 flex gap-3 border-b border-slate-300">
+      <div className="mb-6 flex gap-2 sm:gap-3 border-b border-slate-300 overflow-x-auto mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
         <button
           onClick={() => setView('recommended')}
-          className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+          className={`shrink-0 py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-sm border-b-2 transition-colors ${
             view === 'recommended'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -341,7 +341,7 @@ export default function Careers() {
         </button>
         <button
           onClick={() => setView('all')}
-          className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+          className={`shrink-0 py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-sm border-b-2 transition-colors ${
             view === 'all'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -351,7 +351,7 @@ export default function Careers() {
         </button>
         <button
           onClick={() => setView('tree')}
-          className={`py-3 px-4 font-bold text-sm border-b-2 transition-colors ${
+          className={`shrink-0 py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-sm border-b-2 transition-colors ${
             view === 'tree'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -364,7 +364,7 @@ export default function Careers() {
       {/* Recommended Jobs View */}
       {view === 'recommended' && (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
             <label className="text-sm font-bold text-slate-500 ml-2">Category:</label>
             <select
               value={selectedCategory}
@@ -393,7 +393,7 @@ export default function Careers() {
             </select>
           </div>
 
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div className="mb-4 flex flex-wrap gap-2 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
             <button
               onClick={() => setSelectedSubcategory('all')}
               className={`req-tag ${selectedSubcategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
@@ -412,19 +412,20 @@ export default function Careers() {
           </div>
 
           {filteredRecommendations.length > 0 ? (
-            <div className="glass p-6 mb-4">
+            <div className="glass p-4 sm:p-6 mb-4">
               <h3 className="font-bold text-lg mb-4">Jobs matched to your profile (sorted by match score)</h3>
-              <div className="overflow-x-auto relative">
-                <table className="w-full text-sm">
+              <p className="text-[11px] text-slate-500 mb-2 md:hidden">Swipe horizontally to view all recommendation columns.</p>
+              <div className="overflow-x-auto relative -mx-2 px-2">
+                <table className="w-full min-w-[860px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-300">
-                      <th className="text-left py-3 px-3 font-bold text-slate-700">Job Title</th>
-                      <th className="text-center py-3 px-3 font-bold text-slate-700">Better Pay?</th>
-                      <th className="text-center py-3 px-3 font-bold text-slate-700">✓ Education</th>
-                      <th className="text-center py-3 px-3 font-bold text-slate-700">✓ Certificate</th>
-                      <th className="text-center py-3 px-3 font-bold text-slate-700">✓ Transport</th>
-                      <th className="text-center py-3 px-3 font-bold text-slate-700">Score</th>
-                      <th className="text-right py-3 px-3">Action</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">Job Title</th>
+                      <th className="text-center py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">Better Pay?</th>
+                      <th className="text-center py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">✓ Education</th>
+                      <th className="text-center py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">✓ Certificate</th>
+                      <th className="text-center py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">✓ Transport</th>
+                      <th className="text-center py-2 sm:py-3 px-2 sm:px-3 font-bold text-slate-700">Score</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-3">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -451,7 +452,7 @@ export default function Careers() {
 
                       return (
                         <tr key={j.title} className={`border-b border-slate-200 hover:bg-slate-50 ${!canApply ? 'opacity-60' : ''}`}>
-                          <td className="py-3 px-3">
+                          <td className="py-2 sm:py-3 px-2 sm:px-3">
                             <div className="font-bold text-slate-900">{j.title}</div>
                             <div className="text-xs text-slate-500">${Math.round(jobPay)}/mo</div>
                             <div className="subcat-banner">
@@ -459,7 +460,7 @@ export default function Careers() {
                               <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
                             </div>
                           </td>
-                          <td className="text-center py-3 px-3">
+                          <td className="text-center py-2 sm:py-3 px-2 sm:px-3">
                             {payIncrease > 0 ? (
                               <span className="inline-block bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold">
                                 +${Math.round(payIncrease)} ({payIncreasePercent}%)
@@ -470,7 +471,7 @@ export default function Careers() {
                               <span className="text-xs text-rose-600">−${Math.round(Math.abs(payIncrease))}</span>
                             )}
                           </td>
-                          <td className="text-center py-3 px-3 relative">
+                          <td className="text-center py-2 sm:py-3 px-2 sm:px-3 relative">
                             <div
                               onMouseEnter={() => setHoveredTooltip(`${j.title}-edu`)}
                               onMouseLeave={() => setHoveredTooltip(null)}
@@ -493,7 +494,7 @@ export default function Careers() {
                               </div>
                             )}
                           </td>
-                          <td className="text-center py-3 px-3 relative">
+                          <td className="text-center py-2 sm:py-3 px-2 sm:px-3 relative">
                             <div
                               onMouseEnter={() => setHoveredTooltip(`${j.title}-cert`)}
                               onMouseLeave={() => setHoveredTooltip(null)}
@@ -520,7 +521,7 @@ export default function Careers() {
                               </div>
                             )}
                           </td>
-                          <td className="text-center py-3 px-3 relative">
+                          <td className="text-center py-2 sm:py-3 px-2 sm:px-3 relative">
                             <div
                               onMouseEnter={() => setHoveredTooltip(`${j.title}-transit`)}
                               onMouseLeave={() => setHoveredTooltip(null)}
@@ -543,7 +544,7 @@ export default function Careers() {
                               </div>
                             )}
                           </td>
-                          <td className="text-center py-3 px-3 relative">
+                          <td className="text-center py-2 sm:py-3 px-2 sm:px-3 relative">
                             <div
                               onMouseEnter={() => setHoveredTooltip(`${j.title}-score`)}
                               onMouseLeave={() => setHoveredTooltip(null)}
@@ -579,11 +580,11 @@ export default function Careers() {
                               </div>
                             )}
                           </td>
-                          <td className="text-right py-3 px-3">
+                          <td className="text-right py-2 sm:py-3 px-2 sm:px-3">
                             <button
                               onClick={() => applyForJob(j)}
                               disabled={!canApply || hasApplied}
-                              className={`py-1 px-3 rounded text-xs font-bold ${
+                              className={`w-full sm:w-auto py-1 px-3 rounded text-xs font-bold ${
                                 hasApplied 
                                   ? 'bg-amber-500 text-white cursor-not-allowed' 
                                   : canApply 
@@ -613,7 +614,7 @@ export default function Careers() {
       {view === 'all' && (
         <>
           {/* Sort Controls */}
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
             <label className="text-sm font-bold text-slate-500">Sort:</label>
             <select value={sort} onChange={e => setSort(e.target.value as SortKey)} className="p-2 border rounded">
               <option value="best-match">Best Match</option>
@@ -679,7 +680,7 @@ export default function Careers() {
                   <h4 className="font-bold text-slate-800">{groupName}</h4>
                   <span className="text-xs text-slate-500 font-bold uppercase">{jobs.length} jobs</span>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {jobs.map((j: Job) => {
               const domain = resolveDomainKey(`${j.subcat || ''} ${j.cat || ''}`)
               const eligibility = getJobEligibility(state, j)
@@ -787,7 +788,7 @@ export default function Careers() {
                     </span>
                   </div>
                   {allNeeded.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-3 gap-4">
+                    <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <div><p className="text-xs text-slate-500">Credentials Still Needed</p><p className="text-2xl font-bold text-rose-600">{allNeeded.length}</p></div>
                       <div><p className="text-xs text-slate-500">Time to Complete</p><p className="text-2xl font-bold text-slate-900">{totalMonths} mo</p></div>
                       <div><p className="text-xs text-slate-500">Total Cost</p><p className="text-2xl font-bold text-rose-600">${totalCost.toLocaleString()}</p></div>
@@ -810,7 +811,7 @@ export default function Careers() {
                         const inProgress = state.activeEdu === course.n
                         return (
                           <div key={course.n} className="flex items-center gap-2">
-                            <div className={`rounded-xl px-4 py-3 border-2 min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
+                            <div className={`rounded-xl px-3 sm:px-4 py-3 border-2 min-w-[120px] sm:min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
                               <div className="text-sm font-bold text-slate-900">{course.icon} {course.n}</div>
                               <div className="text-[10px] text-slate-500 mt-0.5">{course.m} mo · ${course.c}/mo</div>
                               <div className={`text-[10px] font-bold mt-1 ${owned ? 'text-emerald-600' : inProgress ? 'text-amber-600' : 'text-rose-600'}`}>
@@ -837,7 +838,7 @@ export default function Careers() {
                         const inProgress = state.activeEdu === course.n
                         return (
                           <div key={course.n} className="flex items-center gap-2">
-                            <div className={`rounded-xl px-4 py-3 border-2 min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
+                            <div className={`rounded-xl px-3 sm:px-4 py-3 border-2 min-w-[120px] sm:min-w-[130px] ${owned ? 'bg-emerald-50 border-emerald-400' : inProgress ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
                               <div className="text-sm font-bold text-slate-900">{course.icon} {course.n}</div>
                               <div className="text-[10px] text-slate-500 mt-0.5">{course.m} mo · ${course.c}/mo</div>
                               <div className={`text-[10px] font-bold mt-1 ${owned ? 'text-emerald-600' : inProgress ? 'text-amber-600' : 'text-rose-600'}`}>

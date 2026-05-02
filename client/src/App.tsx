@@ -461,26 +461,25 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
               onComplete={handleCelebrationComplete} 
             />
             {achievementToast && (
-              <div className="fixed top-5 right-5 z-50 max-w-sm bg-white border border-emerald-200 shadow-xl rounded-2xl px-4 py-3">
+              <div className="fixed top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-3 sm:top-5 sm:right-5 z-50 max-w-sm w-[calc(100vw-1.5rem)] sm:w-auto bg-white border border-emerald-200 shadow-xl rounded-2xl px-4 py-3">
                 <p className="text-[10px] uppercase font-bold tracking-wide text-emerald-600">Achievement Unlocked</p>
                 <p className="text-sm font-bold text-slate-900">{achievementToast.title}</p>
                 <p className="text-xs text-slate-500 mt-1">Category: {achievementToast.category} • Reward spin added</p>
               </div>
             )}
             <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
-            <main className="flex-1 overflow-hidden p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-12 gap-7">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-7 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]">
               <Nav tab={tab} setTab={setTab} />
               <div 
-                className="col-span-10 overflow-y-auto overflow-x-hidden pb-20 tab-panel"
-                style={{ minHeight: 'calc(100vh - 130px)'}}>
+                className="md:col-span-10 overflow-y-visible md:overflow-y-auto overflow-x-hidden pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] md:pb-20 tab-panel md:min-h-[calc(100vh-130px)]">
                 <TabContent tab={tab} />
               </div>
             </main>
           </>
         )}
       {state.showSettlement && (
-        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl relative">
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => dispatch({ type: 'SET_STATE', payload: { showSettlement: false } })}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
@@ -567,8 +566,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       )}
 
       {showSkipPaymentConfirm && (
-        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-2 text-amber-600">⚠️ Skip Payment?</h2>
             <div className="mb-6 text-sm text-slate-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
               <p className="mb-2">Skipping your debt payment this month will:</p>
@@ -607,8 +606,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       )}
 
       {showMonthPreview && monthPreview && (
-        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50">
+          <div className="bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-2">📋 Monthly Preview</h2>
             <p className="text-sm text-slate-600 mb-5">Estimated summary before starting <span className="font-bold">{monthPreview.nextMonthLabel}</span>.</p>
 
@@ -673,8 +672,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       )}
 
       {showAutoLoanConfirm && (
-        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-2 text-rose-600">⚠️ Auto-Loan Alert</h2>
             <div className="mb-6 text-sm text-slate-700 bg-rose-50 p-4 rounded-xl border border-rose-200">
               Your payments will exceed your checking balance. An automatic loan will be created to cover the shortfall.
@@ -722,8 +721,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       )}
 
       {eventPopup && (
-        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-6 z-50">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto">
             {(() => {
               const dialog = eventDialogCopy(eventPopup)
               return (

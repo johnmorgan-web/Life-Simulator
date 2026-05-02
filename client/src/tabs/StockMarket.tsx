@@ -217,12 +217,12 @@ export default function StockMarket() {
 
   return (
     <div className="space-y-6">
-      <div className="glass p-6">
-        <h2 className="text-2xl font-bold mb-2">📈 Stock Market</h2>
+      <div className="glass p-4 sm:p-6">
+        <h2 className="text-xl sm:text-2xl font-bold mb-2">📈 Stock Market</h2>
         <p className="text-sm text-slate-600">Invest in public companies, monitor your portfolio, and learn market vocabulary at your preferred level.</p>
       </div>
 
-      <div className="glass p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="glass p-4 sm:p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <p className="text-[10px] text-slate-400 font-bold uppercase">Cash Available</p>
           <p className="text-xl font-bold text-emerald-700">{toCurrency(state.check || 0)}</p>
@@ -243,7 +243,7 @@ export default function StockMarket() {
         </div>
       </div>
 
-      <div className="glass p-6">
+      <div className="glass p-4 sm:p-6">
         <h3 className="font-bold text-lg mb-3">🤖 Automatic Portfolio</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <label className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 inline-flex items-center gap-2">
@@ -281,7 +281,7 @@ export default function StockMarket() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
           <button
             onClick={confirmAutoInvestSettings}
             disabled={!autoInvestDirty}
@@ -315,20 +315,20 @@ export default function StockMarket() {
         </div>
       </div>
 
-      <div className="glass p-6">
-        <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="glass p-4 sm:p-6">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
           <label className="text-sm font-bold text-slate-600">Learning level:</label>
           <select
             value={learningLevel}
             onChange={(e) => dispatch({ type: 'SET_STATE', payload: { marketLearningLevel: e.target.value } })}
-            className="p-2 border rounded"
+            className="p-2 border rounded w-full sm:w-auto"
           >
             <option value="elementary">Elementary</option>
             <option value="middle-school">Middle School</option>
             <option value="high-school">High School</option>
             <option value="adult">Adult</option>
           </select>
-          <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 ml-2">
+          <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 sm:ml-2">
             <input
               type="checkbox"
               checked={usePlainLanguage}
@@ -351,7 +351,7 @@ export default function StockMarket() {
         </div>
       </div>
 
-      <div className="glass p-6">
+      <div className="glass p-4 sm:p-6">
         <h3 className="font-bold text-lg mb-3">⭐ Top Ideas</h3>
         <p className="text-xs text-slate-500 mb-3">Ranked by current model score using drift, volatility, momentum, valuation gap, and your concentration risk.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2 mb-2">
@@ -370,7 +370,7 @@ export default function StockMarket() {
         </div>
       </div>
 
-      <div className="glass p-6">
+      <div className="glass p-4 sm:p-6">
         <h3 className="font-bold text-lg mb-3">Trade Desk</h3>
         <p className="text-xs text-slate-500 mb-3">Orders may fill slightly above or below quote prices to simulate ceiling/floor executions.</p>
         <p className="text-xs text-slate-500 mb-3">Share quantity supports fractional trades up to 0.001 shares.</p>
@@ -444,14 +444,14 @@ export default function StockMarket() {
                     value={shareInputs[asset.ticker] || ''}
                     onChange={(e) => setShareInputs((prev) => ({ ...prev, [asset.ticker]: roundShareQuantity(Number(e.target.value) || 0) }))}
                     placeholder="Shares"
-                    className="w-28 p-2 border rounded"
+                    className="w-full sm:w-28 p-2 border rounded"
                   />
-                  <div className="text-xs text-slate-500 min-w-[140px]">Trade Cost: {toCurrency(estimatedCost)}</div>
-                  <button onClick={() => handleBuy(asset.ticker)} className="px-3 py-2 rounded bg-emerald-600 text-white text-xs font-bold">Buy</button>
+                  <div className="text-xs text-slate-500 w-full sm:w-auto min-w-0 sm:min-w-[140px]">Trade Cost: {toCurrency(estimatedCost)}</div>
+                  <button onClick={() => handleBuy(asset.ticker)} className="px-3 py-2 rounded bg-emerald-600 text-white text-xs font-bold min-w-[72px]">Buy</button>
                   <button
                     onClick={() => handleSell(asset.ticker)}
                     disabled={ownedShares <= 0}
-                    className={`px-3 py-2 rounded text-xs font-bold ${ownedShares > 0 ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    className={`px-3 py-2 rounded text-xs font-bold min-w-[72px] ${ownedShares > 0 ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                   >
                     Sell
                   </button>
