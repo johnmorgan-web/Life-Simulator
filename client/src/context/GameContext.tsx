@@ -1654,6 +1654,8 @@ function reducer(state: State, action: any) {
 		}
 		case 'PROCESS_MONTH': {
 			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
+			const requestedDebtPayment = Math.max(0, Number(payDebt || 0))
+			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
 
@@ -1803,7 +1805,13 @@ function reducer(state: State, action: any) {
 					transportCostToApply = state.pendingCity.transportCost || 0
 				}
 			}
-			let newDebt = fix(state.debt - payDebt + (applyRelocation ? relocationCostToApply + transportCostToApply : 0))
+			let newDebt = fix(state.debt - appliedDebtPayment + (applyRelocation ? relocationCostToApply + transportCostToApply : 0))
+			if (requestedDebtPayment > appliedDebtPayment + 0.009) {
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `Debt payment capped at remaining balance ($${appliedDebtPayment.toFixed(2)}).`
+				})
+			}
 
 			// If the player's immediate payments push checking negative, convert shortfall into an auto-loan
 			if (resultingCheck < 0) {
@@ -1880,7 +1888,7 @@ function reducer(state: State, action: any) {
 				newDebt = fix(newDebt + monthlyDebtInterest)
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Loan interest charged (${(dynamicAPR * 100).toFixed(2)}% APR): $${monthlyDebtInterest.toFixed(2)}` })
 
-				if (!skippedPayment && payDebt > 0) {
+				if (!skippedPayment && appliedDebtPayment > 0) {
 					paymentStreak += 1
 					debtDelinquencyStreak = 0
 				} else {
@@ -2985,9 +2993,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false) {
+		const safePaySave = Math.max(0, Number(paySave || 0))
+		const safePayDebt = Math.min(Math.max(0, Number(state.debt || 0)), Math.max(0, Number(payDebt || 0)))
 		const priorMonth = state.month
 		const priorYear = state.year
-		dispatch({ type: 'PROCESS_MONTH', payload: { paySave, payDebt, skippedPayment } })
+		dispatch({ type: 'PROCESS_MONTH', payload: { paySave: safePaySave, payDebt: safePayDebt, skippedPayment } })
 
 		// Rebuild ledger and persist only after reducer has advanced month/year,
 		// so Previous Balance includes all post-month event effects.
@@ -2999,7 +3009,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				return
 			}
 
-			buildLedger(paySave, payDebt, latest)
+			buildLedger(safePaySave, safePayDebt, latest)
 			setTimeout(() => {
 				saveGame(latest)
 			}, 60)

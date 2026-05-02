@@ -173,6 +173,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const [showMonthPreview, setShowMonthPreview] = useState(false)
   const [monthPreview, setMonthPreview] = useState<any | null>(null)
   const [autoLoanAmount, setAutoLoanAmount] = useState(0)
+  const [paymentInputWarning, setPaymentInputWarning] = useState<string | null>(null)
   const [eventPopup, setEventPopup] = useState<any | null>(null)
   const [achievementToast, setAchievementToast] = useState<{ title: string; category: string } | null>(null)
   const previousAchievementCountRef = useRef(Array.isArray(state.achievementHistory) ? state.achievementHistory.length : 0)
@@ -237,13 +238,23 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const handleBeginMonth = () => {
     const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
     const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
+    const currentDebt = Math.max(0, Number(state.debt || 0))
     const totalPayment = savings + debtPayment
+
+    if (debtPayment > currentDebt) {
+      setPaymentInputWarning('Debt payment cannot exceed your remaining debt balance.')
+      alert(`⚠️ Debt payment exceeds your current debt balance.\n\nCurrent debt: $${currentDebt.toFixed(2)}\nAttempted debt payment: $${debtPayment.toFixed(2)}\n\nPlease enter a debt payment that is less than or equal to your current debt.`)
+      return
+    }
     
     // Validate that payments won't cause negative balance
     if (!validatePaymentInput(savings, debtPayment)) {
+      setPaymentInputWarning('Combined savings + debt payment cannot exceed checking balance.')
       alert(`⚠️ Your combined payments ($${totalPayment.toFixed(2)}) exceed your checking balance ($${state.check.toFixed(2)}).\n\nPlease adjust your payments or use the Skip Payment option if needed.`)
       return
     }
+
+    setPaymentInputWarning(null)
     
     // Check if this would result in negative checking balance (should not happen with validation)
     if (state.check - totalPayment < 0) {
@@ -391,6 +402,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
   // Validate payment input to prevent negative checking balance
   const validatePaymentInput = (savings: number, debt: number) => {
+    if (savings < 0 || debt < 0) return false
+    if (debt > Math.max(0, Number(state.debt || 0))) return false
     const totalPayment = savings + debt
     return state.check - totalPayment >= 0
   }
@@ -403,14 +416,22 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     if (savingsEl && debtEl) {
       const savings = parseFloat(savingsEl.value) || 0
       const debt = parseFloat(debtEl.value) || 0
+      const debtOverpayment = debt > Math.max(0, Number(state.debt || 0))
+      const exceedsChecking = !validatePaymentInput(savings, debt) && !debtOverpayment
+
+      savingsEl.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
+      debtEl.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
       
-      if (!validatePaymentInput(savings, debt)) {
-        // Show visual feedback that input would cause negative balance
+      if (debtOverpayment) {
+        setPaymentInputWarning('Debt payment cannot exceed your remaining debt balance.')
+        debtEl.classList.add('border-amber-500', 'bg-amber-50')
+      } else if (exceedsChecking) {
+        setPaymentInputWarning('Combined savings + debt payment cannot exceed checking balance.')
+        // Show visual feedback that combined input would overdraw checking
         savingsEl.classList.add('border-rose-500', 'bg-rose-50')
         debtEl.classList.add('border-rose-500', 'bg-rose-50')
       } else {
-        savingsEl.classList.remove('border-rose-500', 'bg-rose-50')
-        debtEl.classList.remove('border-rose-500', 'bg-rose-50')
+        setPaymentInputWarning(null)
       }
     }
   }
@@ -503,7 +524,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                   type="number" 
                   id="pay-debt" 
                   min="0"
-                  max={state.check}
+                  max={Math.min(Number(state.check || 0), Math.max(0, Number(state.debt || 0)))}
                   onChange={handlePaymentChange}
                   className="w-full p-4 border rounded-xl font-bold mt-1" 
                   placeholder="0.00" 
@@ -512,7 +533,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
               <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded">
                 <div>Available Checking: <span className="font-bold">${state.check.toFixed(2)}</span></div>
                 <div className="mt-1">Max Combined Payment: <span className="font-bold">${state.check.toFixed(2)}</span></div>
+                <div className="mt-1">Max Debt Payment: <span className="font-bold">${Math.max(0, Number(state.debt || 0)).toFixed(2)}</span></div>
               </div>
+              {paymentInputWarning && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  {paymentInputWarning}
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <button
