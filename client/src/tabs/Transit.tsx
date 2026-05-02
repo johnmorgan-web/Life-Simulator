@@ -158,6 +158,12 @@ export default function Transit() {
         }
 
         const newCheck = Math.round((state.check - dueAtSigning) * 100) / 100
+        const currentCredit = Number(state.credit || 600)
+        const financedLoanCreditHit = 15
+        const nextCredit = Math.max(300, currentCredit - financedLoanCreditHit)
+        const creditInquiryQueue = Array.isArray(state.creditInquiryQueue)
+          ? [...state.creditInquiryQueue, 6]
+          : [6]
         const newVehicle = {
           id: createGarageEntryId(vehicle.id, condition),
           vehicleId: vehicle.id,
@@ -180,10 +186,16 @@ export default function Transit() {
           type: 'SET_STATE',
           payload: {
             check: newCheck,
+            credit: nextCredit,
+            creditInquiryQueue,
             garage: [...garage, newVehicle],
             ownsVehicle: state.ownsVehicle || newVehicle,
             transit: syncTransitForGarage([...garage, newVehicle], state.transit),
-            pendingTransit: null
+            pendingTransit: null,
+            logs: [
+              ...(Array.isArray(state.logs) ? state.logs : []),
+              { date: `${state.month}/${state.year}`, msg: `🚗 Vehicle financed: credit -${currentCredit - nextCredit} (${nextCredit})` }
+            ]
           }
         })
         setFinancingModal(null)
