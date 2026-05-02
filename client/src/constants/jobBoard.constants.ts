@@ -175,6 +175,101 @@ const jobBoard: Job[] = [
   { title: 'Tech Startup Founder', base: 20000, req: null, certReq: 'Web Developer', tReq: 5, odds: 0.002, cat: 'Pro' , subcat: 'Technology' },
   { title: 'Billionaire CEO', base: 1000000, req: 'Ultra Wealthy Millionaire', certReq: 'Rotorcraft Category Rating', tReq: 5, odds: 0.0001, cat: 'Pro' , subcat: 'Easter Egg' },
   { title: 'Ultra Wealthy Millionaire', base: 500000, req: 'Flight School', certReq: 'Rotorcraft Category Rating',  tReq: 5, odds: 0.001, cat: 'Pro' , subcat: 'Easter Egg' },
+
+  // --- Finance & Business ---
+  { title: 'Long Haul Trucker', base: 4500, req: 'Trade Cert', certReq: 'Truck Driver', tReq: 3, odds: 0.7, cat: 'Skilled', subcat: 'Logistics & Transport' },
+  { title: 'Personal Finance Counselor', base: 3800, req: 'HS Diploma', certReq: 'Certified Personal Finance Counselor', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Finance' },
+  { title: 'CPA', base: 7000, req: 'Bachelors Degree', certReq: 'Certified Public Accountant', tReq: 4, odds: 0.35, cat: 'Pro', subcat: 'Finance' },
+  { title: 'Supply Chain Analyst', base: 5200, req: 'HS Diploma', certReq: 'Certified Supply Chain Professional', tReq: 3, odds: 0.45, cat: 'Pro', subcat: 'Logistics & Transport' },
+  { title: 'Junior Financial Analyst', base: 4500, req: 'HS Diploma', certReq: 'Financial Analysis', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Finance' },
+  { title: 'Senior Financial Planner', base: 6500, req: 'Bachelors Degree', certReq: 'Certified Financial Planner', tReq: 4, odds: 0.4, cat: 'Pro', subcat: 'Finance' },
+  { title: 'Senior Project Manager', base: 7500, req: 'Bachelors Degree', certReq: 'Project Management Professional', tReq: 4, odds: 0.35, cat: 'Pro', subcat: 'General Professional' },
+  { title: 'Tax Preparer', base: 3200, req: 'HS Diploma', certReq: 'Tax Preparation', tReq: 2, odds: 0.6, cat: 'Pro', subcat: 'Finance' },
+  { title: 'Budget Counselor', base: 3500, req: 'HS Diploma', certReq: 'Personal Finance', tReq: 2, odds: 0.55, cat: 'Pro', subcat: 'Finance' },
+  { title: 'Retail Manager', base: 3800, req: 'Trade Cert', certReq: 'Retail Management', tReq: 3, odds: 0.55, cat: 'Pro', subcat: 'Creative & Commercial' },
+  { title: 'Telecom Technician', base: 4000, req: 'HS Diploma', certReq: 'Telecommunications', tReq: 3, odds: 0.55, cat: 'Skilled', subcat: 'Technology' },
+  { title: 'Small Business Owner', base: 6000, req: 'Trade Cert', certReq: 'Entrepreneurship', tReq: 3, odds: 0.3, cat: 'Pro', subcat: 'General Professional' },
+
+  // --- IT & Cloud ---
+  { title: 'Solutions Architect', base: 9000, req: 'Coding Bootcamp', certReq: 'AWS Certified Solutions Architect', tReq: 4, odds: 0.3, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Cloud Admin', base: 5500, req: 'HS Diploma', certReq: 'AWS Certified Cloud Practitioner', tReq: 3, odds: 0.45, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Cloud Developer', base: 8000, req: 'Coding Bootcamp', certReq: 'AWS Certified Developer', tReq: 4, odds: 0.3, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Drafting Technician', base: 3800, req: 'HS Diploma', certReq: 'AutoCAD', tReq: 2, odds: 0.6, cat: 'Pro', subcat: 'Engineering & Trades' },
+  { title: 'Penetration Tester', base: 8000, req: 'CompTIA Security+', certReq: 'Certified Ethical Hacker', tReq: 4, odds: 0.25, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Medical Coder', base: 4500, req: 'Trade Cert', certReq: 'Certified Professional Coder', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Healthcare' },
+  { title: 'Scrum Master', base: 6500, req: 'HS Diploma', certReq: 'Certified Scrum Master', tReq: 3, odds: 0.4, cat: 'Pro', subcat: 'Technology' },
+  { title: 'PC Technician', base: 3500, req: 'Trade Cert', certReq: 'CompTIA A+', tReq: 2, odds: 0.6, cat: 'Skilled', subcat: 'Technology' },
+  { title: 'Network Technician', base: 4500, req: 'Trade Cert', certReq: 'CompTIA Network+', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Junior Data Scientist', base: 6500, req: 'Bachelors Degree', certReq: 'Data Science', tReq: 4, odds: 0.35, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Analytics Specialist', base: 5000, req: 'HS Diploma', certReq: 'Google Data Analytics', tReq: 3, odds: 0.45, cat: 'Pro', subcat: 'Technology' },
+  { title: 'IT Help Desk Tech', base: 3200, req: 'HS Diploma', certReq: 'Google IT Support', tReq: 2, odds: 0.6, cat: 'Skilled', subcat: 'Technology' },
+  { title: 'Graphic Design Specialist', base: 3500, req: 'Trade Cert', certReq: 'Graphic Design', tReq: 2, odds: 0.55, cat: 'Pro', subcat: 'Creative & Commercial' },
+  { title: 'Azure Administrator', base: 6000, req: 'Trade Cert', certReq: 'Microsoft Certified Azure Fundamentals', tReq: 3, odds: 0.4, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Azure Solutions Architect', base: 10000, req: 'Bachelors Degree', certReq: 'Microsoft Certified Azure Solutions Architect', tReq: 4, odds: 0.25, cat: 'Pro', subcat: 'Technology' },
+  { title: 'Junior Developer', base: 5500, req: 'Trade Cert', certReq: 'Software Development', tReq: 3, odds: 0.45, cat: 'Pro', subcat: 'Technology' },
+  { title: 'QA Engineer', base: 4800, req: 'Trade Cert', certReq: 'Software Testing', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Technology' },
+
+  // --- Healthcare ---
+  { title: 'CNA', base: 2800, req: 'HS Diploma', certReq: 'Certified Nursing Assistant', tReq: 2, odds: 0.7, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'CT Scan Technologist', base: 4500, req: 'HS Diploma', certReq: 'Computed Tomography', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Healthcare' },
+  { title: 'Dental Office Assistant', base: 2600, req: 'HS Diploma', certReq: 'Dental Assistant', tReq: 2, odds: 0.7, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'EMT', base: 3200, req: 'HS Diploma', certReq: 'Emergency Medical Technician', tReq: 3, odds: 0.6, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'X-Ray Tech', base: 3800, req: 'HS Diploma', certReq: 'X-Ray Technician', tReq: 3, odds: 0.55, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'RN Floor Nurse', base: 6500, req: 'Bachelors Degree', certReq: 'Registered Nurse', tReq: 4, odds: 0.45, cat: 'Pro', subcat: 'Healthcare' },
+  { title: 'Respiratory Care Specialist', base: 4200, req: 'HS Diploma', certReq: 'Respiratory Therapist', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Healthcare' },
+  { title: 'Surgical Tech', base: 3800, req: 'HS Diploma', certReq: 'Surgical Technician', tReq: 3, odds: 0.55, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'Licensed Massage Therapist', base: 3000, req: 'HS Diploma', certReq: 'Massage Therapist', tReq: 2, odds: 0.65, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'PTA', base: 3400, req: 'HS Diploma', certReq: 'Physical Therapy Assistant', tReq: 3, odds: 0.6, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'OTA', base: 3300, req: 'HS Diploma', certReq: 'Occupational Therapy Assistant', tReq: 3, odds: 0.6, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'Athletic Trainer', base: 4000, req: 'HS Diploma', certReq: 'Athletic Trainer', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Healthcare' },
+  { title: 'Yoga Instructor', base: 2500, req: 'HS Diploma', certReq: 'Yoga Instructor', tReq: 2, odds: 0.65, cat: 'Skilled', subcat: 'Healthcare' },
+  { title: 'Pilates Instructor', base: 2600, req: 'HS Diploma', certReq: 'Pilates Instructor', tReq: 2, odds: 0.6, cat: 'Skilled', subcat: 'Healthcare' },
+
+  // --- Construction & Trades ---
+  { title: 'Construction Cost Estimator', base: 5000, req: 'Trade Cert', certReq: 'Construction Estimating', tReq: 3, odds: 0.5, cat: 'Skilled', subcat: 'Engineering & Trades' },
+  { title: 'Residential Electrician', base: 3500, req: 'Trade Cert', certReq: 'Electrician', tReq: 3, odds: 0.65, cat: 'Skilled', subcat: 'Engineering & Trades' },
+  { title: 'Welding Inspector', base: 5500, req: 'Trade Cert', certReq: 'Welding Inspector', tReq: 4, odds: 0.45, cat: 'Skilled', subcat: 'Engineering & Trades' },
+
+  // --- Culinary ---
+  { title: 'Line Cook', base: 2500, req: 'HS Diploma', certReq: 'Culinary Arts', tReq: 2, odds: 0.75, cat: 'Skilled', subcat: 'Service & Hospitality' },
+
+  // --- Education ---
+  { title: 'Childcare Worker', base: 2400, req: 'HS Diploma', certReq: 'Early Childhood Education', tReq: 2, odds: 0.7, cat: 'Skilled', subcat: 'Education & Social Services' },
+  { title: 'Special Education Teacher', base: 5000, req: 'Bachelors Degree', certReq: 'Special Education', tReq: 4, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'ESL Teacher', base: 4500, req: 'Bachelors Degree', certReq: 'Teaching English as a Second Language', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+
+  // --- Real Estate ---
+  { title: 'Property Appraiser', base: 4800, req: 'Trade Cert', certReq: 'Real Estate Appraiser', tReq: 3, odds: 0.45, cat: 'Pro', subcat: 'General Professional' },
+  { title: 'Real Estate Broker', base: 6500, req: 'Trade Cert', certReq: 'Real Estate Broker', tReq: 4, odds: 0.35, cat: 'Pro', subcat: 'General Professional' },
+
+  // --- Counseling & Therapy ---
+  { title: 'Substance Abuse Counselor', base: 4200, req: 'Bachelors Degree', certReq: 'Substance Abuse Counselor', tReq: 4, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'Mental Health Counselor', base: 4800, req: 'Bachelors Degree', certReq: 'Mental Health Counselor', tReq: 4, odds: 0.45, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'Family Therapist', base: 5200, req: 'Bachelors Degree', certReq: 'Marriage and Family Therapist', tReq: 4, odds: 0.4, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'Rehabilitation Counselor', base: 4200, req: 'Bachelors Degree', certReq: 'Rehabilitation Counselor', tReq: 4, odds: 0.45, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'Career Counselor', base: 4000, req: 'Bachelors Degree', certReq: 'Career Counselor', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'School Counselor', base: 4500, req: 'Bachelors Degree', certReq: 'School Counselor', tReq: 4, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+  { title: 'Grief Counselor', base: 3800, req: 'Bachelors Degree', certReq: 'Grief Counselor', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Education & Social Services' },
+
+  // --- Legal ---
+  { title: 'Legal Secretary', base: 3200, req: 'Trade Cert', certReq: 'Legal Secretary', tReq: 3, odds: 0.6, cat: 'Pro', subcat: 'Legal & Public Safety' },
+  { title: 'Legal Assistant', base: 3500, req: 'Trade Cert', certReq: 'Legal Assistant', tReq: 3, odds: 0.55, cat: 'Pro', subcat: 'Legal & Public Safety' },
+  { title: 'Legal Researcher', base: 4000, req: 'Bachelors Degree', certReq: 'Legal Research', tReq: 3, odds: 0.5, cat: 'Pro', subcat: 'Legal & Public Safety' },
+  { title: 'Legal Tech Specialist', base: 5000, req: 'Bachelors Degree', certReq: 'Legal Technology', tReq: 4, odds: 0.4, cat: 'Pro', subcat: 'Legal & Public Safety' },
+  { title: 'Compliance Officer', base: 6000, req: 'Bachelors Degree', certReq: 'Legal Compliance', tReq: 4, odds: 0.4, cat: 'Pro', subcat: 'Legal & Public Safety' },
+
+  // --- Misc ---
+  { title: 'Zookeeper', base: 3200, req: 'HS Diploma', certReq: 'Zoological Technician', tReq: 2, odds: 0.5, cat: 'Skilled', subcat: 'General Professional' },
+  { title: 'Event Coordinator', base: 3500, req: 'HS Diploma', certReq: 'Event Planning', tReq: 3, odds: 0.55, cat: 'Pro', subcat: 'General Professional' },
+
+  // --- Military ---
+  { title: 'Process Improvement Analyst', base: 5500, req: 'Military Academy', certReq: 'Six Sigma Green Belt', tReq: 4, odds: 0.3, cat: 'Military', subcat: 'Intelligence & Cyber' },
+  { title: 'Cyber Warfare Analyst', base: 6000, req: 'Infantry', certReq: 'Cyber Warfare', tReq: 4, odds: 0.15, cat: 'Military', subcat: 'Intelligence & Cyber' },
+  { title: 'Military Logistics Officer', base: 4500, req: 'Military Academy', certReq: 'Logistics', tReq: 3, odds: 0.25, cat: 'Military', subcat: 'Combat & Operations' },
+  { title: 'Military Police Officer', base: 4000, req: 'Military Academy', certReq: 'Military Police', tReq: 3, odds: 0.3, cat: 'Military', subcat: 'Security & Legal' },
+  { title: 'Combat Pilot', base: 5500, req: 'Flight School', certReq: 'Military Pilot', tReq: 4, odds: 0.1, cat: 'Military', subcat: 'Aviation & Flight Ops' },
+  { title: 'Military Comms Specialist', base: 4200, req: 'Infantry', certReq: 'Military Communications', tReq: 3, odds: 0.25, cat: 'Military', subcat: 'Intelligence & Cyber' },
+  { title: 'Military Supply Officer', base: 4300, req: 'Military Academy', certReq: 'Military Logistics', tReq: 3, odds: 0.25, cat: 'Military', subcat: 'Combat & Operations' },
 ]
 
 export default jobBoard
