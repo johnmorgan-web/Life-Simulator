@@ -4,8 +4,16 @@ import { domainBadgeStyle, resolveDomainKey } from '../constants/domainColors.co
 
 type CourseNode = { n: string; m: number; c: number; type?: string; prereq?: string | null; icon?: string; subcategory?: string; children: CourseNode[] }
 
+function toCurrency(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
 export default function Academy() {
-  const { state, dispatch, academyCourses } = useGame()
+  const { state, dispatch, academyCourses, jobBoard } = useGame()
+
+  const jobsByCourse = (courseName: string) => {
+    return (jobBoard as any[]).filter((j: any) => j.certReq === courseName || j.req === courseName).slice(0, 3)
+  }
   const [academyView, setAcademyView] = useState<'courses' | 'tree'>('courses')
   const [treeSubcat, setTreeSubcat] = useState<string>('all')
 
@@ -83,6 +91,22 @@ export default function Academy() {
             <div className="w-full bg-slate-100 h-2 rounded-full mb-4 overflow-hidden">
               <div className="progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
+            {(() => {
+              const relatedJobs = jobsByCourse(e.n)
+              return relatedJobs.length > 0 ? (
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Unlocks Jobs</p>
+                  <div className="space-y-1">
+                    {relatedJobs.map((j: any) => (
+                      <div key={j.title} className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-semibold text-slate-700 truncate">{j.title}</span>
+                        <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">{toCurrency(j.base)}/mo</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null
+            })()}
             {has ? (
               <p className="text-emerald-600 font-bold text-xs">✓ GRADUATED</p>
             ) : inProgress ? (
@@ -145,6 +169,16 @@ export default function Academy() {
                   <div className="text-[10px] text-slate-500">{node.m}mo · ${node.c}/mo · {node.type === 'degree' ? 'Degree' : 'Cert'}</div>
                   {owned && <div className="text-[10px] font-bold text-emerald-600">✓ Graduated</div>}
                   {inProgress && <div className="text-[10px] font-bold text-amber-600">⏳ {Math.round(progress)}% done</div>}
+                  {(() => {
+                    const relatedJobs = jobsByCourse(node.n)
+                    return relatedJobs.length > 0 ? (
+                      <div className="mt-1 space-y-0.5">
+                        {relatedJobs.map((j: any) => (
+                          <div key={j.title} className="text-[10px] text-slate-600">💼 {j.title} <span className="text-emerald-700 font-bold">{toCurrency(j.base)}/mo</span></div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
                 </div>
               </div>
               {kids.length > 0 && (
