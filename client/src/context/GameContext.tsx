@@ -1264,6 +1264,11 @@ const initialState: State = {
 	// Credit tracking
 	paymentStreak: 0, // Consecutive on-time payments
 	calculationStreak: 0, // Consecutive correct balance checks
+	monthlyCheckSuccesses: 0,
+	monthlyCheckFailures: 0,
+	debtDelinquencyStreak: 0,
+	creditAccountAgeMonths: 0,
+	creditInquiryQueue: [] as number[],
 	lastPaymentOnTime: true,
 	skippedPaymentThisMonth: false,
 	// Pay negotiation tracking
@@ -1517,6 +1522,11 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
 		activeTheme: data.activeTheme ?? 'default',
 		rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : [],
+		debtDelinquencyStreak: Number(data.debtDelinquencyStreak ?? 0),
+		creditAccountAgeMonths: Number(data.creditAccountAgeMonths ?? 0),
+		creditInquiryQueue: Array.isArray(data.creditInquiryQueue)
+			? data.creditInquiryQueue.map((m: any) => Math.max(0, Math.floor(Number(m || 0)))).filter((m: number) => m > 0)
+			: [],
 	}
 }
 
@@ -1601,43 +1611,46 @@ function reducer(state: State, action: any) {
 		case 'INIT_LEDGER':
 			return { ...state, ledger: action.payload }
 		case 'CHECK_ROW': {
-			const { id, done, newCheck, expectedCheck } = action.payload
+			const { id, done, newCheck } = action.payload
+			const targetRow = state.ledger.find((tx: any) => tx.id === id)
+			const wasDone = !!targetRow?.done
 			const ledger = state.ledger.map((tx: any) => (tx.id === id ? { ...tx, done } : tx))
 			const lastLedgerRow = state.ledger[state.ledger.length - 1]
 			const isLastRow = lastLedgerRow && lastLedgerRow.id === id
 			let resultingCheck = (isLastRow && newCheck !== undefined) ? newCheck : state.check
 			let newDebt = state.debt
-			let credit = state.credit
-			let calculationStreak = state.calculationStreak
+			let calculationStreak = Number(state.calculationStreak || 0)
+			let monthlyCheckSuccesses = Number(state.monthlyCheckSuccesses || 0)
+			let monthlyCheckFailures = Number(state.monthlyCheckFailures || 0)
 			let logs = [...state.logs]
-			
-			// Validate calculation accuracy for credit scoring
-			if (expectedCheck !== undefined && newCheck !== undefined) {
-				if (Math.abs(newCheck - expectedCheck) < 0.01) {
-					// Correct calculation
-					calculationStreak += 1
-					const streakBonus = Math.min(10, Math.floor(calculationStreak / 5) * 5) // 5 points per 5 consecutive checks, max 25
-					credit = Math.min(850, credit + 2 + streakBonus)
-					if (calculationStreak % 1 === 0) {
-						logs.push({ date: `${state.month}/${state.year}`, msg: `✅ Calculation streak (${calculationStreak}) - credit +${2 + streakBonus} (${credit})` })
-					}
-				} else {
-					// Incorrect calculation
-					const difference = Math.abs(newCheck - expectedCheck)
-					const penalty = Math.min(300, Math.ceil(difference / 10)) // Higher penalties for bigger errors
-					credit = Math.max(300, credit - penalty)
-					calculationStreak = 0
-					logs.push({ date: `${state.month}/${state.year}`, msg: `❌ Incorrect balance, credit -${penalty} (${credit})` })
-				}
+
+			if (done && !wasDone) {
+				calculationStreak += 1
+				monthlyCheckSuccesses += 1
 			}
-			
+
+			if (!done) {
+				calculationStreak = 0
+				monthlyCheckFailures += 1
+			}
+
 			if (newCheck !== undefined && newCheck < 0) {
 				const loanAmt = fix(Math.abs(newCheck))
 				newDebt = fix(state.debt + loanAmt)
 				logs.push({ date: `${state.month}/${state.year}`, msg: `Auto-loan taken: $${loanAmt.toFixed(2)} to cover negative checking` })
 				resultingCheck = 0
 			}
-			return { ...state, ledger, check: resultingCheck, debt: newDebt, credit, calculationStreak, paymentStreak: state.paymentStreak, logs }
+			return {
+				...state,
+				ledger,
+				check: resultingCheck,
+				debt: newDebt,
+				calculationStreak,
+				monthlyCheckSuccesses,
+				monthlyCheckFailures,
+				paymentStreak: state.paymentStreak,
+				logs
+			}
 		}
 		case 'PROCESS_MONTH': {
 			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
@@ -1739,6 +1752,13 @@ function reducer(state: State, action: any) {
 			// Credit tracking
 			let credit = state.credit
 			let paymentStreak = state.paymentStreak
+			const monthlyCheckSuccesses = Number(state.monthlyCheckSuccesses || 0)
+			const monthlyCheckFailures = Number(state.monthlyCheckFailures || 0)
+			let debtDelinquencyStreak = Number(state.debtDelinquencyStreak || 0)
+			let creditAccountAgeMonths = Number(state.creditAccountAgeMonths || 0)
+			let creditInquiryQueue = Array.isArray(state.creditInquiryQueue)
+				? state.creditInquiryQueue.map((m: any) => Math.max(0, Math.floor(Number(m || 0)))).filter((m: number) => m > 0)
+				: []
 
 			if (state.activeEdu) {
 				eduProgress[state.activeEdu] = (eduProgress[state.activeEdu] || 0) + 1
@@ -1859,28 +1879,16 @@ function reducer(state: State, action: any) {
 				const monthlyDebtInterest = fix(newDebt * (dynamicAPR / 12))
 				newDebt = fix(newDebt + monthlyDebtInterest)
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Loan interest charged (${(dynamicAPR * 100).toFixed(2)}% APR): $${monthlyDebtInterest.toFixed(2)}` })
-				
-				// Track payment on-time status for credit scoring
-				if (skippedPayment) {
-					credit = Math.max(300, credit - 50) // Major credit hit for skipped payment
-					paymentStreak = 0
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Payment skipped - credit score reduced by 50 points (${credit})` })
-				} else if (payDebt > 0) {
-					// On-time payment improves credit
+
+				if (!skippedPayment && payDebt > 0) {
 					paymentStreak += 1
-					const streakBonus = Math.min(10, Math.floor(paymentStreak / 3) * 5) // 5 points per 3 consecutive payments, max 10
-					credit = Math.min(850, credit + 3 + streakBonus)
-					if (paymentStreak % 1 === 0) {
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment streak (${paymentStreak} months) - credit +${1 + streakBonus} (${credit})` })
-					} else {
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `✅ On-time payment - credit +1 (${credit})` })
-					}
+					debtDelinquencyStreak = 0
 				} else {
-					// Minimum payment required to maintain credit
-					credit = Math.max(300, credit - 50)
 					paymentStreak = 0
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Payment missed - credit score reduced by 50 points (${credit})` })
+					debtDelinquencyStreak += 1
 				}
+			} else {
+				debtDelinquencyStreak = 0
 			}
 
 
@@ -2088,6 +2096,7 @@ function reducer(state: State, action: any) {
 			}
 
 			const survivingDeals: any[] = []
+			let mortgageClosingsThisMonth = 0
 			for (const deal of pendingRealEstateDeals) {
 				const monthsInPipeline = Number(deal?.monthsInPipeline || 0) + 1
 				const approvalMonthsRequired = Math.max(1, Number(deal?.approvalMonthsRequired || 2))
@@ -2132,6 +2141,7 @@ function reducer(state: State, action: any) {
 				const mortgageAPR = Math.max(0.035, calculateDynamicAPR(credit) + 0.01)
 				const mortgageTermMonths = purchaseMode === 'cash' ? 0 : (mortgageTermYears * 12)
 				const monthlyDebtService = purchaseMode === 'cash' ? 0 : round2(calculateMonthlyPayment(loanBalance, mortgageAPR, mortgageTermMonths))
+				if (purchaseMode === 'mortgage') mortgageClosingsThisMonth += 1
 				const tier = cityRealEstateTier(cityData.find((c) => c.name === listing.cityName) || { p: 1 }) as keyof typeof rentControlByCityType
 				const rentControlCap = Number(rentControlByCityType[tier] || 0.045)
 				const amenities = Array.isArray(listing.amenities) ? listing.amenities : []
@@ -2178,6 +2188,18 @@ function reducer(state: State, action: any) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏠 Closed on ${listing.templateName} in ${listing.cityName} for $${negotiatedPrice.toLocaleString()} (${purchaseMode === 'cash' ? 'cash purchase' : `${mortgageTermYears}-year mortgage`})` })
 			}
 			pendingRealEstateDeals = survivingDeals
+			if (mortgageClosingsThisMonth > 0) {
+				const mortgageCreditHit = mortgageClosingsThisMonth * 25
+				const beforeMortgagePenalty = credit
+				credit = Math.max(300, credit - mortgageCreditHit)
+				const appliedMortgagePenalty = beforeMortgagePenalty - credit
+				for (let i = 0; i < mortgageClosingsThisMonth; i += 1) {
+					creditInquiryQueue.push(6)
+				}
+				if (appliedMortgagePenalty > 0) {
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏦 Mortgage accepted: credit -${appliedMortgagePenalty} (${credit})` })
+				}
+			}
 
 			let realEstateIncome = 0
 			let realEstateExpenses = 0
@@ -2421,6 +2443,84 @@ function reducer(state: State, action: any) {
 			}
 			const stockInvestedLastMonth = round2(Number(state.stockInvestedThisMonth || 0) + Number(autoInvestResult.investedAmount || 0))
 			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
+			creditAccountAgeMonths += 1
+
+			const checkSuccessCredit = monthlyCheckSuccesses * 5
+			const checkFailurePenalty = monthlyCheckFailures * 10
+			const debtPenalty = newDebt > 0 ? 20 : 0
+			const verificationCreditDelta = checkSuccessCredit - checkFailurePenalty - debtPenalty
+			if (verificationCreditDelta !== 0) {
+				const beforeVerificationCredit = credit
+				credit = Math.max(300, Math.min(850, credit + verificationCreditDelta))
+				const appliedDelta = credit - beforeVerificationCredit
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `📊 Verification credit update: checks +${checkSuccessCredit}, failed checks -${checkFailurePenalty}, debt -${debtPenalty} => ${appliedDelta >= 0 ? '+' : ''}${appliedDelta} (${credit})`
+				})
+			}
+
+			let supplementalCreditDelta = 0
+			const supplementalNotes: string[] = []
+
+			const activeInquiries = creditInquiryQueue.length
+			if (activeInquiries > 0) {
+				const inquiryPenalty = activeInquiries * 2
+				supplementalCreditDelta -= inquiryPenalty
+				supplementalNotes.push(`hard inquiries -${inquiryPenalty}`)
+			}
+			creditInquiryQueue = creditInquiryQueue.map((m: number) => Math.max(0, m - 1)).filter((m: number) => m > 0)
+
+			const vehicleDebtService = round2((Array.isArray(updatedGarage) ? updatedGarage : []).reduce((sum: number, g: any) => {
+				if (Number(g?.monthsRemaining || 0) <= 0) return sum
+				return sum + Number(g?.monthlyPayment || 0)
+			}, 0))
+			const mortgageDebtService = round2((Array.isArray(investmentProperties) ? investmentProperties : []).reduce((sum: number, p: any) => {
+				if (Number(p?.loanBalance || 0) <= 0) return sum
+				return sum + Number(p?.monthlyDebtService || 0)
+			}, 0))
+			const impliedDebtPayment = newDebt > 0 ? Math.max(50, round2(newDebt * 0.015)) : 0
+			const monthlyDebtObligations = round2(impliedDebtPayment + vehicleDebtService + mortgageDebtService)
+			const grossMonthlyIncome = Math.max(1, round2((updatedJob.base * city.p * 0.8) + realEstateIncome))
+			const utilizationRatio = monthlyDebtObligations / grossMonthlyIncome
+			if (utilizationRatio >= 0.5) {
+				supplementalCreditDelta -= 12
+				supplementalNotes.push('high debt utilization -12')
+			} else if (utilizationRatio >= 0.35) {
+				supplementalCreditDelta -= 8
+				supplementalNotes.push('elevated debt utilization -8')
+			} else if (utilizationRatio <= 0.12 && newDebt <= 0) {
+				supplementalCreditDelta += 4
+				supplementalNotes.push('low debt utilization +4')
+			}
+
+			if (debtDelinquencyStreak > 0) {
+				const delinquencyPenalty = Math.min(25, debtDelinquencyStreak * 5)
+				supplementalCreditDelta -= delinquencyPenalty
+				supplementalNotes.push(`delinquency streak (${debtDelinquencyStreak}) -${delinquencyPenalty}`)
+			}
+
+			if (newDebt <= 0 && debtDelinquencyStreak === 0 && monthlyCheckFailures === 0) {
+				const accountAgeBonus = creditAccountAgeMonths >= 24 ? 2 : 1
+				supplementalCreditDelta += accountAgeBonus
+				supplementalNotes.push(`account age +${accountAgeBonus}`)
+			}
+
+			const hasVehicleLoan = (Array.isArray(updatedGarage) ? updatedGarage : []).some((g: any) => Number(g?.monthsRemaining || 0) > 0)
+			const hasMortgage = (Array.isArray(investmentProperties) ? investmentProperties : []).some((p: any) => Number(p?.loanBalance || 0) > 0)
+			if (hasVehicleLoan && hasMortgage && debtDelinquencyStreak === 0) {
+				supplementalCreditDelta += 3
+				supplementalNotes.push('healthy credit mix +3')
+			}
+
+			if (supplementalCreditDelta !== 0) {
+				const beforeSupplementalCredit = credit
+				credit = Math.max(300, Math.min(850, credit + supplementalCreditDelta))
+				const appliedSupplemental = credit - beforeSupplementalCredit
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `📉 Credit profile update: ${supplementalNotes.join(', ')} => ${appliedSupplemental >= 0 ? '+' : ''}${appliedSupplemental} (${credit})`
+				})
+			}
 
 			const achievementSnapshot = {
 				...state,
@@ -2467,6 +2567,9 @@ function reducer(state: State, action: any) {
 				debt: newDebt,
 				credit,
 				paymentStreak,
+				debtDelinquencyStreak,
+				creditAccountAgeMonths,
+				creditInquiryQueue,
 				tenure,
 				showSettlement: false,
 				month: nextMonth,
@@ -2521,6 +2624,8 @@ function reducer(state: State, action: any) {
 				rewardCategoryQueue,
 				lastAchievementCategory,
 				celebration,
+				monthlyCheckSuccesses: 0,
+				monthlyCheckFailures: 0,
 				skippedPaymentThisMonth: false
 			}
 		}
@@ -3054,6 +3159,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			celebration: null,
 			paymentStreak: 0,
 			calculationStreak: 0,
+			monthlyCheckSuccesses: 0,
+			monthlyCheckFailures: 0,
+			debtDelinquencyStreak: 0,
+			creditAccountAgeMonths: 0,
+			creditInquiryQueue: [],
 			lastPaymentOnTime: true,
 			skippedPaymentThisMonth: false,
 			lastNegotiationMonth: null,
