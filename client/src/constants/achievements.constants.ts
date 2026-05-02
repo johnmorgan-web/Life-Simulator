@@ -135,12 +135,80 @@ export const achievementRules: AchievementRule[] = [
 
 ]
 
-export const cosmeticThemes: Record<string, { name: string; accent: string; bg: string }> = {
-  default: { name: 'Classic Red', accent: '#ef4444', bg: '#f8fafc' },
-  emerald: { name: 'Emerald', accent: '#10b981', bg: '#ecfdf5' },
-  ocean: { name: 'Ocean Blue', accent: '#0ea5e9', bg: '#f0f9ff' },
-  sunset: { name: 'Sunset Orange', accent: '#f97316', bg: '#fff7ed' },
-  graphite: { name: 'Graphite', accent: '#475569', bg: '#f8fafc' },
+export type CosmeticTheme = {
+  name: string
+  accent: string
+  bg: string
+  gradient: string
+  pattern: string
+  glassBg: string
+  glassBorder: string
+}
+
+export const cosmeticThemes: Record<string, CosmeticTheme> = {
+  default: {
+    name: 'Crimson Ledger',
+    accent: '#dc2626',
+    bg: '#fef2f2',
+    gradient: 'radial-gradient(circle at 16% 20%, #fee2e2 0%, transparent 34%), radial-gradient(circle at 85% 8%, #fecaca 0%, transparent 28%), linear-gradient(135deg, #fff5f5 0%, #fff1f2 45%, #fef3f2 100%)',
+    pattern: 'repeating-linear-gradient(45deg, rgba(220,38,38,0.07) 0 2px, transparent 2px 14px)',
+    glassBg: 'rgba(255, 255, 255, 0.88)',
+    glassBorder: 'rgba(239, 68, 68, 0.28)'
+  },
+  emerald: {
+    name: 'Emerald Canopy',
+    accent: '#059669',
+    bg: '#ecfdf5',
+    gradient: 'radial-gradient(circle at 12% 12%, #d1fae5 0%, transparent 34%), radial-gradient(circle at 90% 0%, #a7f3d0 0%, transparent 26%), linear-gradient(150deg, #f0fdf4 0%, #dcfce7 50%, #ecfdf5 100%)',
+    pattern: 'radial-gradient(circle at 1px 1px, rgba(16,185,129,0.18) 1.1px, transparent 0)',
+    glassBg: 'rgba(244, 255, 250, 0.84)',
+    glassBorder: 'rgba(5, 150, 105, 0.3)'
+  },
+  ocean: {
+    name: 'Ocean Current',
+    accent: '#0284c7',
+    bg: '#ecfeff',
+    gradient: 'radial-gradient(circle at 18% 20%, #cffafe 0%, transparent 36%), radial-gradient(circle at 88% 6%, #bae6fd 0%, transparent 28%), linear-gradient(155deg, #f0f9ff 0%, #e0f2fe 42%, #ecfeff 100%)',
+    pattern: 'repeating-linear-gradient(-35deg, rgba(14,165,233,0.09) 0 2px, transparent 2px 16px)',
+    glassBg: 'rgba(240, 249, 255, 0.82)',
+    glassBorder: 'rgba(2, 132, 199, 0.28)'
+  },
+  sunset: {
+    name: 'Sunset Circuit',
+    accent: '#ea580c',
+    bg: '#fff7ed',
+    gradient: 'radial-gradient(circle at 9% 10%, #ffedd5 0%, transparent 35%), radial-gradient(circle at 86% 6%, #fed7aa 0%, transparent 26%), linear-gradient(160deg, #fff7ed 0%, #ffedd5 48%, #fffbeb 100%)',
+    pattern: 'repeating-linear-gradient(0deg, rgba(249,115,22,0.08) 0 1px, transparent 1px 13px), repeating-linear-gradient(90deg, rgba(249,115,22,0.08) 0 1px, transparent 1px 13px)',
+    glassBg: 'rgba(255, 250, 240, 0.84)',
+    glassBorder: 'rgba(234, 88, 12, 0.3)'
+  },
+  graphite: {
+    name: 'Graphite Grid',
+    accent: '#334155',
+    bg: '#e2e8f0',
+    gradient: 'radial-gradient(circle at 20% 16%, #cbd5e1 0%, transparent 36%), radial-gradient(circle at 86% 10%, #94a3b8 0%, transparent 27%), linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 52%, #cbd5e1 100%)',
+    pattern: 'repeating-linear-gradient(45deg, rgba(51,65,85,0.1) 0 2px, transparent 2px 10px)',
+    glassBg: 'rgba(248, 250, 252, 0.8)',
+    glassBorder: 'rgba(71, 85, 105, 0.32)'
+  },
+  aurora: {
+    name: 'Aurora Mint',
+    accent: '#0f766e',
+    bg: '#ecfeff',
+    gradient: 'radial-gradient(circle at 18% 18%, #99f6e4 0%, transparent 33%), radial-gradient(circle at 84% 8%, #a5f3fc 0%, transparent 26%), linear-gradient(140deg, #f0fdfa 0%, #e0f2fe 45%, #ecfeff 100%)',
+    pattern: 'linear-gradient(120deg, rgba(20,184,166,0.12) 0%, transparent 35%, rgba(14,116,144,0.1) 65%, transparent 100%)',
+    glassBg: 'rgba(240, 253, 250, 0.82)',
+    glassBorder: 'rgba(15, 118, 110, 0.3)'
+  },
+  royal: {
+    name: 'Royal Gold',
+    accent: '#a16207',
+    bg: '#fefce8',
+    gradient: 'radial-gradient(circle at 14% 12%, #fef08a 0%, transparent 32%), radial-gradient(circle at 88% 7%, #fde68a 0%, transparent 28%), linear-gradient(150deg, #fffbeb 0%, #fef3c7 46%, #fefce8 100%)',
+    pattern: 'repeating-linear-gradient(45deg, rgba(161,98,7,0.1) 0 1px, transparent 1px 11px)',
+    glassBg: 'rgba(255, 251, 235, 0.84)',
+    glassBorder: 'rgba(161, 98, 7, 0.32)'
+  }
 }
 
 export type RewardPrize =
@@ -157,6 +225,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
     { kind: 'cash', value: 750, weight: 3, label: '$750 cash bonus' },
     { kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' },
     { kind: 'theme', value: 'ocean', weight: 2, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'vehicle', weight: 5, label: 'Gifted luxury car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'vehicle', weight: 4, label: 'Gifted commuter car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'vehicle', weight: 3, label: 'Luxury car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
@@ -166,6 +235,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   education: [
     { kind: 'vehicle', weight: 2, label: 'Scholar ride reward' },
     { kind: 'theme', value: 'ocean', weight: 4, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 3, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'VTI', shares: 2, weight: 4, label: '2 VTI shares' },
     { kind: 'cash', value: 1000, weight: 3, label: '$1,000 cash bonus' },
     { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
@@ -186,6 +256,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   wealth: [
     { kind: 'cash', value: 2000, weight: 5, label: '$2,000 cash bonus' },
     { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
+    { kind: 'theme', value: 'royal', weight: 3, label: 'Royal Gold theme' },
     { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 2, label: '1 AAPL share' },
     { kind: 'stock', ticker: 'TSLA', shares: 1, weight: 2, label: '1 TSLA share' },
     { kind: 'stock', ticker: 'AMZN', shares: 1, weight: 2, label: '1 AMZN share' },
@@ -199,6 +270,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   default: [
     { kind: 'cash', value: 500, weight: 4, label: '$500 cash bonus' },
     { kind: 'theme', value: 'ocean', weight: 3, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'VTI', shares: 1, weight: 3, label: '1 VTI share' },
     { kind: 'vehicle', weight: 2, label: 'Commuter car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'theme', value: 'graphite', weight: 2, label: 'Graphite theme' },
