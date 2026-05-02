@@ -234,7 +234,7 @@ export default function Lifestyle() {
       {/* Current Lifestyle Info */}
           <div className="glass p-6 mb-6">
             <h3 className="font-bold text-lg mb-4">📊 Current Lifestyle</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-slate-50 p-3 rounded-lg">
                 <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Monthly Income</p>
                 <p className="text-xl font-bold text-emerald-600">${netSalary.toLocaleString()}</p>
@@ -261,7 +261,7 @@ export default function Lifestyle() {
                       ?
                     </button>
                     {showHappinessTooltip && (
-                      <div className="absolute z-50 bottom-full mb-2 right-0 w-72 max-w-[85vw] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl">
+                      <div className="absolute z-[90] top-full mt-2 left-0 sm:left-auto sm:right-0 w-72 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
                         <p className="font-bold mb-1">Happiness Drivers</p>
                         <p>Improves with concierge, housekeeper, trainer, therapist, and healthy leisure spending.</p>
                         <p className="mt-1">Drops with debt, long low-pay stagnation, high-pay stress, stale purchases, and underspending.</p>

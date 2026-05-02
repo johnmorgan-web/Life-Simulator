@@ -1,6 +1,24 @@
 
 import { useGame } from '../context/GameContext'
 
+function formatHeaderCurrency(value: number) {
+  const abs = Math.abs(Number(value || 0))
+  if (abs >= 1000000000) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 2
+    }).format(value)
+  }
+  return Number(value || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
 export default function Header({ state, onVerify, verifyEnabled }: any) {
   const { logout, affluenceComparison: affluence } = useGame()
   const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
@@ -8,27 +26,27 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
   const averageWidth = Math.min(100, (affluence.average / meterMax) * 100)
 
   return (
-    <header className="p-5 bg-white border-b border-slate-200 sticky top-0 z-40">
-      <div className="max-w-[98vw] mx-auto flex justify-between items-center">
-        <div className="flex gap-8">
-          <div>
+    <header className="p-3 sm:p-5 bg-white border-b border-slate-200 sticky top-0 z-40">
+      <div className="max-w-[98vw] mx-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-8 w-full lg:w-auto">
+          <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Checking</span>
-            <p className="text-2xl font-bold text-slate-800">${state.check.toFixed(2)}</p>
+            <p title={Number(state.check || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-slate-800 leading-tight truncate">{formatHeaderCurrency(state.check)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Savings</span>
-            <p className="text-2xl font-bold text-blue-600">${state.savings.toFixed(2)}</p>
+            <p title={Number(state.savings || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-blue-600 leading-tight truncate">{formatHeaderCurrency(state.savings)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Debt</span>
-            <p className="text-2xl font-bold text-rose-600">${state.debt.toFixed(2)}</p>
+            <p title={Number(state.debt || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-rose-600 leading-tight truncate">{formatHeaderCurrency(state.debt)}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Credit</span>
-            <p className="text-2xl font-bold text-indigo-600">{state.credit}</p>
+            <p className="text-lg sm:text-2xl font-bold text-indigo-600 leading-tight">{state.credit}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-start lg:items-center gap-3 sm:gap-4">
           <div className="hidden xl:block min-w-[250px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
             <p className="text-[10px] font-bold uppercase text-slate-500">Affluence Rank</p>
             <p className="text-xs font-bold text-slate-700 mb-1">
@@ -44,10 +62,10 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
             </div>
             <p className="text-[10px] text-slate-500 mt-1">Green: you | Blue: average</p>
           </div>
-          <div className="text-right mr-4">
+          <div className="text-left sm:text-right mr-0 sm:mr-2">
             <span className="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold uppercase">{state.city.name}</span>
             <p className="text-base font-bold text-slate-500">{new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-            <div className="xl:hidden mt-2 w-[170px] ml-auto bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
+            <div className="xl:hidden mt-2 w-[170px] sm:ml-auto bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
               <p className="text-[10px] font-bold text-slate-600">Affluence #{affluence.rank}/{affluence.count}</p>
               <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
                 <div className="h-1 bg-emerald-500 rounded-full" style={{ width: `${currentWidth}%` }} />
@@ -57,9 +75,9 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => logout()} className="px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
-            <button onClick={onVerify} disabled={!verifyEnabled} className={`px-6 py-3 rounded-xl text-sm font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button onClick={() => logout()} className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
+            <button onClick={onVerify} disabled={!verifyEnabled} className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
           </div>
         </div>
       </div>
