@@ -395,6 +395,14 @@ export default function Rewards() {
                 disabled={!unlocked}
                 className={`text-left border rounded-lg p-3 ${active ? 'ring-2 ring-slate-800' : ''} ${unlocked ? 'bg-white' : 'bg-slate-100 opacity-60 cursor-not-allowed'}`}
               >
+                <div
+                  className="h-14 rounded-md border mb-2"
+                  style={{
+                    backgroundImage: `${theme.pattern}, ${theme.gradient}`,
+                    backgroundSize: '16px 16px, cover',
+                    borderColor: theme.glassBorder
+                  }}
+                />
                 <div className="flex items-center justify-between">
                   <p className="font-bold text-slate-800">{theme.name}</p>
                   <span className="inline-block w-5 h-5 rounded-full" style={{ background: theme.accent }} />

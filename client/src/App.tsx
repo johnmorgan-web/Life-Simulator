@@ -202,8 +202,12 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     const root = document.documentElement
     root.style.setProperty('--app-accent', activeTheme.accent)
     root.style.setProperty('--app-bg', activeTheme.bg)
+    root.style.setProperty('--app-gradient', activeTheme.gradient)
+    root.style.setProperty('--app-pattern', activeTheme.pattern)
+    root.style.setProperty('--glass-bg', activeTheme.glassBg)
+    root.style.setProperty('--glass-border', activeTheme.glassBorder)
     document.body.style.backgroundColor = activeTheme.bg
-  }, [activeTheme.accent, activeTheme.bg])
+  }, [activeTheme.accent, activeTheme.bg, activeTheme.gradient, activeTheme.pattern, activeTheme.glassBg, activeTheme.glassBorder])
 
   useEffect(() => {
     const queued = Array.isArray(ledgerEventNotifications) ? ledgerEventNotifications : []
@@ -441,7 +445,11 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       className="app-shell"
       style={{
         ['--app-accent' as any]: activeTheme.accent,
-        ['--app-bg' as any]: activeTheme.bg
+        ['--app-bg' as any]: activeTheme.bg,
+        ['--app-gradient' as any]: activeTheme.gradient,
+        ['--app-pattern' as any]: activeTheme.pattern,
+        ['--glass-bg' as any]: activeTheme.glassBg,
+        ['--glass-border' as any]: activeTheme.glassBorder,
       }}
     >
         { !state.currentUser ? (

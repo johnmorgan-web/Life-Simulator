@@ -8,6 +8,10 @@
 :root {
 	--app-accent: #ef4444;
 	--app-bg: #f8fafc;
+	--app-gradient: linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 75%, white) 0%, #ffffff 100%);
+	--app-pattern: none;
+	--glass-bg: rgba(255, 255, 255, 0.92);
+	--glass-border: rgba(148, 163, 184, 0.35);
 	font-size: 17px;
 }
 
@@ -19,14 +23,32 @@ body {
 
 .app-shell {
 	min-height: 100%;
-	background: linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 75%, white) 0%, #ffffff 100%);
+	position: relative;
+	background: var(--app-gradient);
+}
+
+.app-shell::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	background-image: var(--app-pattern);
+	background-size: 18px 18px;
+	opacity: 0.6;
+	z-index: 0;
+}
+
+.app-shell > * {
+	position: relative;
+	z-index: 1;
 }
 
 .glass {
 	border-radius: 1.2rem;
-	background: rgba(255, 255, 255, 0.92);
-	border: 1px solid #dbe5f1;
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
 	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+	backdrop-filter: blur(8px);
 }
 
 .tab-active {
