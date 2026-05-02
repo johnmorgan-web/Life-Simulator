@@ -414,7 +414,7 @@ export default function Careers() {
           {filteredRecommendations.length > 0 ? (
             <div className="glass p-6 mb-4">
               <h3 className="font-bold text-lg mb-4">Jobs matched to your profile (sorted by match score)</h3>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto relative">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-300">
@@ -483,13 +483,13 @@ export default function Careers() {
                               )}
                             </div>
                             {hoveredTooltip === `${j.title}-edu` && (
-                              <div className="absolute z-10 bg-slate-900 text-white text-xs rounded p-2 whitespace-nowrap bottom-full mb-2 left-1/2 transform -translate-x-1/2">
+                              <div className="absolute z-20 bg-slate-900 text-white text-xs rounded-md px-3 py-2 top-full mt-2 left-1/2 -translate-x-1/2 w-56 max-w-[85vw] whitespace-normal text-left leading-relaxed break-words shadow-lg">
                                 {edMet ? (
                                   <div>{j.req ? `✓ Have ${j.req}` : '✓ No requirement'}</div>
                                 ) : (
                                   <div>Need: {j.req}</div>
                                 )}
-                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-slate-900 border-t-slate-900 border-l-transparent border-r-transparent"></div>
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
                             )}
                           </td>
@@ -508,7 +508,7 @@ export default function Careers() {
                               )}
                             </div>
                             {hoveredTooltip === `${j.title}-cert` && (
-                              <div className="absolute z-10 bg-slate-900 text-white text-xs rounded p-2 whitespace-nowrap bottom-full mb-2 left-1/2 transform -translate-x-1/2">
+                              <div className="absolute z-20 bg-slate-900 text-white text-xs rounded-md px-3 py-2 top-full mt-2 left-1/2 -translate-x-1/2 w-56 max-w-[85vw] whitespace-normal text-left leading-relaxed break-words shadow-lg">
                                 {!j.certReq ? (
                                   <div>No requirement</div>
                                 ) : certMet ? (
@@ -516,7 +516,7 @@ export default function Careers() {
                                 ) : (
                                   <div>Need: {j.certReq}</div>
                                 )}
-                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-slate-900 border-t-slate-900 border-l-transparent border-r-transparent"></div>
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
                             )}
                           </td>
@@ -533,13 +533,13 @@ export default function Careers() {
                               )}
                             </div>
                             {hoveredTooltip === `${j.title}-transit` && (
-                              <div className="absolute z-10 bg-slate-900 text-white text-xs rounded p-2 whitespace-nowrap bottom-full mb-2 left-1/2 transform -translate-x-1/2">
+                              <div className="absolute z-20 bg-slate-900 text-white text-xs rounded-md px-3 py-2 top-full mt-2 left-1/2 -translate-x-1/2 w-56 max-w-[85vw] whitespace-normal text-left leading-relaxed break-words shadow-lg">
                                 {trMet ? (
                                   <div>✓ Have Level {state.transit.level}</div>
                                 ) : (
                                   <div>Need: Level {j.tReq}, Have: Level {state.transit.level}</div>
                                 )}
-                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-slate-900 border-t-slate-900 border-l-transparent border-r-transparent"></div>
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
                             )}
                           </td>
@@ -559,7 +559,7 @@ export default function Careers() {
                               </div>
                             </div>
                             {hoveredTooltip === `${j.title}-score` && (
-                              <div className="absolute z-10 bg-slate-900 text-white text-xs rounded p-2 bottom-full mb-2 left-1/2 transform -translate-x-1/2 min-w-[220px] text-left whitespace-normal">
+                              <div className="absolute z-20 bg-slate-900 text-white text-xs rounded-md px-3 py-2 top-full mt-2 left-1/2 -translate-x-1/2 min-w-[220px] max-w-[85vw] text-left whitespace-normal leading-relaxed break-words shadow-lg">
                                 <div className="font-bold mb-1">Score Breakdown</div>
                                 <div>Education: {breakdown.education > 0 ? '+' : ''}{breakdown.education}</div>
                                 <div>Certificate: {breakdown.certificate > 0 ? '+' : ''}{breakdown.certificate}</div>
@@ -575,7 +575,7 @@ export default function Careers() {
                                 ) : (
                                   <div>No feeder role required</div>
                                 )}
-                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-slate-900 border-t-slate-900 border-l-transparent border-r-transparent"></div>
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
                             )}
                           </td>
