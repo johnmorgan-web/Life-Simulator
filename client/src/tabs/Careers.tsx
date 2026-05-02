@@ -79,6 +79,16 @@ export default function Careers() {
   const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null)
   const [showNegotiationModal, setShowNegotiationModal] = useState(false)
   const [negotiationModifier, setNegotiationModifier] = useState(0)
+  const [negotiationDetails, setNegotiationDetails] = useState<null | {
+    creditContribution: number
+    tenureContribution: number
+    compatibilityContribution: number
+    compatibilityScore: number
+  }>(null)
+  const [calculatedRaiseInput, setCalculatedRaiseInput] = useState('')
+  const [calculatedSalaryInput, setCalculatedSalaryInput] = useState('')
+  const [negotiationCalcError, setNegotiationCalcError] = useState<string | null>(null)
+  const [showNegotiationPracticeMode, setShowNegotiationPracticeMode] = useState(false)
 
   const getRoleExperienceMonths = (roleTitle: string) => {
     let months = 0
@@ -118,18 +128,43 @@ export default function Careers() {
   // Handle negotiation button click
   const handleNegotiatePay = () => {
     const compatibilityScore = calculateJobCompatibilityScore(state.job, state.credentials, state.transit.level)
-    let successChance = 0.15 // Base 15% chance
-    successChance += (state.credit / 850) * 0.1 // Up to +10% based on credit score
-    successChance += Math.min(state.tenure / 60, 1) * 0.15 // Up to +15% based on tenure (maxes out at 5 years)
-    successChance += (compatibilityScore / 100) * 0.05 // Up to +5% based on job fit
     const result = calculatePayNegotiationModifier(state.credit, state.tenure, compatibilityScore)
     setNegotiationModifier(result.modifier)
+    setNegotiationDetails({
+      creditContribution: result.creditContribution,
+      tenureContribution: result.tenureContribution,
+      compatibilityContribution: result.compatibilityContribution,
+      compatibilityScore
+    })
+    setCalculatedRaiseInput('')
+    setCalculatedSalaryInput('')
+    setNegotiationCalcError(null)
+    setShowNegotiationPracticeMode(false)
     setShowNegotiationModal(true)
   }
 
   // Confirm negotiation
   const handleConfirmNegotiation = () => {
+    const enteredRaise = Number(calculatedRaiseInput)
+    const enteredNewBase = Number(calculatedSalaryInput)
+    const expectedRaise = Number(negotiationModifier)
+    const expectedNewBase = Number((state.job.base * (1 + negotiationModifier / 100)).toFixed(2))
+
+    if (!Number.isFinite(enteredRaise) || !Number.isFinite(enteredNewBase)) {
+      setNegotiationCalcError('Enter both calculated values before submitting.')
+      return
+    }
+
+    const raiseCorrect = Math.abs(enteredRaise - expectedRaise) <= 0.1
+    const salaryCorrect = Math.abs(enteredNewBase - expectedNewBase) <= 1
+    if (!raiseCorrect || !salaryCorrect) {
+      setNegotiationCalcError('Calculation mismatch. Recheck the percentage sum and new base salary.')
+      return
+    }
+
     dispatch({ type: 'NEGOTIATE_PAY', payload: { negotiationModifier } })
+    setNegotiationCalcError(null)
+    setShowNegotiationPracticeMode(false)
     setShowNegotiationModal(false)
   }
 
@@ -856,34 +891,83 @@ export default function Careers() {
       {showNegotiationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="glass p-8 rounded-lg max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold text-slate-900 mb-4">Pay Negotiation</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Pay Negotiation Challenge</h2>
             
             <div className="space-y-4 mb-6">
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                <label className="inline-flex items-center gap-2 font-semibold text-blue-800">
+                  <input
+                    type="checkbox"
+                    checked={showNegotiationPracticeMode}
+                    onChange={(e) => setShowNegotiationPracticeMode(e.target.checked)}
+                  />
+                  Practice Mode (show worked example)
+                </label>
+                <p className="text-xs text-blue-700 mt-1">Optional helper. You still need to submit the calculated values.</p>
+              </div>
+
               <div className="bg-slate-50 p-4 rounded">
                 <p className="text-xs text-slate-500 font-bold uppercase mb-1">Current Base Salary</p>
                 <p className="text-3xl font-bold text-slate-900">${state.job.base.toFixed(0)}/mo</p>
               </div>
-              
-              <div className="bg-slate-50 p-4 rounded">
-                <p className="text-xs text-slate-500 font-bold uppercase mb-1">Proposed Increase</p>
-                <p className="text-3xl font-bold text-emerald-600">+{negotiationModifier.toFixed(1)}%</p>
-              </div>
-              
-              <div className="bg-emerald-50 border-l-4 border-emerald-600 p-4 rounded">
-                <p className="text-xs text-slate-500 font-bold uppercase mb-1">New Base Salary</p>
-                <p className="text-3xl font-bold text-emerald-700">
-                  ${(state.job.base * (1 + negotiationModifier / 100)).toFixed(0)}/mo
-                </p>
-              </div>
 
               <div className="bg-slate-100 p-4 rounded text-sm">
-                <p className="font-bold text-slate-900 mb-2">Negotiation Breakdown:</p>
+                <p className="font-bold text-slate-900 mb-2">Calculate Your Raise</p>
+                <p className="text-xs text-slate-600 mb-2">Step 1: Add the three contributions below.</p>
                 <ul className="space-y-1 text-slate-700">
-                  <li>📊 Credit Score: +{(negotiationModifier * 0.4).toFixed(1)}%</li>
-                  <li>⏱️ Tenure ({state.tenure}mo): +{(negotiationModifier * 0.32).toFixed(1)}%</li>
-                  <li>✅ Job Fit: +{(negotiationModifier * 0.28).toFixed(1)}%</li>
+                  <li>📊 Credit Score Contribution: +{(negotiationDetails?.creditContribution || 0).toFixed(2)}%</li>
+                  <li>⏱️ Tenure ({state.tenure}mo) Contribution: +{(negotiationDetails?.tenureContribution || 0).toFixed(2)}%</li>
+                  <li>✅ Compatibility ({Math.round(negotiationDetails?.compatibilityScore || 0)}/100) Contribution: +{(negotiationDetails?.compatibilityContribution || 0).toFixed(2)}%</li>
                 </ul>
+                <p className="text-xs text-slate-700 mt-2">Step 2: Cap the final raise at 3.00% if your sum is higher.</p>
               </div>
+
+              {showNegotiationPracticeMode && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-900">
+                  <p className="font-bold mb-2">Worked Example</p>
+                  <p>1) Sum = {Number(negotiationDetails?.creditContribution || 0).toFixed(2)} + {Number(negotiationDetails?.tenureContribution || 0).toFixed(2)} + {Number(negotiationDetails?.compatibilityContribution || 0).toFixed(2)} = {(Number(negotiationDetails?.creditContribution || 0) + Number(negotiationDetails?.tenureContribution || 0) + Number(negotiationDetails?.compatibilityContribution || 0)).toFixed(2)}%</p>
+                  <p className="mt-1">2) Final Raise = min(3.00%, Sum) = {negotiationModifier.toFixed(2)}%</p>
+                  <p className="mt-1">3) New Base Salary = ${state.job.base.toFixed(2)} × (1 + {negotiationModifier.toFixed(2)} / 100)</p>
+                  <p className="font-bold mt-1">New Base Salary = ${(state.job.base * (1 + negotiationModifier / 100)).toFixed(2)}/mo</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-500">Your Calculated Raise %</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calculatedRaiseInput}
+                    onChange={(e) => {
+                      setCalculatedRaiseInput(e.target.value)
+                      if (negotiationCalcError) setNegotiationCalcError(null)
+                    }}
+                    className="w-full mt-1 p-3 border rounded-lg font-bold"
+                    placeholder="e.g. 2.75"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-500">Your Calculated New Base Salary ($/mo)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calculatedSalaryInput}
+                    onChange={(e) => {
+                      setCalculatedSalaryInput(e.target.value)
+                      if (negotiationCalcError) setNegotiationCalcError(null)
+                    }}
+                    className="w-full mt-1 p-3 border rounded-lg font-bold"
+                    placeholder="e.g. 4250.00"
+                  />
+                </div>
+              </div>
+
+              {negotiationCalcError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded p-3">
+                  {negotiationCalcError}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -897,7 +981,7 @@ export default function Careers() {
                 onClick={handleConfirmNegotiation}
                 className="flex-1 py-2 px-4 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition-colors"
               >
-                Accept Offer
+                Submit Calculation
               </button>
             </div>
           </div>

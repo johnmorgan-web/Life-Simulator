@@ -1352,15 +1352,15 @@ function calculatePayNegotiationModifier(
 	tenure: number,
 	jobCompatibilityScore: number // 0-100 scale
 ): { modifier: number; creditContribution: number; tenureContribution: number; compatibilityContribution: number } {
-	// Credit contribution: 0-5% based on credit score
-	const creditContribution = Math.min(5, (creditScore - 300) / 55) // scales from 0 to 10%
-	
-	// Tenure contribution: 0-3% based on months in position, capped at 36 months
-	const tenureContribution = Math.min(3, (tenure / 36) * 8)
-	
-	// Job compatibility contribution: 0-3% based on how well matched you are (0-100)
-	const compatibilityContribution = (jobCompatibilityScore / 100) * 3
-	
+	const normalizedCredit = Math.max(0, Math.min(1, (creditScore - 300) / 550))
+	const normalizedTenure = Math.max(0, Math.min(1, tenure / 36))
+	const normalizedCompatibility = Math.max(0, Math.min(1, jobCompatibilityScore / 100))
+
+	// Credit can contribute up to 3.0% at an 850 score.
+	const creditContribution = normalizedCredit * 3
+	const tenureContribution = normalizedTenure * 0.9
+	const compatibilityContribution = normalizedCompatibility * 0.9
+
 	const modifier = creditContribution + tenureContribution + compatibilityContribution
 	
 	return {
