@@ -71,7 +71,7 @@ export default function Relocate() {
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
     const dpr = window.devicePixelRatio || 1
-    const size = Math.min(1080, window.innerWidth - 60)
+    const size = Math.max(240, Math.min(760, window.innerWidth - 80, window.innerHeight - 220))
     canvas.width = size * dpr
     canvas.height = size * dpr
     canvas.style.width = `${size}px`
