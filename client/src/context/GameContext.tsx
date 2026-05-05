@@ -1863,8 +1863,19 @@ function reducer(state: State, action: any) {
 				resultingCheck = 0
 			}
 
+			// Preserve pending jobs by default; cleared when applied.
+			let pendingJobToApply = state.pendingJob
+
+			// Legacy relocation plans may have queued Odd Jobs immediately. Defer until relocation month.
+			const deferRelocationFallbackJob = !!(
+				state.pendingJob
+				&& state.pendingCity
+				&& !applyRelocation
+				&& state.pendingJob.title === 'Odd Jobs'
+			)
+
 			// If a job was accepted previously, apply it now at the start of the new month.
-			if (state.pendingJob) {
+			if (state.pendingJob && !deferRelocationFallbackJob) {
 				// record prior job with full dates and months (no extra month added)
 				const prev = state.job
 				careerHistory.push({
@@ -1902,13 +1913,13 @@ function reducer(state: State, action: any) {
 				if (isPromotion) {
 					jobUpgradeBoostMonths = Math.max(jobUpgradeBoostMonths, 6)
 				}
+				pendingJobToApply = null
 			} else {
 				// no job change, increment tenure
 				tenure = state.tenure + 1
 			}
 
 			// Apply relocation if scheduled for this upcoming month
-			let pendingJobToApply = null as any
 			if (applyRelocation && state.pendingCity) {
 				city = { name: state.pendingCity.name, p: state.pendingCity.p, r: state.pendingCity.r, icon: state.pendingCity.icon, lat: state.pendingCity.lat, lon: state.pendingCity.lon }
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Relocated to ${state.pendingCity.name} (distance: ${state.pendingCity.distanceKm || 'N/A'} km)` })

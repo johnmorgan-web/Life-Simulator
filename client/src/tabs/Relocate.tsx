@@ -393,8 +393,20 @@ export default function Relocate() {
     const transitDistanceCost = Math.round((costInfo.distance * (transitOption2?.costPerKm || 0.15)) * 100) / 100
     const totalRelocationCost = Math.round((transitBaseCost + transitDistanceCost) * 100) / 100
 
-    // set pendingCity with scheduling and costs
-    dispatch({ type: 'SET_STATE', payload: { pendingCity: { ...selected, scheduledMonth: schedMonth, scheduledYear: schedYear, relocationCost: totalRelocationCost, transportCost: costInfo.transportCost, distanceKm: costInfo.distance }, pendingJob: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 } } })
+    // Only schedule relocation here; fallback job is queued once relocation actually happens.
+    dispatch({
+      type: 'SET_STATE',
+      payload: {
+        pendingCity: {
+          ...selected,
+          scheduledMonth: schedMonth,
+          scheduledYear: schedYear,
+          relocationCost: totalRelocationCost,
+          transportCost: costInfo.transportCost,
+          distanceKm: costInfo.distance,
+        },
+      },
+    })
   }
 
   const sortedCities = useMemo(() => [...cities].sort((a, b) => a.name.localeCompare(b.name)), [cities])
@@ -491,6 +503,9 @@ export default function Relocate() {
         {state.pendingCity && (
           <div className="mt-4 text-xs text-slate-400">
             Pending relocation: <strong>{state.pendingCity.name}</strong> scheduled for {state.pendingCity.scheduledMonth}/{state.pendingCity.scheduledYear} • Cost: ${state.pendingCity.relocationCost}
+            <div className="mt-1 text-emerald-300">
+              Current job remains active until relocation executes on {state.pendingCity.scheduledMonth}/{state.pendingCity.scheduledYear}.
+            </div>
           </div>
         )}
       </div>
