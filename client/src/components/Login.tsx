@@ -10,10 +10,52 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isCreateMode, setIsCreateMode] = useState(false)
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [welcomePopupMessage, setWelcomePopupMessage] = useState<string | null>(null)
+
+  const signInPhrases = [
+    'Clock in, check the ledger, and make this month count.',
+    'Your city is waiting. Your budget is judging.',
+    'Smart moves compound. So do late fees.',
+    'One login away from your next promotion.',
+    'Balance first, flex later.',
+    'Big dreams, small steps, smart choices.',
+    'Your piggy bank called. It said, "Let us cook."',
+    'Be the boss of your bucks.',
+    'Save today, celebrate tomorrow.',
+    'Math powers on. Adventure begins.',
+    'Build your life one good choice at a time.',
+    'Spend like a hero, not like a zero.',
+    'Future-you is cheering for today-you.',
+    'Login now. Level up your money game.',
+    'Your financial journey continues. Let’s make it legendary.',
+    'Every login is a step towards your next big win.',
+    'Your neighbors are watching. Show them how it’s done.',
+    'Your money, your rules. Let’s get started.',
+  ]
+
+  const welcomeBackMessages = [
+    'Great to see you return. Let\'s continue building your story.',
+    'Your city missed you. Let\'s pick up where you left off.',
+    'Welcome back! Your next smart move is waiting.',
+    'Glad you are back. Time to make this month a good one.',
+    'Welcome back! Let\'s keep your progress rolling.',
+    'Nice to have you back. Your journey continues today.',
+    'Welcome back! Ready for another great chapter?',
+    'Good to see you again. Let\'s make more progress together.',
+  ]
 
   useEffect(() => {
     void checkForPublishedUpdate()
   }, [])
+
+  useEffect(() => {
+    if (isCreateMode) return
+    const timer = window.setInterval(() => {
+      setPhraseIndex((prev) => (prev + 1) % signInPhrases.length)
+    }, 3200)
+    return () => window.clearInterval(timer)
+  }, [isCreateMode, signInPhrases.length])
 
   const handleUsernameChange = (value: string) => {
     if (isCreateMode) {
@@ -51,6 +93,13 @@ export default function Login() {
       setError(result?.error || (isCreateMode
         ? 'Unable to create user. Username may already exist.'
         : 'Invalid credentials or unable to reach server.'))
+      return
+    }
+
+    if (!isCreateMode) {
+      const cleanUsername = String(username || '').trim() || 'Player'
+      const message = welcomeBackMessages[Math.floor(Math.random() * welcomeBackMessages.length)]
+      setWelcomePopupMessage(`Welcome back, ${cleanUsername}! ${message}`)
     }
   }
 
@@ -61,6 +110,13 @@ export default function Login() {
         <h2 className="text-2xl font-small mb-4 ">
           {isCreateMode ? 'Create your account' : 'Your neighbors missed you. (The nice ones, anyway.)'}
         </h2>
+        {!isCreateMode ? (
+          <div className="mb-4 rounded-lg bg-slate-100 p-3 border border-slate-200">
+            <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Before You Sign In</p>
+            <p className="text-sm text-slate-700 mt-1">{signInPhrases[phraseIndex]}</p>
+            <p className="text-xs text-slate-500 mt-1">Use your existing username and password to continue your current life simulation.</p>
+          </div>
+        ) : null}
         <div className="mb-4">
           <label className="block text-sm font-bold text-slate-600 mb-1">Username</label>
           <input value={username} onChange={e => handleUsernameChange(e.target.value)} className="w-full p-3 border rounded" placeholder="Enter your username" />
@@ -101,6 +157,39 @@ export default function Login() {
           {isCreateMode ? 'Back to Sign In' : 'Create user'}
         </button>
       </form>
+      {welcomePopupMessage ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setWelcomePopupMessage(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-bold text-slate-800">Welcome Back</h3>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close welcome message"
+                onClick={() => setWelcomePopupMessage(null)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-700">{welcomePopupMessage}</p>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                className="rounded bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+                onClick={() => setWelcomePopupMessage(null)}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
