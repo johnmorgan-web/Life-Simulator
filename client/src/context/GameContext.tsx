@@ -1288,6 +1288,10 @@ const initialState: State = {
 	subscriptionBadges: [] as any[],
 	entertainmentTicketStubs: [] as any[],
 	happiness: 70,
+	jobUpgradeBoostMonths: 0,
+	payRaiseBoostMonths: 0,
+	credentialBoostMonths: 0,
+	perfectChecksBoostMonths: 0,
 	workPenaltyPercent: 0,
 	celebration: null as 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow' | null,
 	// Credit tracking
@@ -1529,6 +1533,10 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		subscriptionBadges: data.subscriptionBadges ?? [],
 		entertainmentTicketStubs: data.entertainmentTicketStubs ?? [],
 		happiness: data.happiness ?? 70,
+		jobUpgradeBoostMonths: Math.max(0, Number(data.jobUpgradeBoostMonths ?? 0)),
+		payRaiseBoostMonths: Math.max(0, Number(data.payRaiseBoostMonths ?? 0)),
+		credentialBoostMonths: Math.max(0, Number(data.credentialBoostMonths ?? 0)),
+		perfectChecksBoostMonths: Math.max(0, Number(data.perfectChecksBoostMonths ?? 0)),
 		workPenaltyPercent: data.workPenaltyPercent ?? 0,
 		marketPrices,
 		marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
@@ -1776,6 +1784,10 @@ function reducer(state: State, action: any) {
 			const nextJobMarket = { ...(state.jobMarket || {}) }
 			let job = state.job
 			let tenure = state.tenure
+			let jobUpgradeBoostMonths = Math.max(0, Number(state.jobUpgradeBoostMonths || 0))
+			let payRaiseBoostMonths = Math.max(0, Number(state.payRaiseBoostMonths || 0))
+			let credentialBoostMonths = Math.max(0, Number(state.credentialBoostMonths || 0))
+			let perfectChecksBoostMonths = Math.max(0, Number(state.perfectChecksBoostMonths || 0))
 			let lastNegotiationMonth = state.lastNegotiationMonth
 			let lastNegotiationYear = state.lastNegotiationYear
 			let celebration = null as 'degree' | 'certification' | 'job-accepted' | 'promotion' | 'debt-paid-off' | 'car-paid-off' | 'pay-bump' | 'achievement' | 'rainbow' | null
@@ -1800,6 +1812,7 @@ function reducer(state: State, action: any) {
 					credentials.push(state.activeEdu)
 					credentialHistory.push({ name: state.activeEdu, month: nextMonth, year: nextYear, months: monthsStudied })
 					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Graduated: ${state.activeEdu} (${monthsStudied} mo)` })
+					credentialBoostMonths = Math.max(credentialBoostMonths, 3)
 					activeEdu = null
 					// Trigger celebration for degree or certification
 					const courseType = course?.type || 'degree'
@@ -1886,6 +1899,9 @@ function reducer(state: State, action: any) {
 				lastNegotiationYear = null
 				// Trigger celebration for job acceptance/promotion
 				celebration = isPromotion ? 'promotion' : 'job-accepted'
+				if (isPromotion) {
+					jobUpgradeBoostMonths = Math.max(jobUpgradeBoostMonths, 6)
+				}
 			} else {
 				// no job change, increment tenure
 				tenure = state.tenure + 1
@@ -2068,6 +2084,10 @@ function reducer(state: State, action: any) {
 			const netMonthlyIncome = Math.max(0, updatedJob.base * city.p * 0.8)
 			const luxuryDiscretionary = totalLuxuryServiceDiscretionary({ ...state, job: updatedJob, city })
 			const discretionarySpend = (nextEntertainmentBudgets.entertainmentBudget || 0) + (nextEntertainmentBudgets.subscriptionBudget || 0) + luxuryDiscretionary
+			const hadPerfectChecksThisMonth = monthlyCheckSuccesses > 0 && monthlyCheckFailures === 0
+			if (hadPerfectChecksThisMonth) {
+				perfectChecksBoostMonths = Math.max(perfectChecksBoostMonths, 1)
+			}
 			let happinessDelta = 0
 			let negativeMoodDebuffs = 0
 
@@ -2088,6 +2108,16 @@ function reducer(state: State, action: any) {
 				const therapistOffset = Math.floor(negativeMoodDebuffs * 0.85)
 				happinessDelta += therapistOffset + 1
 			}
+
+			if (jobUpgradeBoostMonths > 0) happinessDelta += 8
+			if (payRaiseBoostMonths > 0) happinessDelta += 5
+			if (credentialBoostMonths > 0) happinessDelta += 4
+			if (perfectChecksBoostMonths > 0) happinessDelta += 3
+
+			const nextJobUpgradeBoostMonths = Math.max(0, jobUpgradeBoostMonths - 1)
+			const nextPayRaiseBoostMonths = Math.max(0, payRaiseBoostMonths - 1)
+			const nextCredentialBoostMonths = Math.max(0, credentialBoostMonths - 1)
+			const nextPerfectChecksBoostMonths = Math.max(0, perfectChecksBoostMonths - 1)
 
 			const nextHappiness = Math.max(0, Math.min(100, Math.round((state.happiness ?? 70) + happinessDelta)))
 
@@ -2639,6 +2669,10 @@ function reducer(state: State, action: any) {
 				subscriptionBadges: nextSubscriptionBadges,
 				entertainmentTicketStubs: nextEntertainmentTicketStubs,
 				happiness: nextHappiness,
+				jobUpgradeBoostMonths: nextJobUpgradeBoostMonths,
+				payRaiseBoostMonths: nextPayRaiseBoostMonths,
+				credentialBoostMonths: nextCredentialBoostMonths,
+				perfectChecksBoostMonths: nextPerfectChecksBoostMonths,
 				workPenaltyPercent: nextWorkPenaltyPercent,
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
@@ -2690,6 +2724,7 @@ function reducer(state: State, action: any) {
 			return {
 				...state,
 				job: newJob,
+				payRaiseBoostMonths: Math.max(2, Number(state.payRaiseBoostMonths || 0)),
 				lastNegotiationMonth: state.month,
 				lastNegotiationYear: state.year,
 				logs,
@@ -2710,6 +2745,7 @@ function reducer(state: State, action: any) {
 			return {
 				...state,
 				job: newJob,
+				payRaiseBoostMonths: Math.max(2, Number(state.payRaiseBoostMonths || 0)),
 				lastAutoBumpMonth: state.month,
 				lastAutoBumpYear: state.year,
 				logs,
@@ -3194,6 +3230,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			subscriptionBadges: [],
 			entertainmentTicketStubs: [],
 			happiness: 70,
+			jobUpgradeBoostMonths: 0,
+			payRaiseBoostMonths: 0,
+			credentialBoostMonths: 0,
+			perfectChecksBoostMonths: 0,
 			workPenaltyPercent: 0,
 			celebration: null,
 			paymentStreak: 0,

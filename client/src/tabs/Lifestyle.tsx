@@ -153,6 +153,75 @@ export default function Lifestyle() {
   const subscriptionTier = getSubscriptionTier(subscriptionPct)
   const projectedHappinessModifier = entertainmentTier.modifier + subscriptionTier.modifier
 
+  // Happiness modifier breakdown (mirrors GameContext processMonth logic)
+  const monthsSinceVehiclePurchase = (() => {
+    const garage = Array.isArray(state.garage) ? state.garage : []
+    if (garage.length === 0) return 999
+    const curMonth = Number(state.month || 1)
+    const curYear = Number(state.year || 2025)
+    let best = Infinity
+    for (const g of garage) {
+      if (typeof g.purchaseMonth !== 'number' || typeof g.purchaseYear !== 'number') continue
+      const months = (curYear - g.purchaseYear) * 12 + (curMonth - g.purchaseMonth)
+      if (months < best) best = months
+    }
+    return best === Infinity ? 999 : best
+  })()
+  const luxuryServiceSpend = lifestyleExpenses.luxuryServices.reduce((sum, service) => {
+    return (state.luxuryServices as any)?.[service.id] ? sum + Number(getLuxuryServiceMonthlyPay(service.id) || 0) : sum
+  }, 0)
+  const discretionarySpend = (entertainmentSpend + subscriptionSpend) + luxuryServiceSpend
+  const hasDebt = Number(state.debt || 0) > 0
+  const lowPayStagnation = Number(state.tenure || 0) >= 12 && netSalary < 3200
+  const highPayStress1 = netSalary >= 10000
+  const highPayStress2 = netSalary >= 20000
+  const staleVehicle = monthsSinceVehiclePurchase > 6
+  const lowDiscretionary = discretionarySpend < netSalary * 0.03
+
+  const happinessDebuffs = [
+    { label: 'Carrying debt', amount: -5, active: hasDebt },
+    { label: 'Low-pay stagnation (12+ mo. tenure & salary < $3,200)', amount: -4, active: lowPayStagnation },
+    { label: 'High income stress ($10k+ salary)', amount: -2, active: highPayStress1 },
+    { label: 'High income stress ($20k+ salary, stacks)', amount: -2, active: highPayStress2 },
+    { label: 'Stale vehicle purchase (no new vehicle in 6+ mo.)', amount: -3, active: staleVehicle },
+    { label: 'Underspending on leisure (<3% of income)', amount: -2, active: lowDiscretionary },
+    { label: 'Entertainment underspend (Bare Minimum tier)', amount: -1, active: entertainmentTier.modifier < 0 },
+    { label: 'Subscription overspend (Subscription Creep tier)', amount: -2, active: subscriptionTier.modifier < 0 },
+  ]
+  const happinessBuffs = [
+    { label: 'Housekeeper service', amount: 2, active: !!state.luxuryServices?.housekeeper },
+    { label: 'Concierge service', amount: 3, active: !!state.luxuryServices?.concierge },
+    { label: 'Personal trainer service', amount: 1, active: !!state.luxuryServices?.trainer },
+    { label: 'Therapist service (offsets ~85% of debuffs + 1)', amount: null as number | null, active: !!state.luxuryServices?.therapist },
+    { label: `Entertainment tier: ${entertainmentTier.name}`, amount: entertainmentTier.modifier, active: entertainmentTier.modifier > 0 },
+    { label: `Subscription tier: ${subscriptionTier.name}`, amount: subscriptionTier.modifier, active: subscriptionTier.modifier > 0 },
+    {
+      label: `Promotion/new higher-pay job momentum (${Math.max(0, Number(state.jobUpgradeBoostMonths || 0))} mo left)`,
+      amount: 8,
+      active: Number(state.jobUpgradeBoostMonths || 0) > 0,
+    },
+    {
+      label: `Pay raise momentum (${Math.max(0, Number(state.payRaiseBoostMonths || 0))} mo left)`,
+      amount: 5,
+      active: Number(state.payRaiseBoostMonths || 0) > 0,
+    },
+    {
+      label: `Recent credential momentum (${Math.max(0, Number(state.credentialBoostMonths || 0))} mo left)`,
+      amount: 4,
+      active: Number(state.credentialBoostMonths || 0) > 0,
+    },
+    {
+      label: `Perfect check month (${Math.max(0, Number(state.perfectChecksBoostMonths || 0))} mo left)`,
+      amount: 3,
+      active: Number(state.perfectChecksBoostMonths || 0) > 0,
+    },
+  ]
+  const totalActiveDebuffs = happinessDebuffs.filter(d => d.active).reduce((s, d) => s + d.amount, 0)
+  const therapistOffset = state.luxuryServices?.therapist ? Math.floor(Math.abs(totalActiveDebuffs) * 0.85) + 1 : 0
+  const netHappinessDelta = happinessDebuffs.filter(d => d.active).reduce((s, d) => s + d.amount, 0)
+    + happinessBuffs.filter(b => b.active && b.amount !== null).reduce((s, b) => s + (b.amount ?? 0), 0)
+    + therapistOffset
+
   const entertainmentTierBlurb: Record<string, string> = {
     'Bare Minimum': 'A single snack and a strong imagination are carrying this month.',
     'Friday Fun Budget': 'Enough for regular fun without derailing the budget plan.',
@@ -199,9 +268,7 @@ export default function Lifestyle() {
   const activeEntertainmentCount = getActiveCount(entertainmentSpend, entertainmentOptions)
   const activeSubscriptionCount = getActiveCount(subscriptionSpend, subscriptionOptions)
 
-  const monthlyLuxuryServicesCost = lifestyleExpenses.luxuryServices.reduce((sum, service) => {
-    return (state.luxuryServices as any)?.[service.id] ? sum + Number(getLuxuryServiceMonthlyPay(service.id) || 0) : sum
-  }, 0)
+  const monthlyLuxuryServicesCost = luxuryServiceSpend
 
   useEffect(() => {
     if (!prevEntTierRef.current) {
@@ -261,11 +328,41 @@ export default function Lifestyle() {
                       ?
                     </button>
                     {showHappinessTooltip && (
-                      <div className="absolute z-[90] top-full mt-2 left-0 sm:left-auto sm:right-0 w-72 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
-                        <p className="font-bold mb-1">Happiness Drivers</p>
-                        <p>Improves with concierge, housekeeper, trainer, therapist, and healthy leisure spending.</p>
-                        <p className="mt-1">Drops with debt, long low-pay stagnation, high-pay stress, stale purchases, and underspending.</p>
-                        <p className="mt-2 font-bold">Current projected leisure modifier: {projectedHappinessModifier >= 0 ? '+' : ''}{projectedHappinessModifier}</p>
+                      <div className="absolute z-[90] top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
+                        <p className="font-bold mb-2">Monthly Happiness Modifiers</p>
+
+                        <p className="text-[10px] font-bold uppercase text-rose-400 mb-1">Debuffs</p>
+                        <div className="space-y-0.5 mb-2">
+                          {happinessDebuffs.map((d, i) => (
+                            <div key={i} className={`flex justify-between gap-2 ${d.active ? 'text-rose-300' : 'text-slate-500'}`}>
+                              <span>{d.active ? '▸' : '○'} {d.label}</span>
+                              <span className="shrink-0 font-bold">{d.active ? d.amount : '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-[10px] font-bold uppercase text-emerald-400 mb-1">Buffs</p>
+                        <div className="space-y-0.5 mb-2">
+                          {happinessBuffs.map((b, i) => (
+                            <div key={i} className={`flex justify-between gap-2 ${b.active ? 'text-emerald-300' : 'text-slate-500'}`}>
+                              <span>{b.active ? '▸' : '○'} {b.label}</span>
+                              <span className="shrink-0 font-bold">
+                                {b.active
+                                  ? b.amount === null
+                                    ? `+${therapistOffset}`
+                                    : b.amount > 0 ? `+${b.amount}` : b.amount
+                                  : '—'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border-t border-slate-700 pt-1.5 mt-1">
+                          <div className={`flex justify-between font-bold ${netHappinessDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            <span>Estimated net this month</span>
+                            <span>{netHappinessDelta >= 0 ? '+' : ''}{netHappinessDelta}</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
