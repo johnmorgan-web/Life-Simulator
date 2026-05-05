@@ -211,10 +211,17 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 
 	const compactJobMarket = requestedTitles.reduce((acc: Record<string, any>, title: string) => {
 		const slot = snapshot?.jobMarket?.[title]
-		if (!slot || typeof slot !== 'object') return acc
+		const fallbackJob = jobBoard.find((job: Job) => job.title === title)
+		const fallbackCapacity = Math.max(1, Math.round(Number(fallbackJob?.capacity || 8)))
+		const normalizedSlot = slot && typeof slot === 'object'
+			? slot
+			: {
+				capacity: fallbackCapacity,
+				occupied: Math.floor(fallbackCapacity * 0.75),
+			}
 		acc[title] = {
-			capacity: Number(slot.capacity || 0),
-			occupied: Number(slot.occupied || 0),
+			capacity: Number(normalizedSlot.capacity || 0),
+			occupied: Number(normalizedSlot.occupied || 0),
 		}
 		return acc
 	}, {})
