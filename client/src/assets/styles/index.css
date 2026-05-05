@@ -54,7 +54,7 @@ body {
 	z-index: 0;
 }
 
-.app-shell > * {
+.app-shell > :not(.fixed) {
 	position: relative;
 	z-index: 1;
 }
