@@ -17,6 +17,7 @@ import StockMarket from './tabs/StockMarket'
 import Rewards from './tabs/Rewards'
 import RealEstate from './tabs/RealEstate'
 import Admin from './tabs/Admin'
+import AICoach from './tabs/AICoach'
 import { cosmeticThemes } from './constants/achievements.constants'
 import { stockMarketAssets } from './constants/stockMarket.constants'
 
@@ -26,6 +27,7 @@ function TabContent({ tab }: { tab: string }) {
 
   if (tab === 'ledger') return <Ledger ledger={state.ledger} onCheck={checkRow} format={format} isAdmin={state.isAdmin} />
   if (tab === 'careers') return <Careers />
+  if (tab === 'ai-coach') return <AICoach />
   if (tab === 'academy') return <Academy />
   if (tab === 'transit') return <Transit />
   if (tab === 'relocate') return <Relocate />
