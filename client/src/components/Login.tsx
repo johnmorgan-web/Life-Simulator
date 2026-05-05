@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
+import { checkForPublishedUpdate } from '../utils/publishedUpdate'
 
 export default function Login() {
   const { login, createUser } = useGame()
@@ -9,6 +10,10 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isCreateMode, setIsCreateMode] = useState(false)
+
+  useEffect(() => {
+    void checkForPublishedUpdate()
+  }, [])
 
   const handleUsernameChange = (value: string) => {
     if (isCreateMode) {
