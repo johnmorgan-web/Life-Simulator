@@ -75,8 +75,8 @@ function propertyConditionTrend(property: any, currentMonth: number, currentYear
 
 export default function RealEstate() {
   const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts } = useGame()
-  const learningLevel: LearningLevel = state.realEstateLearningLevel || 'adult'
-  const usePlainLanguage = !!state.realEstateUsePlainLanguage
+  const learningLevel: LearningLevel = state.learningLevel || state.realEstateLearningLevel || state.marketLearningLevel || 'adult'
+  const usePlainLanguage = Boolean(state.usePlainLanguage ?? state.realEstateUsePlainLanguage ?? state.marketUsePlainLanguage)
   const [selectedCity, setSelectedCity] = useState(state.city?.name || cityData?.[0]?.name || '')
   const [downPaymentPct, setDownPaymentPct] = useState(0.25)
   const [purchaseMode, setPurchaseMode] = useState<'cash' | 'mortgage'>('mortgage')
@@ -234,7 +234,14 @@ export default function RealEstate() {
             Learning level
             <select
               value={learningLevel}
-              onChange={(e) => dispatch({ type: 'SET_STATE', payload: { realEstateLearningLevel: e.target.value } })}
+              onChange={(e) => dispatch({
+                type: 'SET_STATE',
+                payload: {
+                  learningLevel: e.target.value,
+                  marketLearningLevel: e.target.value,
+                  realEstateLearningLevel: e.target.value,
+                },
+              })}
               className="px-2 py-1 rounded border border-slate-300 bg-white"
             >
               <option value="elementary">Elementary</option>
@@ -247,7 +254,14 @@ export default function RealEstate() {
             <input
               type="checkbox"
               checked={usePlainLanguage}
-              onChange={(e) => dispatch({ type: 'SET_STATE', payload: { realEstateUsePlainLanguage: e.target.checked } })}
+              onChange={(e) => dispatch({
+                type: 'SET_STATE',
+                payload: {
+                  usePlainLanguage: e.target.checked,
+                  marketUsePlainLanguage: e.target.checked,
+                  realEstateUsePlainLanguage: e.target.checked,
+                },
+              })}
             />
             Plain language
           </label>

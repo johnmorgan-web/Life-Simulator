@@ -133,8 +133,8 @@ export default function StockMarket() {
   const previousPrices = state.marketPricesPrevious || {}
   const portfolio = Array.isArray(state.portfolio) ? state.portfolio : []
 
-  const learningLevel: LearningLevel = state.marketLearningLevel || 'adult'
-  const usePlainLanguage = !!state.marketUsePlainLanguage
+  const learningLevel: LearningLevel = state.learningLevel || state.marketLearningLevel || state.realEstateLearningLevel || 'adult'
+  const usePlainLanguage = Boolean(state.usePlainLanguage ?? state.marketUsePlainLanguage ?? state.realEstateUsePlainLanguage)
   const autoInvest = state.autoInvest || { enabled: false, monthlyAmount: 0, profileId: 'balanced' }
   const [autoInvestDraft, setAutoInvestDraft] = useState(autoInvest)
 
@@ -320,7 +320,14 @@ export default function StockMarket() {
           <label className="text-sm font-bold text-slate-600">Learning level:</label>
           <select
             value={learningLevel}
-            onChange={(e) => dispatch({ type: 'SET_STATE', payload: { marketLearningLevel: e.target.value } })}
+            onChange={(e) => dispatch({
+              type: 'SET_STATE',
+              payload: {
+                learningLevel: e.target.value,
+                marketLearningLevel: e.target.value,
+                realEstateLearningLevel: e.target.value,
+              },
+            })}
             className="p-2 border rounded w-full sm:w-auto"
           >
             <option value="elementary">Elementary</option>
@@ -332,7 +339,14 @@ export default function StockMarket() {
             <input
               type="checkbox"
               checked={usePlainLanguage}
-              onChange={(e) => dispatch({ type: 'SET_STATE', payload: { marketUsePlainLanguage: e.target.checked } })}
+              onChange={(e) => dispatch({
+                type: 'SET_STATE',
+                payload: {
+                  usePlainLanguage: e.target.checked,
+                  marketUsePlainLanguage: e.target.checked,
+                  realEstateUsePlainLanguage: e.target.checked,
+                },
+              })}
             />
             Translate into common words
           </label>
