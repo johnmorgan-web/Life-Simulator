@@ -144,7 +144,7 @@ export default function StockMarket() {
     const previous = prevStockInvestedRef.current || 0
     prevStockInvestedRef.current = current
     if (current > previous) {
-      buildLedger()
+      buildLedger(0, 0, undefined, true)
     }
   }, [state.stockInvestedThisMonth, buildLedger])
 
