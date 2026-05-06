@@ -85,6 +85,8 @@ jobs:
           script_stop: true
           script: |
             set -e
-            cd "${{ inputs.vps_app_dir }}"
+            TARGET_DIR="${{ inputs.vps_app_dir }}"
+            TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
+            cd "$TARGET_DIR"
             docker compose -f "${{ inputs.compose_file }}" pull
             docker compose -f "${{ inputs.compose_file }}" up -d --remove-orphans
