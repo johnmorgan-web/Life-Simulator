@@ -328,7 +328,7 @@ export default function Lifestyle() {
                       ?
                     </button>
                     {showHappinessTooltip && (
-                      <div className="absolute z-50 bottom-full mb-2 left-0 sm:left-auto sm:right-0 w-80 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
+                      <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
                         <p className="font-bold mb-2">Monthly Happiness Modifiers</p>
 
                         <p className="text-[10px] font-bold uppercase text-rose-400 mb-1">Debuffs</p>
