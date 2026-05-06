@@ -2529,7 +2529,7 @@ function reducer(state: State, action: any) {
 					year: nextYear
 				})
 			}
-			const stockInvestedLastMonth = round2(Number(state.stockInvestedThisMonth || 0) + Number(autoInvestResult.investedAmount || 0))
+			const stockInvestedLastMonth = round2(Number(autoInvestResult.investedAmount || 0))
 			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
 			creditAccountAgeMonths += 1
 
