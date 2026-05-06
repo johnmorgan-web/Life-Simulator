@@ -146,7 +146,7 @@ export default function StockMarket() {
     if (current > previous) {
       buildLedger()
     }
-  }, [state.stockInvestedThisMonth])
+  }, [state.stockInvestedThisMonth, buildLedger])
 
   useEffect(() => {
     setAutoInvestDraft(autoInvest)
