@@ -7,6 +7,24 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "npm --prefix client version ${nextRelease.version} --no-git-tag-version && npm --prefix server version ${nextRelease.version} --no-git-tag-version"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "client/package.json",
+          "client/package-lock.json",
+          "server/package.json",
+          "server/package-lock.json"
+        ],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    [
       "@semantic-release/github",
       {
         "successComment": false,
