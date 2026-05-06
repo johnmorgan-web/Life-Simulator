@@ -1655,8 +1655,16 @@ function scaleLifeEventAmount(event: LifeEvent, netMonthlyIncome: number) {
 
 function reducer(state: State, action: any) {
 	switch (action.type) {
-		case 'INIT_LEDGER':
-			return { ...state, ledger: action.payload }
+		case 'INIT_LEDGER': {
+			const doneById: Record<number, boolean> = {}
+			for (const row of state.ledger) {
+				if (row?.done) doneById[row.id] = true
+			}
+			const mergedLedger = (action.payload as any[]).map((row: any) =>
+				doneById[row.id] ? { ...row, done: true } : row
+			)
+			return { ...state, ledger: mergedLedger }
+		}
 		case 'CHECK_ROW': {
 			const { id, done, newCheck } = action.payload
 			const targetRow = state.ledger.find((tx: any) => tx.id === id)
