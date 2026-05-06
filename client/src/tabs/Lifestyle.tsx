@@ -299,7 +299,7 @@ export default function Lifestyle() {
   return (
     <div className="space-y-8">
       {/* Current Lifestyle Info */}
-          <div className="glass p-6 mb-6">
+          <div className={`glass p-6 mb-6 relative ${showHappinessTooltip ? 'z-10' : ''}`}>
             <h3 className="font-bold text-lg mb-4">📊 Current Lifestyle</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-slate-50 p-3 rounded-lg">
