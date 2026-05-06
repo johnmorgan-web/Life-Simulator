@@ -299,7 +299,7 @@ export default function Lifestyle() {
   return (
     <div className="space-y-8">
       {/* Current Lifestyle Info */}
-          <div className="glass p-6 mb-6">
+          <div className={`glass p-6 mb-6 relative ${showHappinessTooltip ? 'z-10' : ''}`}>
             <h3 className="font-bold text-lg mb-4">📊 Current Lifestyle</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-slate-50 p-3 rounded-lg">
@@ -328,7 +328,7 @@ export default function Lifestyle() {
                       ?
                     </button>
                     {showHappinessTooltip && (
-                      <div className="absolute z-[90] top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
+                      <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 max-w-[calc(100vw-1rem)] rounded-lg bg-slate-900 text-white text-[11px] leading-relaxed p-3 shadow-xl whitespace-normal break-words">
                         <p className="font-bold mb-2">Monthly Happiness Modifiers</p>
 
                         <p className="text-[10px] font-bold uppercase text-rose-400 mb-1">Debuffs</p>
