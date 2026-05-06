@@ -21,6 +21,8 @@ import AICoach from './tabs/AICoach'
 import { cosmeticThemes } from './constants/achievements.constants'
 import { stockMarketAssets } from './constants/stockMarket.constants'
 
+declare const __APP_VERSION__: string
+
 function TabContent({ tab }: { tab: string }) {
   const { state, checkRow } = useGame()
   const format = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -477,6 +479,9 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 <TabContent tab={tab} />
               </div>
             </main>
+            <footer className="px-4 pb-4 text-right text-[10px] text-slate-400 sm:px-7 xl:px-9">
+              v{__APP_VERSION__}
+            </footer>
           </>
         )}
       {state.showSettlement && (

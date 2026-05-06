@@ -67,6 +67,9 @@ jobs:
     needs: [release]
     if: ${{ always() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     runs-on: ubuntu-latest
+    outputs:
+      release_published: ${{ steps.semver.outputs.found }}
+      release_tag: ${{ steps.semver.outputs.tag }}
     permissions:
       contents: read
       packages: write
@@ -135,9 +138,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy-to-vps:
-    needs: [release, build-and-push]
+    needs: [build-and-push]
     runs-on: ubuntu-latest
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.deploy_to_vps && (needs.release.result == 'success' || needs.release.result == 'skipped') && needs.build-and-push.result == 'success' }}
+    if: ${{ always() && needs.build-and-push.result == 'success' && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-and-push.outputs.release_published == 'true') || (github.event_name == 'workflow_dispatch' && inputs.deploy_to_vps)) }}
 
     steps:
       - name: Deploy on VPS over SSH
@@ -150,8 +153,8 @@ jobs:
           script_stop: true
           script: |
             set -e
-            TARGET_DIR="${{ inputs.vps_app_dir }}"
+            TARGET_DIR="${{ inputs.vps_app_dir || '~/life-simulator' }}"
             TARGET_DIR="${TARGET_DIR/#\~/$HOME}"
             cd "$TARGET_DIR"
-            docker compose -f "${{ inputs.compose_file }}" pull
-            docker compose -f "${{ inputs.compose_file }}" up -d --remove-orphans
+            docker compose -f "${{ inputs.compose_file || 'docker-compose.prod.yml' }}" pull
+            docker compose -f "${{ inputs.compose_file || 'docker-compose.prod.yml' }}" up -d --remove-orphans

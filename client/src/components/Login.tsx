@@ -3,6 +3,8 @@ import { useGame } from '../context/GameContext'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
 import { checkForPublishedUpdate } from '../utils/publishedUpdate'
 
+declare const __APP_VERSION__: string
+
 export default function Login() {
   const { login, createUser } = useGame()
   const [username, setUsername] = useState('')
@@ -105,7 +107,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-white/50 flex items-start sm:items-center justify-center p-4">
-      <form onSubmit={handleSubmit} className="glass p-8 rounded-xl w-full max-w-sm">
+      <form onSubmit={handleSubmit} className="glass relative p-8 rounded-xl w-full max-w-sm">
         <img src="/LedgerLegends.png" alt="Ledger Legends" className="w-full mb-4 rounded-xl" />
         <h2 className="text-2xl font-small mb-4 ">
           {isCreateMode ? 'Create your account' : 'Your neighbors missed you. (The nice ones, anyway.)'}
@@ -156,6 +158,9 @@ export default function Login() {
         >
           {isCreateMode ? 'Back to Sign In' : 'Create user'}
         </button>
+        <p className="absolute bottom-3 right-4 text-[10px] text-slate-400">
+          v{__APP_VERSION__}
+        </p>
       </form>
       {welcomePopupMessage ? (
         <div
