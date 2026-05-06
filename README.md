@@ -53,6 +53,35 @@ The container serves:
 
 The workflow at `.github/workflows/docker-image.yml` builds and pushes the image to GitHub Container Registry (`ghcr.io`) on pushes to `main` and on manual runs.
 
+### Commit message guide (semantic-release)
+
+Releases are created from commits merged to `main` using Conventional Commits.
+
+- Patch release (`x.y.Z`):
+  - `fix: correct ledger rounding`
+  - `perf: reduce query time`
+- Minor release (`x.Y.0`):
+  - `feat: add admin auto-check toggle`
+- Major release (`X.0.0`):
+  - `feat!: remove legacy auth flow`
+  - `feat: remove legacy auth flow` plus a `BREAKING CHANGE:` footer in the commit body
+
+No release is created for commit types like `docs:`, `chore:`, `style:`, `test:`, `refactor:` unless the commit includes a breaking change marker (`!` or `BREAKING CHANGE:`).
+
+Recommended format:
+
+```text
+type(scope): short summary
+```
+
+Examples:
+
+```text
+fix(auth): handle expired token refresh
+feat(careers): add capacity indicators to job cards
+feat(api)!: replace user profile endpoint
+```
+
 Expected image name:
 
 ```text
