@@ -5,6 +5,22 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy_to_vps:
+        description: Deploy newly built image to VPS
+        required: true
+        default: false
+        type: boolean
+      vps_app_dir:
+        description: VPS directory containing docker-compose.prod.yml
+        required: true
+        default: ~/life-simulator
+        type: string
+      compose_file:
+        description: Docker Compose file name on VPS
+        required: true
+        default: docker-compose.prod.yml
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -52,3 +68,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-to-vps:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to_vps }}
+
+    steps:
+      - name: Deploy on VPS over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_U }}
+          password: ${{ secrets.SSH_P }}
+          port: ${{ secrets.SSH_PT }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ inputs.vps_app_dir }}"
+            docker compose -f "${{ inputs.compose_file }}" pull
+            docker compose -f "${{ inputs.compose_file }}" up -d --remove-orphans
