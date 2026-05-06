@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { stockMarketAssets, stockMarketGlossary, autoInvestProfiles } from '../constants/stockMarket.constants'
 
@@ -126,7 +126,7 @@ function generateRecommendation(asset: any, price: number, prevPrice: number, po
 }
 
 export default function StockMarket() {
-  const { state, dispatch, saveGame } = useGame()
+  const { state, dispatch, saveGame, buildLedger } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
 
   const marketPrices = state.marketPrices || {}
@@ -137,6 +137,16 @@ export default function StockMarket() {
   const usePlainLanguage = Boolean(state.usePlainLanguage ?? state.marketUsePlainLanguage ?? state.realEstateUsePlainLanguage)
   const autoInvest = state.autoInvest || { enabled: false, monthlyAmount: 0, profileId: 'balanced' }
   const [autoInvestDraft, setAutoInvestDraft] = useState(autoInvest)
+
+  const prevStockInvestedRef = useRef(state.stockInvestedThisMonth)
+  useEffect(() => {
+    const current = state.stockInvestedThisMonth || 0
+    const previous = prevStockInvestedRef.current || 0
+    prevStockInvestedRef.current = current
+    if (current > previous) {
+      buildLedger(0, 0, undefined, true)
+    }
+  }, [state.stockInvestedThisMonth, buildLedger])
 
   useEffect(() => {
     setAutoInvestDraft(autoInvest)

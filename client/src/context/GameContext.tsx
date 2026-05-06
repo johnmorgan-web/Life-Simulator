@@ -1655,8 +1655,19 @@ function scaleLifeEventAmount(event: LifeEvent, netMonthlyIncome: number) {
 
 function reducer(state: State, action: any) {
 	switch (action.type) {
-		case 'INIT_LEDGER':
-			return { ...state, ledger: action.payload }
+		case 'INIT_LEDGER': {
+			if (!action.preserveProgress) {
+				return { ...state, ledger: action.payload }
+			}
+			const doneById: Record<number, boolean> = {}
+			for (const row of state.ledger) {
+				if (row?.done) doneById[row.id] = true
+			}
+			const mergedLedger = (action.payload as any[]).map((row: any) =>
+				doneById[row.id] ? { ...row, done: true } : row
+			)
+			return { ...state, ledger: mergedLedger }
+		}
 		case 'CHECK_ROW': {
 			const { id, done, newCheck } = action.payload
 			const targetRow = state.ledger.find((tx: any) => tx.id === id)
@@ -2529,7 +2540,7 @@ function reducer(state: State, action: any) {
 					year: nextYear
 				})
 			}
-			const stockInvestedLastMonth = round2(Number(state.stockInvestedThisMonth || 0) + Number(autoInvestResult.investedAmount || 0))
+			const stockInvestedLastMonth = round2(Number(autoInvestResult.investedAmount || 0))
 			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
 			creditAccountAgeMonths += 1
 
@@ -3051,7 +3062,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any) {
+	async function buildLedger(paySave = 0, payDebt = 0, stateOverride?: any, preserveProgress = false) {
 		const buildState = stateOverride ?? state
 		try {
 			const requestState = buildLedgerRequestState(buildState)
@@ -3062,7 +3073,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			})
 			if (!response.ok) return
 			const result = await response.json()
-			dispatch({ type: 'INIT_LEDGER', payload: result.ledger })
+			dispatch({ type: 'INIT_LEDGER', payload: result.ledger, preserveProgress })
 			enqueueLedgerEventNotifications(result.events)
 		} catch (e) {
 			console.error('Failed to build ledger from server', e)
