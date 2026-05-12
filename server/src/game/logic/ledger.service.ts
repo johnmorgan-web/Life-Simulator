@@ -158,7 +158,8 @@ export class LedgerService {
         done: false,
       });
 
-      if ((state.transit?.level || 1) > 1 && !(state.garage && state.garage.length > 0)) {
+      // Only charge gas and maintenance if the player owns a vehicle
+      if (state.garage && state.garage.length > 0) {
         const gas = this.utils.variableCost(
           gameValues.gasCostPercentOfSalary * 0.5,
           state.month,

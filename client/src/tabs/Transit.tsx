@@ -27,6 +27,8 @@ export default function Transit() {
   const [financingModal, setFinancingModal] = useState<any>(null)
   const [transitConfirm, setTransitConfirm] = useState<any>(null)
   const [vehicleImageLoadErrors, setVehicleImageLoadErrors] = useState<Record<string, boolean>>({})
+  const [validationError, setValidationError] = useState<any>(null)
+  const [financialPreview, setFinancialPreview] = useState<any>(null)
   const FINANCE_DOWN_PAYMENT_RATE = 0.1
   const FINANCE_MIN_DOWN_PAYMENT = 300
 
@@ -105,8 +107,71 @@ export default function Transit() {
     return 0.18 // Subprime rate for credit below 650
   }
 
+  // Check if a vehicle was purchased within the last 6 months
+  const checkRecentPurchase = () => {
+    if (!garage || garage.length === 0) return null
+    const sixMonthsAgo = state.month - 6
+    for (const vehicle of garage) {
+      const monthsSincePurchase = (state.year - vehicle.purchaseYear) * 12 + (state.month - vehicle.purchaseMonth)
+      if (monthsSincePurchase < 6 && monthsSincePurchase >= 0) {
+        return {
+          vehicleName: vehicle.vehicleName,
+          monthsSincePurchase
+        }
+      }
+    }
+    return null
+  }
+
+  // Calculate debt-to-income ratio and check if new purchase would exceed safe limits
+  const calculateDebtToIncomeRatio = (newMonthlyPayment: number = 0) => {
+    const grossMonthlyIncome = Math.max(1, state.job.base * state.city.p * 0.8)
+    
+    // Sum all existing vehicle payments
+    const existingVehiclePayments = (garage || []).reduce((sum: number, g: any) => {
+      return sum + (g.monthsRemaining > 0 ? g.monthlyPayment : 0)
+    }, 0)
+    
+    // Add gas and maintenance for each vehicle
+    const existingGasAndMaintenance = (garage || []).reduce((sum: number, g: any) => {
+      return sum + calculateMonthlyGasCost(g) + calculateMonthlyMaintenanceCost(g, state.month, state.year)
+    }, 0)
+    
+    // Add mortgage payments
+    const mortgagePayments = (state.investmentProperties || []).reduce((sum: number, p: any) => {
+      return sum + (p.loanBalance > 0 ? p.monthlyDebtService : 0)
+    }, 0)
+    
+    // Add implied debt payment
+    const impliedDebtPayment = state.debt > 0 ? Math.max(50, state.debt * 0.015) : 0
+    
+    const totalNewMonthlyObligations = existingVehiclePayments + newMonthlyPayment + existingGasAndMaintenance + mortgagePayments + impliedDebtPayment
+    const debtToIncomeRatio = totalNewMonthlyObligations / grossMonthlyIncome
+    
+    return {
+      ratio: debtToIncomeRatio,
+      grossMonthlyIncome,
+      totalNewMonthlyObligations,
+      existingVehiclePayments,
+      existingGasAndMaintenance,
+      mortgagePayments,
+      impliedDebtPayment
+    }
+  }
+
   // Purchase vehicle handler - show financing choice
   const showFinancingModal = (vehicle: any, condition: 'new' | 'used' | 'lease') => {
+    // Check for 6-month purchase cooldown
+    const recentPurchase = checkRecentPurchase()
+    if (recentPurchase) {
+      setValidationError({
+        type: 'cooldown',
+        message: `You recently purchased a vehicle (${recentPurchase.vehicleName} ${recentPurchase.monthsSincePurchase} month${recentPurchase.monthsSincePurchase !== 1 ? 's' : ''} ago). Wait 6 months between purchases to make informed decisions.`,
+        monthsRemaining: 6 - recentPurchase.monthsSincePurchase
+      })
+      return
+    }
+
     if (condition === 'lease') {
       // Lease doesn't need financing choice
       purchaseVehicle(vehicle, condition, false)
@@ -117,11 +182,51 @@ export default function Transit() {
     const downPayment = getFinanceDownPayment(price)
     const financedPrincipal = Math.max(0, price - downPayment)
     const monthlyPayment = calculateMonthlyPayment(financedPrincipal, getAPR(), 60)
+    const monthlyGas = calculateMonthlyGasCost(vehicle)
+    const monthlyMaintenance = calculateMonthlyMaintenanceCost(vehicle, state.month, state.year)
+    const totalMonthlyVehicleCost = monthlyPayment + monthlyGas + monthlyMaintenance
+    
     const dueAtSigning = downPayment + monthlyPayment
     const canPayCash = state.savings >= price || state.check >= price
     const canFinance = state.check >= dueAtSigning
     
-    setFinancingModal({ vehicle, condition, price, downPayment, monthlyPayment, dueAtSigning, canPayCash, canFinance })
+    // Calculate debt-to-income ratio with this new purchase
+    const dtiAnalysis = calculateDebtToIncomeRatio(totalMonthlyVehicleCost)
+    const dtiExceedsSafeLimit = dtiAnalysis.ratio > 0.43 // Standard lending limit is ~43%
+    
+    if (dtiExceedsSafeLimit && canFinance) {
+      // Show warning before proceeding
+      setValidationError({
+        type: 'dti-warning',
+        message: `This purchase would increase your debt-to-income ratio to ${(dtiAnalysis.ratio * 100).toFixed(1)}%, which exceeds the recommended 43% lending limit. Lenders typically won't finance beyond this point.`,
+        dtiAnalysis,
+        vehicle,
+        condition,
+        price,
+        downPayment,
+        monthlyPayment,
+        dueAtSigning,
+        canPayCash,
+        canFinance
+      })
+      return
+    }
+    
+    // Show financial impact preview modal
+    setFinancialPreview({
+      vehicle,
+      condition,
+      price,
+      downPayment,
+      monthlyPayment,
+      monthlyGas,
+      monthlyMaintenance,
+      totalMonthlyVehicleCost,
+      dueAtSigning,
+      canPayCash,
+      canFinance,
+      dtiAnalysis
+    })
   }
 
   // Purchase vehicle handler - with financing choice
@@ -199,6 +304,7 @@ export default function Transit() {
           }
         })
         setFinancingModal(null)
+        setFinancialPreview(null)
         return
       } else {
         // Cash payment - no financing
@@ -235,6 +341,7 @@ export default function Transit() {
           }
         })
         setFinancingModal(null)
+        setFinancialPreview(null)
       } else if (state.check >= price) {
         // Use checking
         const newCheck = Math.round((state.check - price) * 100) / 100
@@ -263,6 +370,7 @@ export default function Transit() {
           }
         })
         setFinancingModal(null)
+        setFinancialPreview(null)
       } else {
         alert('Insufficient funds in savings or checking account')
       }
@@ -590,6 +698,169 @@ export default function Transit() {
               <p className="text-sm text-slate-500">Visit the "Buy/Lease Vehicle" tab to purchase or lease a vehicle.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Validation Error Modal - Cooldown or DTI Warning */}
+      {validationError && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 space-y-4">
+            <h3 className="font-bold text-lg">
+              {validationError.type === 'cooldown' ? '⏳ Purchase Cooldown' : '⚠️ High Debt-to-Income Ratio'}
+            </h3>
+            
+            <div className={`p-4 rounded-lg ${validationError.type === 'cooldown' ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+              <p className={`text-sm ${validationError.type === 'cooldown' ? 'text-amber-800' : 'text-red-800'}`}>
+                {validationError.message}
+              </p>
+            </div>
+
+            {validationError.type === 'cooldown' && (
+              <div className="bg-slate-50 p-3 rounded-lg">
+                <p className="text-xs text-slate-500 font-bold">Next Purchase Available</p>
+                <p className="font-bold text-lg">{validationError.monthsRemaining} month{validationError.monthsRemaining !== 1 ? 's' : ''} from now</p>
+              </div>
+            )}
+
+            {validationError.type === 'dti-warning' && (
+              <div className="space-y-3">
+                <div className="bg-slate-50 p-3 rounded-lg">
+                  <p className="text-xs text-slate-500 font-bold">Your Debt-to-Income Ratio</p>
+                  <p className="font-bold text-lg text-red-600">{(validationError.dtiAnalysis.ratio * 100).toFixed(1)}%</p>
+                  <p className="text-xs text-slate-600 mt-1">Recommended max: 43%</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                    <p className="text-slate-600 font-bold">Monthly Gross Income</p>
+                    <p className="font-bold">${validationError.dtiAnalysis.grossMonthlyIncome.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-red-50 p-2 rounded border border-red-200">
+                    <p className="text-slate-600 font-bold">Total Obligations</p>
+                    <p className="font-bold">${validationError.dtiAnalysis.totalNewMonthlyObligations.toLocaleString()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setValidationError(null)
+                    setFinancingModal({
+                      vehicle: validationError.vehicle,
+                      condition: validationError.condition,
+                      price: validationError.price,
+                      downPayment: validationError.downPayment,
+                      monthlyPayment: validationError.monthlyPayment,
+                      dueAtSigning: validationError.dueAtSigning,
+                      canPayCash: validationError.canPayCash,
+                      canFinance: validationError.canFinance
+                    })
+                  }}
+                  className="w-full py-2 rounded bg-amber-600 text-white font-bold text-sm"
+                >
+                  ⚡ Proceed Anyway
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => setValidationError(null)}
+              className="w-full py-2 rounded bg-slate-200 text-slate-800 font-bold"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Impact Preview Modal */}
+      {financialPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg mx-4 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-lg">💰 Financial Impact Preview</h3>
+            <p className="text-sm text-slate-600">{financialPreview.vehicle.name} - {financialPreview.condition}</p>
+            
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <p className="text-xs text-slate-600 font-bold">Purchase Price</p>
+                  <p className="font-bold text-lg">${financialPreview.price.toLocaleString()}</p>
+                </div>
+                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                  <p className="text-xs text-slate-600 font-bold">Down Payment</p>
+                  <p className="font-bold text-lg">${financialPreview.downPayment.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-lg space-y-2 border border-slate-200">
+                <p className="font-bold text-sm">New Monthly Obligations</p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Vehicle Payment (60 mo)</span>
+                    <span className="font-bold">${financialPreview.monthlyPayment.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Gas & Maintenance</span>
+                    <span className="font-bold">${(financialPreview.monthlyGas + financialPreview.monthlyMaintenance).toLocaleString()}</span>
+                  </div>
+                  <div className="border-t border-slate-300 pt-1 mt-1 flex justify-between font-bold text-base">
+                    <span>Total Monthly Cost</span>
+                    <span className="text-red-600">${financialPreview.totalMonthlyVehicleCost.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                  <p className="text-xs text-slate-600 font-bold">Current Checking</p>
+                  <p className="font-bold text-lg text-green-700">${state.check.toLocaleString()}</p>
+                </div>
+                <div className={`p-3 rounded-lg border ${state.check - financialPreview.dueAtSigning >= 1000 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <p className="text-xs text-slate-600 font-bold">After Down Payment</p>
+                  <p className={`font-bold text-lg ${state.check - financialPreview.dueAtSigning >= 1000 ? 'text-green-700' : 'text-red-700'}`}>
+                    ${Math.max(0, state.check - financialPreview.dueAtSigning).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <p className="text-xs text-slate-600 font-bold">Debt-to-Income Ratio</p>
+                <p className="font-bold text-lg text-blue-700">{(financialPreview.dtiAnalysis.ratio * 100).toFixed(1)}% of income</p>
+                <p className="text-xs text-slate-600 mt-1">Lenders typically allow up to 43%</p>
+              </div>
+
+              {state.check - financialPreview.dueAtSigning < 500 && (
+                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
+                  <p className="text-xs font-bold text-yellow-800">⚠️ Low Cash Buffer</p>
+                  <p className="text-xs text-yellow-700 mt-1">You'll have less than $500 in checking after purchase. Consider keeping more for emergencies.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  setFinancialPreview(null)
+                  setFinancingModal({
+                    vehicle: financialPreview.vehicle,
+                    condition: financialPreview.condition,
+                    price: financialPreview.price,
+                    downPayment: financialPreview.downPayment,
+                    monthlyPayment: financialPreview.monthlyPayment,
+                    dueAtSigning: financialPreview.dueAtSigning,
+                    canPayCash: financialPreview.canPayCash,
+                    canFinance: financialPreview.canFinance
+                  })
+                }}
+                className="w-full py-3 rounded bg-emerald-600 text-white font-bold"
+              >
+                Continue to Financing
+              </button>
+              <button
+                onClick={() => setFinancialPreview(null)}
+                className="w-full py-2 rounded bg-slate-200 text-slate-800 font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
