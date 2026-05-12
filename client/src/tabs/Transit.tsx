@@ -110,7 +110,6 @@ export default function Transit() {
   // Check if a vehicle was purchased within the last 6 months
   const checkRecentPurchase = () => {
     if (!garage || garage.length === 0) return null
-    const sixMonthsAgo = state.month - 6
     for (const vehicle of garage) {
       const monthsSincePurchase = (state.year - vehicle.purchaseYear) * 12 + (state.month - vehicle.purchaseMonth)
       if (monthsSincePurchase < 6 && monthsSincePurchase >= 0) {
