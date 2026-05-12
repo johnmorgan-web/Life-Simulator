@@ -69,8 +69,11 @@ export class UserController {
     return this.userService.applyAction(id, action);
   }
 
-  @Delete(':id')
-  async deleteUser(@Param('id') id: string) {
-    return this.userService.deleteUser(id);
+  @Delete('admin/:targetUserId')
+  async adminDeleteUser(
+    @Param('targetUserId') targetUserId: string,
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    return this.userService.adminDeleteUser(authorization, targetUserId);
   }
 }

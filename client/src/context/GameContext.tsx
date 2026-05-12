@@ -145,6 +145,19 @@ async function adminUpdateUserById(
 	return response.json()
 }
 
+async function adminDeleteUserById(targetUserId: string, authToken: string) {
+	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}`, {
+		method: 'DELETE',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${authToken}`,
+		},
+	})
+	if (!response.ok) return false
+	const result = await response.json()
+	return Boolean(result)
+}
+
 async function persistUserState(id: string, state: any) {
 	const response = await fetch(`${API_BASE_URL}/users/${id}`, {
 		method: 'PATCH',
@@ -3534,6 +3547,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		return adminUpdateUserById(targetUserId, String(state.authToken), changes)
 	}
 
+	async function deleteUserAsAdmin(targetUserId: string) {
+		if (!state.id || !state.isAdmin || !state.authToken) return false
+		return adminDeleteUserById(targetUserId, String(state.authToken))
+	}
+
 	useEffect(() => {
 		if (!state.currentUser) return
 		saveGame()
@@ -3697,7 +3715,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
 			{children}
 		</GameContext.Provider>
 	)
