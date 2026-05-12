@@ -9,7 +9,7 @@ import { JobService } from './job.service';
 import { GameState } from '../types/game.types';
 import { cityData } from '../../data/cityData.constants';
 import { academyCourses } from '../../data/academyCourses.constants';
-import { jobBoard } from '../../data/jobBoard.constants';
+import jobBoard from '../../data/jobBoard.constants';
 
 @Injectable()
 export class GameService {
