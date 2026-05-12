@@ -88,9 +88,9 @@ export default function Bank() {
   const format = (amount: number) =>
     amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-  const currentWidth = Math.min(100, (comparison.currentAffluence / maxForMeter) * 100)
-  const averageWidth = Math.min(100, (comparison.average / maxForMeter) * 100)
-  const topWidth = Math.min(100, (comparison.top.affluence / maxForMeter) * 100)
+  const currentWidth = Math.max(0, Math.min(100, (comparison.currentAffluence / maxForMeter) * 100))
+  const averageWidth = Math.max(0, Math.min(100, (comparison.average / maxForMeter) * 100))
+  const topWidth = Math.max(0, Math.min(100, (comparison.top.affluence / maxForMeter) * 100))
 
   return (
     <div className="space-y-6">
