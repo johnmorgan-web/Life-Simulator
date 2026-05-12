@@ -165,6 +165,24 @@ export class UserService implements OnModuleInit {
 
   private toAdminUserSummary(entity: UserStateEntity, isPrimaryAdminLocked = false) {
     const state = entity.state || {};
+    const credentials = Array.isArray((state as any).credentials) ? (state as any).credentials : [];
+    const educationPriority = ['PhD', 'Masters Degree', 'Bachelors Degree', 'Trade Cert', 'HS Diploma'];
+    const educationLevel = educationPriority.find((label) => credentials.includes(label)) || 'No Degree';
+    const checking = Number(state.check || 0);
+    const savings = Number(state.savings || 0);
+    const debt = Number(state.debt || 0);
+    const stockValue = Array.isArray((state as any).portfolio)
+      ? (state as any).portfolio.reduce((sum: number, holding: any) => {
+          const ticker = String(holding?.ticker || '');
+          const shares = Number(holding?.shares || 0);
+          const prices = (state as any).marketPrices || {};
+          const price = Number(prices[ticker] || 0);
+          if (!Number.isFinite(shares) || !Number.isFinite(price)) return sum;
+          return sum + (shares * price);
+        }, 0)
+      : 0;
+    const netWorth = Math.round((checking + savings + stockValue - debt) * 100) / 100;
+
     return {
       id: entity.id,
       username: entity.username,
@@ -173,9 +191,23 @@ export class UserService implements OnModuleInit {
       isPrimaryAdminLocked,
       createdAt: entity.createdAt,
       balances: {
-        checking: Number(state.check || 0),
-        savings: Number(state.savings || 0),
-        debt: Number(state.debt || 0),
+        checking,
+        savings,
+        debt,
+      },
+      progression: {
+        month: Number((state as any).month || 0),
+        year: Number((state as any).year || 0),
+        tenureMonths: Number((state as any).tenure || 0),
+        jobTitle: String((state as any).job?.title || 'Unemployed'),
+        jobBase: Number((state as any).job?.base || 0),
+        educationLevel,
+        credentialsCount: credentials.length,
+        activeEducation: (state as any).activeEdu ? String((state as any).activeEdu) : null,
+        transitLevel: Number((state as any).transit?.level || 0),
+        creditScore: Number((state as any).credit || 0),
+        happiness: Number((state as any).happiness || 0),
+        netWorth,
       },
       updatedAt: entity.updatedAt,
     };
@@ -422,12 +454,19 @@ export class UserService implements OnModuleInit {
     return this.toAdminUserSummary(saved);
   }
 
-  /**
-   * Delete a user
-   */
-  async deleteUser(id: string): Promise<boolean> {
-    const user = await this.userStateRepository.findOne({ where: { id } });
+  async adminDeleteUser(authorization: string | undefined, targetUserId: string): Promise<boolean> {
+    const actingUser = await this.assertAdminSession(authorization);
+
+    const normalizedTargetId = String(targetUserId || '').trim();
+    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
+
+    if (actingUser.id === normalizedTargetId) {
+      throw new ForbiddenException('Admin users cannot delete their own account');
+    }
+
+    const user = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
     if (!user) return false;
+
     const [firstUser] = await this.userStateRepository.find({
       order: { createdAt: 'ASC' },
       take: 1,
@@ -442,7 +481,7 @@ export class UserService implements OnModuleInit {
       }
     }
 
-    const result = await this.userStateRepository.delete({ id });
+    const result = await this.userStateRepository.delete({ id: normalizedTargetId });
     return Number(result.affected || 0) > 0;
   }
 }
