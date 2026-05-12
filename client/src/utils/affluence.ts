@@ -115,15 +115,18 @@ export function computeAffluence(snapshot: any) {
 
   const check = toNumber(snapshot.check)
   const save = toNumber(snapshot.savings)
-  const debt = toNumber(snapshot.debt)
+  // Treat debt as a burden regardless of stored sign to protect ranking integrity.
+  const debt = Math.abs(toNumber(snapshot.debt))
 
   const vehicleAssets = estimateVehicleAssets(snapshot.garage)
-  const total = check + save + vehicleAssets - debt
+  const investedStocks = estimateInvestedStocks(snapshot)
+  const total = check + save + vehicleAssets + investedStocks - debt
   return Math.round(total * 100) / 100
 }
 
 export function getAffluenceComparison({ currentState, peerSnapshots = [] }: AffluenceComparisonInput) {
   const currentUser = currentState.currentUser || currentState.username || 'Current Player'
+  const currentUserId = String(currentState?.id || '').trim()
   const currentAffluence = computeAffluence(currentState)
   const currentStats = getWealthStats(currentState)
 
@@ -131,15 +134,17 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
 
   for (const snapshot of peerSnapshots) {
     const user = String(snapshot?.username || snapshot?.currentUser || '').trim()
-    if (!user) continue
-    peersByUser.set(user, {
+    const userId = String(snapshot?.id || '').trim()
+    const key = userId || user
+    if (!key) continue
+    peersByUser.set(key, {
       user,
       affluence: computeAffluence(snapshot),
       stats: getWealthStats(snapshot),
     })
   }
 
-  peersByUser.set(String(currentUser), {
+  peersByUser.set(currentUserId || String(currentUser), {
     user: String(currentUser),
     affluence: currentAffluence,
     stats: currentStats,
@@ -152,7 +157,7 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
   const total = sorted.reduce((sum, p) => sum + p.affluence, 0)
   const average = total / count
   const top = sorted[0] || { user: currentUser, affluence: currentAffluence, stats: currentStats }
-  const rankIndex = sorted.findIndex((p) => p.user === currentUser)
+  const rankIndex = sorted.findIndex((p) => p.user === currentUser && p.affluence === currentAffluence)
   const rank = rankIndex >= 0 ? rankIndex + 1 : count
   const percentile = Math.max(0, Math.round(((count - rank) / Math.max(1, count - 1)) * 100))
   const averageProfile = averageStats(sorted)

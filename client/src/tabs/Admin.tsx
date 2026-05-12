@@ -583,6 +583,7 @@ export default function Admin() {
                 <td className="py-2 pr-3">
                   <input
                     type="number"
+                    min="0"
                     value={user.balances.debt}
                     onChange={e => updateRow(user.id, 'debt', e.target.value)}
                     className="p-2 border rounded w-32"

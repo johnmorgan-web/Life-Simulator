@@ -22,8 +22,8 @@ function formatHeaderCurrency(value: number) {
 export default function Header({ state, onVerify, verifyEnabled }: any) {
   const { logout, affluenceComparison: affluence } = useGame()
   const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
-  const currentWidth = Math.min(100, (affluence.currentAffluence / meterMax) * 100)
-  const averageWidth = Math.min(100, (affluence.average / meterMax) * 100)
+  const currentWidth = Math.max(0, Math.min(100, (affluence.currentAffluence / meterMax) * 100))
+  const averageWidth = Math.max(0, Math.min(100, (affluence.average / meterMax) * 100))
 
   return (
     <header className="p-3 sm:p-5 bg-white border-b border-slate-200 sticky top-0 z-40">

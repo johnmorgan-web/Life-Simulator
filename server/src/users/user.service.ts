@@ -163,6 +163,42 @@ export class UserService implements OnModuleInit {
     };
   }
 
+  private async normalizeLegacyFinancialState(entity: UserStateEntity): Promise<UserStateEntity> {
+    const currentState = { ...(entity.state || {}) } as Record<string, any>;
+    let changed = false;
+
+    const normalizeMoney = (key: 'check' | 'savings' | 'debt', options?: { absolute?: boolean; min?: number }) => {
+      const raw = Number(currentState[key] ?? 0);
+      let next = Number.isFinite(raw) ? raw : 0;
+      if (options?.absolute) next = Math.abs(next);
+      if (typeof options?.min === 'number') next = Math.max(options.min, next);
+      if (next !== raw) {
+        currentState[key] = next;
+        changed = true;
+      }
+    };
+
+    // Legacy bug fix pass: debt should never be negative; balances should be finite.
+    normalizeMoney('check');
+    normalizeMoney('savings');
+    normalizeMoney('debt', { absolute: true, min: 0 });
+
+    if (!changed) return entity;
+
+    const month = Number(currentState.month || 0);
+    const year = Number(currentState.year || 0);
+    const logs = Array.isArray(currentState.logs) ? [...currentState.logs] : [];
+    logs.push({
+      date: `${month}/${year}`,
+      msg: 'System normalization: corrected legacy financial values for consistency.',
+    });
+    currentState.logs = logs;
+
+    entity.state = this.buildPersistedState(currentState);
+    entity.updatedAt = new Date();
+    return this.userStateRepository.save(entity);
+  }
+
   private toAdminUserSummary(entity: UserStateEntity, isPrimaryAdminLocked = false) {
     const state = entity.state || {};
     const credentials = Array.isArray((state as any).credentials) ? (state as any).credentials : [];
@@ -276,8 +312,9 @@ export class UserService implements OnModuleInit {
       throw new UnauthorizedException('Invalid username or password');
     }
 
+    const normalizedUser = await this.normalizeLegacyFinancialState(user);
     const authToken = this.issueSession(user.id);
-    return this.toGameSnapshot(user, authToken);
+    return this.toGameSnapshot(normalizedUser, authToken);
   }
 
   /**
@@ -285,7 +322,9 @@ export class UserService implements OnModuleInit {
    */
   async getUserById(id: string): Promise<(Partial<GameState> & { id: string }) | null> {
     const user = await this.userStateRepository.findOne({ where: { id } });
-    return user ? this.toGameSnapshot(user) : null;
+    if (!user) return null;
+    const normalizedUser = await this.normalizeLegacyFinancialState(user);
+    return this.toGameSnapshot(normalizedUser);
   }
 
   /**
@@ -358,18 +397,20 @@ export class UserService implements OnModuleInit {
    */
   async listAllUsers(): Promise<Array<Partial<GameState> & { id: string }>> {
     const users = await this.userStateRepository.find({ order: { updatedAt: 'DESC' } });
-    return users.map((user) => this.toGameSnapshot(user));
+    const normalizedUsers = await Promise.all(users.map((user) => this.normalizeLegacyFinancialState(user)));
+    return normalizedUsers.map((user) => this.toGameSnapshot(user));
   }
 
   async listUsersForAdmin(authorization?: string): Promise<Array<ReturnType<UserService['toAdminUserSummary']>>> {
     await this.assertAdminSession(authorization);
     const users = await this.userStateRepository.find({ order: { createdAt: 'ASC' } });
+    const normalizedUsers = await Promise.all(users.map((user) => this.normalizeLegacyFinancialState(user)));
     const [firstUser] = await this.userStateRepository.find({
       order: { createdAt: 'ASC' },
       take: 1,
     });
     const firstUserId = firstUser?.id || null;
-    return users.map((user) => this.toAdminUserSummary(user, user.id === firstUserId));
+    return normalizedUsers.map((user) => this.toAdminUserSummary(user, user.id === firstUserId));
   }
 
   async adminUpdateUser(
@@ -411,7 +452,7 @@ export class UserService implements OnModuleInit {
     }
     if (changes.debt !== undefined) {
       const debt = Number(changes.debt);
-      if (!Number.isFinite(debt)) throw new BadRequestException('Invalid debt value');
+      if (!Number.isFinite(debt) || debt < 0) throw new BadRequestException('Invalid debt value');
       nextState.debt = debt;
     }
     if (changes.isAdmin !== undefined) {
