@@ -1369,6 +1369,10 @@ const initialState: State = {
 	rewardHistory: [] as any[]
 	,
 	jobMigrationBanner: null as string | null
+	,
+	mathLabLastSolvedMonth: null as number | null,
+	mathLabLastSolvedYear: null as number | null,
+	mathLabStreak: 0,
 }
 
 const GameContext = createContext<any>(null)
@@ -1686,6 +1690,9 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : [],
 		debtDelinquencyStreak: Number(data.debtDelinquencyStreak ?? 0),
 		creditAccountAgeMonths: Number(data.creditAccountAgeMonths ?? 0),
+		mathLabLastSolvedMonth: data.mathLabLastSolvedMonth ?? null,
+		mathLabLastSolvedYear: data.mathLabLastSolvedYear ?? null,
+		mathLabStreak: Number(data.mathLabStreak ?? 0),
 		creditInquiryQueue: Array.isArray(data.creditInquiryQueue)
 			? data.creditInquiryQueue.map((m: any) => Math.max(0, Math.floor(Number(m || 0)))).filter((m: number) => m > 0)
 			: [],
@@ -3438,6 +3445,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			activeTheme: 'default',
 			rewardHistory: [],
 			jobMigrationBanner: null,
+			mathLabLastSolvedMonth: null,
+			mathLabLastSolvedYear: null,
+			mathLabStreak: 0,
 			isAdmin: Boolean(state.isAdmin)
 		}
 		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)

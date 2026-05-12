@@ -13,6 +13,18 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('/react/') || id.includes('/react-dom/')) return 'react-vendor'
+          if (id.includes('/framer-motion/')) return 'motion-vendor'
+          return 'vendor'
+        },
+      },
+    },
+  },
   plugins: [
     react({
       babel: {

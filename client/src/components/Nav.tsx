@@ -17,6 +17,7 @@ export default function Nav({ tab, setTab }: any) {
     { id: 'ledger', label: '📓 Journal' },
     { id: 'lifestyle', label: '💎 Lifestyle' },
     { id: 'loans', label: '💳 Loans' },
+    { id: 'math-lab', label: '🧮 Math Lab' },
     { id: 'real-estate', label: `🏘️ Real Estate (${propertyCount})` },
     { id: 'relocate', label: '✈️ Relocate' },
     { id: 'resume', label: '📄 Resume' },

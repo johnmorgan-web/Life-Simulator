@@ -1,25 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import Header from './components/Header'
 import Nav from './components/Nav'
 import Celebration from './components/Celebration'
 import { GameProvider, useGame } from './context/GameContext'
 import Login from './components/Login'
-import Ledger from './tabs/Ledger'
-import Careers from './tabs/Careers'
-import Academy from './tabs/Academy'
-import Transit from './tabs/Transit'
-import Relocate from './tabs/Relocate'
-import Resume from './tabs/Resume'
-import Lifestyle from './tabs/Lifestyle'
-import Loans from './tabs/Loans'
-import Bank from './tabs/Bank'
-import StockMarket from './tabs/StockMarket'
-import Rewards from './tabs/Rewards'
-import RealEstate from './tabs/RealEstate'
-import Admin from './tabs/Admin'
-import AICoach from './tabs/AICoach'
 import { cosmeticThemes } from './constants/achievements.constants'
 import { stockMarketAssets } from './constants/stockMarket.constants'
+
+const Ledger = lazy(() => import('./tabs/Ledger'))
+const Careers = lazy(() => import('./tabs/Careers'))
+const AICoach = lazy(() => import('./tabs/CoachAi'))
+const Academy = lazy(() => import('./tabs/Academy'))
+const Transit = lazy(() => import('./tabs/Transit'))
+const Relocate = lazy(() => import('./tabs/Relocate'))
+const Resume = lazy(() => import('./tabs/Resume'))
+const Lifestyle = lazy(() => import('./tabs/Lifestyle'))
+const Loans = lazy(() => import('./tabs/Loans'))
+const Bank = lazy(() => import('./tabs/Bank'))
+const StockMarket = lazy(() => import('./tabs/StockMarket'))
+const RealEstate = lazy(() => import('./tabs/RealEstate'))
+const Rewards = lazy(() => import('./tabs/Rewards'))
+const Admin = lazy(() => import('./tabs/Admin'))
+const MathLab = lazy(() => import('./tabs/MathLab'))
 
 declare const __APP_VERSION__: string
 
@@ -41,6 +43,7 @@ function TabContent({ tab }: { tab: string }) {
   if (tab === 'real-estate') return <RealEstate />
   if (tab === 'rewards') return <Rewards />
   if (tab === 'admin') return <Admin />
+  if (tab === 'math-lab') return <MathLab />
   return <div className="p-6">Unknown tab</div>
 }
 
@@ -476,7 +479,9 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
               <Nav tab={tab} setTab={setTab} />
               <div 
                 className="md:col-span-10 overflow-y-visible md:overflow-y-auto overflow-x-hidden pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] md:pb-20 tab-panel md:min-h-[calc(100vh-130px)]">
-                <TabContent tab={tab} />
+                <Suspense fallback={<div className="glass p-5 text-sm text-slate-600">Loading tab...</div>}>
+                  <TabContent tab={tab} />
+                </Suspense>
               </div>
             </main>
             <footer className="px-4 pb-4 text-right text-[10px] text-slate-400 sm:px-7 xl:px-9">
