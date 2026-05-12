@@ -68,6 +68,10 @@ function buildPrereqChain(credName: string | null, courses: any[]): any[] {
 
 type SortKey = 'best-match' | 'certificates' | 'transit' | 'highest-pay' | 'lowest-pay' | 'alpha' | 'highest-edu' | 'lowest-edu'
 type CareerView = 'recommended' | 'all' | 'tree'
+type ProgressTrack = {
+  groupName: string
+  jobs: Job[]
+}
 
 export default function Careers() {
   const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
@@ -292,9 +296,45 @@ export default function Careers() {
   const goalJob = useMemo(() => (jobBoard as Job[]).find(j => j.title === goalJobTitle) ?? null, [goalJobTitle, jobBoard])
   const eduChain = useMemo(() => buildPrereqChain(goalJob?.req ?? null, academyCourses as any[]), [goalJob, academyCourses])
   const certChain = useMemo(() => buildPrereqChain(goalJob?.certReq ?? null, academyCourses as any[]), [goalJob, academyCourses])
+  const progressionTracks = useMemo(() => {
+    const tracks = new Map<string, Job[]>()
+    ;(jobBoard as Job[]).forEach((job: Job) => {
+      const category = job.cat || 'General'
+      const subcategory = job.subcat || 'General'
+      if (selectedCategory !== 'all' && category !== selectedCategory) return
+      if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return
+      const key = `${category} / ${subcategory}`
+      if (!tracks.has(key)) tracks.set(key, [])
+      tracks.get(key)!.push(job)
+    })
+
+    return Array.from(tracks.entries())
+      .map(([groupName, jobs]) => ({
+        groupName,
+        jobs: [...jobs].sort((a, b) => (a.base - b.base) || a.title.localeCompare(b.title))
+      }))
+      .sort((a, b) => a.groupName.localeCompare(b.groupName))
+  }, [jobBoard, selectedCategory, selectedSubcategory]) as ProgressTrack[]
 
   return (
     <div>
+      {state.jobMigrationBanner && (
+        <div className="glass p-4 sm:p-5 mb-5 border-l-4 border-blue-500 bg-blue-50/60">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <p className="font-bold text-blue-900">Career Updated</p>
+              <p className="text-sm text-blue-800 mt-1">{state.jobMigrationBanner}</p>
+            </div>
+            <button
+              onClick={() => dispatch({ type: 'SET_STATE', payload: { jobMigrationBanner: null } })}
+              className="self-start px-3 py-1.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 hover:bg-blue-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Current Job Section */}
       <div className="glass p-4 sm:p-6 mb-6 border-l-4 border-emerald-600">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
@@ -745,6 +785,89 @@ export default function Careers() {
       {/* Career Path Planner */}
       {view === 'tree' && (
         <div className="space-y-6">
+          <div className="glass p-6">
+            <h3 className="font-bold text-xl mb-2">🌳 Category Progression Tree</h3>
+            <p className="text-sm text-slate-600 mb-4">Use filters to inspect progression within each category and subcategory at a glance.</p>
+
+            <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
+              <label className="text-sm font-bold text-slate-500">Category:</label>
+              <select
+                value={selectedCategory}
+                onChange={e => {
+                  setSelectedCategory(e.target.value)
+                  setSelectedSubcategory('all')
+                }}
+                className="p-2 border rounded"
+              >
+                <option value="all">All Categories</option>
+                {categoryOptions.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+
+              <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+              <select
+                value={selectedSubcategory}
+                onChange={e => setSelectedSubcategory(e.target.value)}
+                className="p-2 border rounded"
+              >
+                <option value="all">All Subcategories</option>
+                {subcategoryOptions.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            </div>
+
+            {progressionTracks.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No progression tracks found for this filter.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {progressionTracks.map((track) => (
+                  <div key={track.groupName} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-bold text-slate-900">{track.groupName}</p>
+                      <span className="text-xs font-bold text-slate-500 uppercase">{track.jobs.length} steps</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-stretch gap-2">
+                      {track.jobs.map((job, index) => {
+                        const eligibility = getJobEligibility(state, job)
+                        const isCurrent = state.job?.title === job.title
+                        const statusClass = isCurrent
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : eligibility.canApply
+                            ? 'border-blue-300 bg-blue-50'
+                            : 'border-slate-300 bg-slate-50'
+                        const statusText = isCurrent ? 'Current' : (eligibility.canApply ? 'Eligible' : 'Locked')
+
+                        return (
+                          <div key={job.title} className="flex items-center gap-2">
+                            <div className={`min-w-[180px] max-w-[220px] rounded-lg border p-3 ${statusClass}`}>
+                              <p className="font-bold text-sm text-slate-900">{job.title}</p>
+                              <p className="text-xs font-bold text-emerald-700 mt-0.5">${Math.round(job.base * state.city.p * 0.8).toLocaleString()}/mo</p>
+                              <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                                <p>Edu: {job.req || 'None'}</p>
+                                <p>Cert: {job.certReq || 'None'}</p>
+                                <p>Transit: L{job.tReq}</p>
+                                {job.expReq && <p>Exp: {job.expReq.minMonths}mo in {job.expReq.roles.join(' or ')}</p>}
+                              </div>
+                              <p className="mt-2 text-[11px] font-bold text-slate-700">{statusText}</p>
+                            </div>
+                            {index < track.jobs.length - 1 && (
+                              <span className="text-slate-400 font-bold text-lg">→</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="glass p-6">
             <h3 className="font-bold text-xl mb-2">🗺️ Career Path Planner</h3>
             <p className="text-sm text-slate-600 mb-4">Select any job to see the full roadmap — education prerequisites, certification chains, transit level, and experience requirements.</p>
