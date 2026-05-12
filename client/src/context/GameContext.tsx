@@ -304,6 +304,41 @@ const CERT_ALIASES: Record<string, string> = {
 	'Special Operations': 'Special Forces',
 	'Civil Engineering': 'Construction Management',
 	'Welding': 'Welder',
+	'Security': 'Cybersecurity',
+	'Animal Care': 'Veterinary Technician',
+	'SEAL Training': 'Special Forces',
+	'OSHA 10/30': 'OSHA 10/30 Safety Cards',
+	'Master Electrician': 'Electrician',
+	'Master HVAC': 'HVAC',
+	'Plumbing': 'Plumbing Design',
+	'Master Plumbing': 'Plumbing Design',
+	'ASE Master Technician': 'Auto Service',
+	'Cosmetology': 'Massage Therapist',
+	'Medical Lab Technician': 'Medical Laboratory Scientist',
+	'Nurse Practitioner': 'Registered Nurse',
+	'Pharmacist License': 'Pharmacy Technician',
+	'Medical License': 'Medical School',
+	'Surgery Specialty': 'Surgery Certificate',
+	'Dentist License': 'Dental Assistant',
+	'Veterinarian License': 'Veterinary Technician',
+	'Psychology License': 'Mental Health Counselor',
+	'Software Architecture': 'Software Development',
+	'Data Analysis': 'Google Data Analytics',
+	'Machine Learning': 'Data Science',
+	'AWS Cloud Practitioner': 'AWS Certified Cloud Practitioner',
+	'AWS Solutions Architect': 'AWS Certified Solutions Architect',
+	'UI/UX Design': 'Graphic Design',
+	'Bookkeeping': 'Tax Preparation',
+	'Investment Analysis': 'Financial Analysis',
+	'Counselor License': 'Mental Health Counselor',
+	'Social Work': 'Social Work Case Manager',
+	'Law License': 'Paralegal',
+	'Police Academy': 'Cybersecurity',
+	'Investigative': 'Intelligence Analyst',
+	'Correctional Officer': 'Cybersecurity',
+	'Sales Management': 'Sales',
+	'Adobe Creative Suite': 'Adobe Certified Professional',
+	'Management Consulting': 'Project Management',
 	'Massage Therapy': 'Massage Therapist',
 	'Physical Therapy': 'Physical Therapy Assistant',
 	'Occupational Therapy': 'Occupational Therapy Assistant',
@@ -319,11 +354,7 @@ const CERT_ALIASES: Record<string, string> = {
 	'Artificial Intelligence': 'Data Science'
 }
 
-const REQUIREMENT_ALIASES: Record<string, string> = {
-	'Veterinary School': 'Bachelors Degree',
-	'Pharmacy School': 'Bachelors Degree',
-	'Dental School': 'Bachelors Degree'
-}
+const REQUIREMENT_ALIASES: Record<string, string> = {}
 
 function capacityForJob(job: Job, rankInTrack: number) {
 	const baseByCategory: Record<string, number> = {
@@ -468,6 +499,50 @@ function getRoleExperienceMonths(state: State, roleTitle: string) {
 	return months
 }
 
+const WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
+	'Tech Startup Founder': 250000,
+	Millionaire: 500000,
+	Billionaire: 50000000,
+}
+
+function estimatePortfolioCostBasis(state: State) {
+	const portfolio = Array.isArray(state?.portfolio) ? state.portfolio : []
+	return portfolio.reduce((sum: number, holding: any) => {
+		const shares = Number(holding?.shares || 0)
+		const avgCost = Number(holding?.avgCost || 0)
+		return sum + (shares * avgCost)
+	}, 0)
+}
+
+function estimateVehicleAssets(state: State) {
+	const garage = Array.isArray(state?.garage) ? state.garage : []
+	return garage.reduce((sum: number, vehicle: any) => {
+		const currentValue = Number(vehicle?.currentValue || 0)
+		if (currentValue > 0) return sum + currentValue
+		const purchasePrice = Number(vehicle?.purchasePrice || 0)
+		return purchasePrice > 0 ? sum + purchasePrice * 0.7 : sum
+	}, 0)
+}
+
+function estimateRealEstateEquity(state: State) {
+	const properties = Array.isArray(state?.investmentProperties) ? state.investmentProperties : []
+	return properties.reduce((sum: number, property: any) => {
+		const value = Number(property?.propertyValue || 0)
+		const loan = Number(property?.loanBalance || 0)
+		return sum + Math.max(0, value - loan)
+	}, 0)
+}
+
+function computeNetWorthForEligibility(state: State) {
+	const checking = Number(state?.check || 0)
+	const savings = Number(state?.savings || 0)
+	const portfolio = estimatePortfolioCostBasis(state)
+	const vehicles = estimateVehicleAssets(state)
+	const realEstateEquity = estimateRealEstateEquity(state)
+	const debt = Math.abs(Number(state?.debt || 0))
+	return round2(checking + savings + portfolio + vehicles + realEstateEquity - debt)
+}
+
 function getJobOpenings(state: State, job: Job) {
 	const slot = state.jobMarket?.[job.title]
 	const registeredUsers = getRegisteredUserCount()
@@ -501,6 +576,9 @@ function getJobEligibility(state: State, job: Job) {
 	const educationMet = !job.req || state.credentials.includes(job.req)
 	const certificationMet = !job.certReq || state.credentials.includes(job.certReq)
 	const transitMet = state.transit.level >= job.tReq
+	const netWorth = computeNetWorthForEligibility(state)
+	const wealthRequirement = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
+	const wealthMet = wealthRequirement <= 0 || netWorth >= wealthRequirement
 	const openings = getJobOpenings(state, job)
 	const capacityMet = openings > 0
 
@@ -514,11 +592,14 @@ function getJobEligibility(state: State, job: Job) {
 	}
 
 	return {
-		canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet,
+		canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet && wealthMet,
 		educationMet,
 		certificationMet,
 		transitMet,
 		experienceMet,
+		wealthMet,
+		wealthRequirement,
+		netWorth,
 		capacityMet,
 		experienceDetail,
 		openings
