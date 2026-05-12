@@ -16,6 +16,20 @@ function toCurrency(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 }
 
+function chartColorForTicker(ticker: string) {
+  const palette = [
+    '#0f766e', '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#4f46e5',
+    '#be185d', '#ea580c', '#65a30d', '#0284c7', '#7e22ce', '#1d4ed8', '#059669', '#b91c1c',
+  ]
+  let seed = 0
+  for (let i = 0; i < ticker.length; i++) seed = (seed * 31 + ticker.charCodeAt(i)) >>> 0
+  return palette[seed % palette.length]
+}
+
+function monthShortLabel(month: number, year: number) {
+  return `${Math.max(1, Math.min(12, Number(month || 1)))}/${String(Number(year || 2026)).slice(-2)}`
+}
+
 function recommendationClasses(recommendation?: string) {
   if (recommendation === 'Buy') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
   if (recommendation === 'Sell') return 'bg-rose-50 text-rose-700 border-rose-200'
@@ -128,6 +142,8 @@ function generateRecommendation(asset: any, price: number, prevPrice: number, po
 export default function StockMarket() {
   const { state, dispatch, saveGame, buildLedger } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
+  const [focusedTicker, setFocusedTicker] = useState('SPY')
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null)
 
   const marketPrices = state.marketPrices || {}
   const previousPrices = state.marketPricesPrevious || {}
@@ -207,6 +223,78 @@ export default function StockMarket() {
       .sort((a, b) => Number(b.signal?.score || 0) - Number(a.signal?.score || 0))
       .slice(0, 5)
   }, [signalsByTicker])
+
+  const chartHistory = useMemo(() => {
+    const history = Array.isArray(state.marketPriceHistory) ? state.marketPriceHistory : []
+    const normalized = history
+      .filter((entry: any) => entry && typeof entry === 'object')
+      .map((entry: any) => ({
+        month: Number(entry.month || state.month || 1),
+        year: Number(entry.year || state.year || 2026),
+        prices: entry.prices || {},
+      }))
+
+    const currentMonth = Number(state.month || 1)
+    const currentYear = Number(state.year || 2026)
+    const hasCurrent = normalized.some((entry: any) => entry.month === currentMonth && entry.year === currentYear)
+    if (!hasCurrent) {
+      normalized.push({ month: currentMonth, year: currentYear, prices: marketPrices })
+    }
+    return normalized.slice(Math.max(0, normalized.length - 24))
+  }, [state.marketPriceHistory, state.month, state.year, marketPrices])
+
+  const chartData = useMemo(() => {
+    const labels = chartHistory.map((point: any) => monthShortLabel(point.month, point.year))
+    const series = stockMarketAssets.map((asset) => {
+      const points = chartHistory.map((point: any) => {
+        const fallback = Number(marketPrices[asset.ticker] || asset.basePrice)
+        return Number(point?.prices?.[asset.ticker] || fallback)
+      })
+      return { ticker: asset.ticker, color: chartColorForTicker(asset.ticker), points }
+    })
+
+    const allValues = series.flatMap((line) => line.points)
+    const minValue = allValues.length ? Math.min(...allValues) : 0
+    const maxValue = allValues.length ? Math.max(...allValues) : 1
+    const span = Math.max(1, maxValue - minValue)
+    return { labels, series, minValue, maxValue, span }
+  }, [chartHistory, marketPrices])
+
+  const focusedSeries = useMemo(
+    () => chartData.series.find((line) => line.ticker === focusedTicker) || chartData.series[0],
+    [chartData.series, focusedTicker],
+  )
+
+  const hoveredTooltip = useMemo(() => {
+    if (hoveredPointIndex === null) return null
+    if (hoveredPointIndex < 0 || hoveredPointIndex >= chartData.labels.length) return null
+
+    const prices = chartData.series
+      .map((line) => ({ ticker: line.ticker, color: line.color, price: Number(line.points[hoveredPointIndex] || 0) }))
+      .sort((a, b) => a.ticker.localeCompare(b.ticker))
+
+    const focusedPrice = focusedSeries ? Number(focusedSeries.points[hoveredPointIndex] || 0) : 0
+    return {
+      index: hoveredPointIndex,
+      label: chartData.labels[hoveredPointIndex],
+      prices,
+      focusedPrice,
+    }
+  }, [hoveredPointIndex, chartData.labels, chartData.series, focusedSeries])
+
+  const handleChartHover = (event: React.MouseEvent<SVGRectElement>) => {
+    if (chartData.labels.length <= 1) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    if (!bounds.width) return
+
+    const chartLeft = 50
+    const chartWidth = 825
+    const pointerX = ((event.clientX - bounds.left) / bounds.width) * 900
+    const clampedX = Math.max(chartLeft, Math.min(chartLeft + chartWidth, pointerX))
+    const step = chartWidth / Math.max(1, chartData.labels.length - 1)
+    const idx = Math.round((clampedX - chartLeft) / step)
+    setHoveredPointIndex(Math.max(0, Math.min(chartData.labels.length - 1, idx)))
+  }
 
   const handleBuy = (ticker: string) => {
     const shares = Math.max(0, roundShareQuantity(Number(shareInputs[ticker] || 0)))
@@ -392,6 +480,150 @@ export default function StockMarket() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="glass p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-bold text-lg">📉 Price Trend Graph</h3>
+            <p className="text-xs text-slate-500">Monthly history for all listed stocks (up to last 24 months).</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold uppercase text-slate-500">Focus</label>
+            <select
+              value={focusedTicker}
+              onChange={(e) => setFocusedTicker(e.target.value)}
+              className="p-2 border rounded text-sm"
+            >
+              {stockMarketAssets.map((asset) => (
+                <option key={`focus-${asset.ticker}`} value={asset.ticker}>{asset.ticker}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {chartData.labels.length <= 1 ? (
+          <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+            Build at least 2 in-game months to unlock trend charting.
+          </div>
+        ) : (
+          <>
+            <div className="w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-2">
+              <svg viewBox="0 0 900 320" className="w-full min-w-[680px]">
+                <rect x="0" y="0" width="900" height="320" fill="#ffffff" />
+
+                {[0, 1, 2, 3, 4].map((tick) => {
+                  const y = 30 + tick * 65
+                  const value = chartData.maxValue - (chartData.span * tick) / 4
+                  return (
+                    <g key={`grid-${tick}`}>
+                      <line x1="50" y1={y} x2="875" y2={y} stroke="#e2e8f0" strokeDasharray="4 4" />
+                      <text x="8" y={y + 4} fontSize="11" fill="#64748b">{toCurrency(value)}</text>
+                    </g>
+                  )
+                })}
+
+                {chartData.series.map((line) => {
+                  const points = line.points.map((value: number, idx: number) => {
+                    const x = 50 + (idx * 825) / Math.max(1, chartData.labels.length - 1)
+                    const y = 30 + ((chartData.maxValue - value) / chartData.span) * 260
+                    return `${x},${y}`
+                  }).join(' ')
+                  const focused = line.ticker === focusedTicker
+                  return (
+                    <polyline
+                      key={`line-${line.ticker}`}
+                      points={points}
+                      fill="none"
+                      stroke={line.color}
+                      strokeWidth={focused ? 3 : 1.3}
+                      opacity={focused ? 1 : 0.35}
+                    />
+                  )
+                })}
+
+                {hoveredTooltip && (
+                  <line
+                    x1={50 + (hoveredTooltip.index * 825) / Math.max(1, chartData.labels.length - 1)}
+                    y1="30"
+                    x2={50 + (hoveredTooltip.index * 825) / Math.max(1, chartData.labels.length - 1)}
+                    y2="290"
+                    stroke="#0f172a"
+                    strokeDasharray="5 4"
+                    opacity="0.35"
+                  />
+                )}
+
+                {hoveredTooltip && focusedSeries && (
+                  <circle
+                    cx={50 + (hoveredTooltip.index * 825) / Math.max(1, chartData.labels.length - 1)}
+                    cy={30 + ((chartData.maxValue - Number(focusedSeries.points[hoveredTooltip.index] || 0)) / chartData.span) * 260}
+                    r="4.5"
+                    fill={focusedSeries.color}
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                  />
+                )}
+
+                {chartData.labels.map((label: string, idx: number) => {
+                  const x = 50 + (idx * 825) / Math.max(1, chartData.labels.length - 1)
+                  const showLabel = idx === 0 || idx === chartData.labels.length - 1 || idx % 3 === 0
+                  return showLabel ? <text key={`x-${idx}`} x={x - 8} y="307" fontSize="10" fill="#64748b">{label}</text> : null
+                })}
+
+                <rect
+                  x="50"
+                  y="30"
+                  width="825"
+                  height="260"
+                  fill="transparent"
+                  onMouseMove={handleChartHover}
+                  onMouseLeave={() => setHoveredPointIndex(null)}
+                />
+              </svg>
+            </div>
+
+            {hoveredTooltip && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <span className="text-xs font-bold uppercase text-slate-500">Hover Snapshot</span>
+                  <span className="text-sm font-bold text-slate-900">{hoveredTooltip.label}</span>
+                  <span className="text-xs text-slate-600">Focused ({focusedSeries?.ticker || focusedTicker}): <span className="font-bold text-slate-900">{toCurrency(hoveredTooltip.focusedPrice)}</span></span>
+                </div>
+                <div className="max-h-36 overflow-y-auto grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {hoveredTooltip.prices.map((row) => (
+                    <div key={`hover-${row.ticker}`} className="flex items-center justify-between rounded border border-slate-200 bg-white px-2 py-1">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: row.color }} />
+                        {row.ticker}
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-900">{toCurrency(row.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {stockMarketAssets.map((asset) => {
+                const isFocused = asset.ticker === focusedTicker
+                return (
+                  <button
+                    key={`legend-${asset.ticker}`}
+                    onClick={() => setFocusedTicker(asset.ticker)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold ${isFocused ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300'}`}
+                  >
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: chartColorForTicker(asset.ticker) }}
+                    />
+                    {asset.ticker}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="glass p-4 sm:p-6">

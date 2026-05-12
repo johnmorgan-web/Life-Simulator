@@ -564,6 +564,33 @@ function normalizeMarketPrices(prices: any) {
 	return base
 }
 
+function appendMarketPriceHistory(history: any, prices: any, month: number, year: number, maxPoints = 24) {
+	const normalizedPrices = normalizeMarketPrices(prices)
+	const normalizedMonth = Math.max(1, Math.min(12, Math.floor(Number(month || 1))))
+	const normalizedYear = Math.max(1, Math.floor(Number(year || 2026)))
+	const list = Array.isArray(history)
+		? history.filter((entry: any) => entry && typeof entry === 'object').map((entry: any) => ({
+			month: Math.max(1, Math.min(12, Math.floor(Number(entry.month || normalizedMonth)))),
+			year: Math.max(1, Math.floor(Number(entry.year || normalizedYear))),
+			prices: normalizeMarketPrices(entry.prices),
+		}))
+		: []
+
+	const last = list[list.length - 1]
+	if (last && Number(last.month) === normalizedMonth && Number(last.year) === normalizedYear) {
+		list[list.length - 1] = { month: normalizedMonth, year: normalizedYear, prices: normalizedPrices }
+	} else {
+		list.push({ month: normalizedMonth, year: normalizedYear, prices: normalizedPrices })
+	}
+
+	return list.slice(Math.max(0, list.length - maxPoints))
+}
+
+function normalizeMarketPriceHistory(history: any, fallbackPrices: any, fallbackMonth: number, fallbackYear: number) {
+	const seeded = appendMarketPriceHistory(history, fallbackPrices, fallbackMonth, fallbackYear)
+	return seeded.length ? seeded : appendMarketPriceHistory([], fallbackPrices, fallbackMonth, fallbackYear)
+}
+
 function cityRealEstateTier(city: any) {
 	const priceFactor = Number(city?.p || 1)
 	if (priceFactor >= 1.3) return 'highCost'
@@ -1342,6 +1369,7 @@ const initialState: State = {
 	// Stock market
 	marketPrices: initializeMarketPrices(),
 	marketPricesPrevious: initializeMarketPrices(),
+	marketPriceHistory: appendMarketPriceHistory([], initializeMarketPrices(), 2, 2026),
 	portfolio: [] as any[],
 	learningLevel: 'adult',
 	usePlainLanguage: false,
@@ -1633,6 +1661,9 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 
 	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
 	const marketPrices = normalizeMarketPrices(data.marketPrices)
+	const currentMonth = Number(data?.month ?? fallbackState?.month ?? 1)
+	const currentYear = Number(data?.year ?? fallbackState?.year ?? 2026)
+	const marketPriceHistory = normalizeMarketPriceHistory(data.marketPriceHistory, marketPrices, currentMonth, currentYear)
 	const realEstateState = normalizeRealEstateState(data)
 	const normalizedName = String(
 		data.username
@@ -1667,6 +1698,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		workPenaltyPercent: data.workPenaltyPercent ?? 0,
 		marketPrices,
 		marketPricesPrevious: normalizeMarketPrices(data.marketPricesPrevious || marketPrices),
+		marketPriceHistory,
 		portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
 		learningLevel: data.learningLevel ?? data.marketLearningLevel ?? data.realEstateLearningLevel ?? 'adult',
 		usePlainLanguage: data.usePlainLanguage ?? data.marketUsePlainLanguage ?? data.realEstateUsePlainLanguage ?? false,
@@ -2664,6 +2696,7 @@ function reducer(state: State, action: any) {
 			}
 			const stockInvestedLastMonth = round2(Number(autoInvestResult.investedAmount || 0))
 			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
+			const marketPriceHistory = appendMarketPriceHistory(state.marketPriceHistory, nextMarketPrices, nextMonth, nextYear)
 			creditAccountAgeMonths += 1
 
 			const checkSuccessCredit = monthlyCheckSuccesses * 5
@@ -2830,6 +2863,7 @@ function reducer(state: State, action: any) {
 				workPenaltyPercent: nextWorkPenaltyPercent,
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
+				marketPriceHistory,
 				portfolio: nextPortfolio,
 				investmentProperties,
 				pendingRealEstateDeals,
@@ -3412,6 +3446,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			garage: [],
 			marketPrices: startingMarketPrices,
 			marketPricesPrevious: startingMarketPrices,
+			marketPriceHistory: appendMarketPriceHistory([], startingMarketPrices, 2, 2026),
 			portfolio: [],
 			learningLevel: 'adult',
 			usePlainLanguage: false,
