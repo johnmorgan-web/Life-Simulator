@@ -1,12 +1,58 @@
 import { Injectable } from '@nestjs/common';
+import { academyCourses } from '../../data/academyCourses.constants';
+import jobBoard from '../../data/jobBoard.constants';
 
 @Injectable()
 export class JobService {
+  private WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
+    'Tech Startup Founder': 250000,
+    Millionaire: 500000,
+    Billionaire: 50000000,
+  };
+
+  private academyCredentialSet = new Set(academyCourses.map((course) => String(course?.n || '').trim()));
+  private jobTitleSet = new Set(jobBoard.map((job) => String(job?.title || '').trim()));
+
   private CERT_ALIASES: Record<string, string> = {
+    Security: 'Cybersecurity',
     'Content Marketing': 'Public Relations',
+    'Animal Care': 'Veterinary Technician',
     'Special Operations': 'Special Forces',
+    'SEAL Training': 'Special Forces',
     'Civil Engineering': 'Construction Management',
+    'OSHA 10/30': 'OSHA 10/30 Safety Cards',
     'Welding': 'Welder',
+    'Master Electrician': 'Electrician',
+    'Master HVAC': 'HVAC',
+    Plumbing: 'Plumbing Design',
+    'Master Plumbing': 'Plumbing Design',
+    'ASE Master Technician': 'Auto Service',
+    Cosmetology: 'Massage Therapist',
+    'Medical Lab Technician': 'Medical Laboratory Scientist',
+    'Nurse Practitioner': 'Registered Nurse',
+    'Pharmacist License': 'Pharmacy Technician',
+    'Medical License': 'Medical School',
+    'Surgery Specialty': 'Surgery Certificate',
+    'Dentist License': 'Dental Assistant',
+    'Veterinarian License': 'Veterinary Technician',
+    'Psychology License': 'Mental Health Counselor',
+    'Software Architecture': 'Software Development',
+    'Data Analysis': 'Google Data Analytics',
+    'Machine Learning': 'Data Science',
+    'AWS Cloud Practitioner': 'AWS Certified Cloud Practitioner',
+    'AWS Solutions Architect': 'AWS Certified Solutions Architect',
+    'UI/UX Design': 'Graphic Design',
+    Bookkeeping: 'Tax Preparation',
+    'Investment Analysis': 'Financial Analysis',
+    'Counselor License': 'Mental Health Counselor',
+    'Social Work': 'Social Work Case Manager',
+    'Law License': 'Paralegal',
+    'Police Academy': 'Cybersecurity',
+    Investigative: 'Intelligence Analyst',
+    'Correctional Officer': 'Cybersecurity',
+    'Sales Management': 'Sales',
+    'Adobe Creative Suite': 'Adobe Certified Professional',
+    'Management Consulting': 'Project Management',
     'Massage Therapy': 'Massage Therapist',
     'Physical Therapy': 'Physical Therapy Assistant',
     'Occupational Therapy': 'Occupational Therapy Assistant',
@@ -22,11 +68,7 @@ export class JobService {
     'Artificial Intelligence': 'Data Science',
   };
 
-  private REQUIREMENT_ALIASES: Record<string, string> = {
-    'Veterinary School': 'Bachelors Degree',
-    'Pharmacy School': 'Bachelors Degree',
-    'Dental School': 'Bachelors Degree',
-  };
+  private REQUIREMENT_ALIASES: Record<string, string> = {};
 
   private explicitExperienceRequirement(jobTitle: string): any {
     const ladders: Record<string, { roles: string[]; minMonths: number }> = {
@@ -67,6 +109,41 @@ export class JobService {
     return [];
   }
 
+  private inferBaseCapacity(job: any): number {
+    const category = String(job?.cat || 'Pro');
+    const salary = Number(job?.base || 0);
+    if (category === 'Entry') return 24;
+    if (category === 'Military') return 12;
+    if (category === 'Trades') return 14;
+    if (category === 'Healthcare') return 10;
+    if (category === 'Technology') return 10;
+    if (salary >= 10000) return 4;
+    if (salary >= 7000) return 6;
+    return 8;
+  }
+
+  private normalizeJobRequirements(job: any): {
+    resolvedReq: string | null;
+    resolvedCertReq: string | null;
+    roleReqFromReq: string | null;
+  } {
+    const rawReq = String(job?.req || '').trim();
+    const rawCertReq = String(job?.certReq || '').trim();
+
+    const aliasedReq = rawReq ? (this.REQUIREMENT_ALIASES[rawReq] ?? rawReq) : '';
+    const aliasedCertReq = rawCertReq ? (this.CERT_ALIASES[rawCertReq] ?? rawCertReq) : '';
+
+    const resolvedReq = aliasedReq && this.academyCredentialSet.has(aliasedReq) ? aliasedReq : null;
+    const roleReqFromReq = aliasedReq && !resolvedReq && this.jobTitleSet.has(aliasedReq) ? aliasedReq : null;
+    const resolvedCertReq = aliasedCertReq && this.academyCredentialSet.has(aliasedCertReq) ? aliasedCertReq : null;
+
+    return {
+      resolvedReq,
+      resolvedCertReq,
+      roleReqFromReq,
+    };
+  }
+
   getRoleExperienceMonths(state: any, roleTitle: string): number {
     let months = 0;
     if (state.job?.title === roleTitle) months += state.tenure || 0;
@@ -85,6 +162,44 @@ export class JobService {
     return h;
   }
 
+  private estimatePortfolioCostBasis(state: any): number {
+    const portfolio = Array.isArray(state?.portfolio) ? state.portfolio : [];
+    return portfolio.reduce((sum: number, holding: any) => {
+      const shares = Number(holding?.shares || 0);
+      const avgCost = Number(holding?.avgCost || 0);
+      return sum + (shares * avgCost);
+    }, 0);
+  }
+
+  private estimateVehicleAssets(state: any): number {
+    const garage = Array.isArray(state?.garage) ? state.garage : [];
+    return garage.reduce((sum: number, vehicle: any) => {
+      const currentValue = Number(vehicle?.currentValue || 0);
+      if (currentValue > 0) return sum + currentValue;
+      const purchasePrice = Number(vehicle?.purchasePrice || 0);
+      return purchasePrice > 0 ? sum + purchasePrice * 0.7 : sum;
+    }, 0);
+  }
+
+  private estimateRealEstateEquity(state: any): number {
+    const properties = Array.isArray(state?.investmentProperties) ? state.investmentProperties : [];
+    return properties.reduce((sum: number, property: any) => {
+      const value = Number(property?.propertyValue || 0);
+      const loan = Number(property?.loanBalance || 0);
+      return sum + Math.max(0, value - loan);
+    }, 0);
+  }
+
+  private computeNetWorth(state: any): number {
+    const checking = Number(state?.check || 0);
+    const savings = Number(state?.savings || 0);
+    const portfolio = this.estimatePortfolioCostBasis(state);
+    const vehicles = this.estimateVehicleAssets(state);
+    const realEstateEquity = this.estimateRealEstateEquity(state);
+    const debt = Math.abs(Number(state?.debt || 0));
+    return checking + savings + portfolio + vehicles + realEstateEquity - debt;
+  }
+
   capacityForJob(job: any, rankInTrack: number): number {
     const baseByCategory: Record<string, number> = {
       Entry: 36,
@@ -101,12 +216,18 @@ export class JobService {
 
   getJobOpenings(state: any, job: any): number {
     const slot = state.jobMarket?.[job.title];
-    const baseCapacity = job.capacity ?? slot?.capacity ?? 1;
+    const inferredCapacity = this.inferBaseCapacity(job);
+    const baseCapacity = Math.max(
+      1,
+      Number(slot?.capacity || 0),
+      Number(job?.capacity || 0),
+      Number(inferredCapacity || 1),
+    );
     const dynamicCapacity = Math.max(1, Math.round(baseCapacity * 1)); // Scale would go here
     const cityUsers = Math.max(1, Number(state?.cityUserCount || 1));
 
-    const storedCapacity = slot?.capacity ?? dynamicCapacity;
-    const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.75);
+    const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity);
+    const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68);
     const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75;
     const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000));
     const month = Number(state?.month || 1);
@@ -126,31 +247,46 @@ export class JobService {
   }
 
   getJobEligibility(state: any, job: any): any {
-    const resolvedReq = job.req ? (this.REQUIREMENT_ALIASES[job.req] ?? job.req) : null;
-    const educationMet = !resolvedReq || state.credentials.includes(resolvedReq);
-    const resolvedCertReq = job.certReq ? (this.CERT_ALIASES[job.certReq] ?? job.certReq) : null;
-    const certificationMet = !resolvedCertReq || state.credentials.includes(resolvedCertReq);
+    const normalized = this.normalizeJobRequirements(job);
+    const resolvedReq = normalized.resolvedReq;
+    const resolvedCertReq = normalized.resolvedCertReq;
+    const roleReqFromReq = normalized.roleReqFromReq;
+
+    const credentials = Array.isArray(state?.credentials) ? state.credentials : [];
+    const educationMet = !resolvedReq || credentials.includes(resolvedReq);
+    const certificationMet = !resolvedCertReq || credentials.includes(resolvedCertReq);
     const transitMet = state.transit.level >= job.tReq;
+    const netWorth = this.computeNetWorth(state);
+    const wealthRequirement = Number(this.WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0);
+    const wealthMet = wealthRequirement <= 0 || netWorth >= wealthRequirement;
     const openings = this.getJobOpenings(state, job);
     const capacityMet = openings > 0;
 
     let experienceMet = true;
     let experienceDetail = '';
-    if (job.expReq && job.expReq.roles.length > 0) {
+    if (job.expReq && Array.isArray(job.expReq.roles) && job.expReq.roles.length > 0) {
       const reqMonths = job.expReq.minMonths || 0;
       const actualMonths = job.expReq.roles.reduce((max: number, role: string) => {
         return Math.max(max, this.getRoleExperienceMonths(state, role));
       }, 0);
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months`;
+    } else if (roleReqFromReq) {
+      const reqMonths = 6;
+      const actualMonths = this.getRoleExperienceMonths(state, roleReqFromReq);
+      experienceMet = actualMonths >= reqMonths;
+      experienceDetail = `${actualMonths}/${reqMonths} months in ${roleReqFromReq}`;
     }
 
     return {
-      canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet,
+      canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet && wealthMet,
       educationMet,
       certificationMet,
       transitMet,
       experienceMet,
+      wealthMet,
+      wealthRequirement,
+      netWorth,
       capacityMet,
       experienceDetail,
       openings,
@@ -162,9 +298,10 @@ export class JobService {
   initializeJobMarket(jobs: any[]): Record<string, any> {
     const market: Record<string, any> = {};
     for (const job of jobs) {
+      const capacity = Math.max(1, Number(job?.capacity ?? this.inferBaseCapacity(job)));
       market[job.title] = {
-        capacity: job.capacity ?? 1,
-        occupied: Math.floor((job.capacity ?? 1) * 0.75),
+        capacity,
+        occupied: Math.min(capacity - 1, Math.max(0, Math.floor(capacity * 0.68))),
       };
     }
     return market;

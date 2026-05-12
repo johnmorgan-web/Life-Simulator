@@ -73,6 +73,35 @@ type ProgressTrack = {
   jobs: Job[]
 }
 
+const WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
+  'Tech Startup Founder': 250000,
+  Millionaire: 500000,
+  Billionaire: 50000000,
+}
+
+function estimateNetWorth(state: any) {
+  const checking = Number(state?.check || 0)
+  const savings = Number(state?.savings || 0)
+  const debt = Math.abs(Number(state?.debt || 0))
+  const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
+    const shares = Number(holding?.shares || 0)
+    const avgCost = Number(holding?.avgCost || 0)
+    return sum + shares * avgCost
+  }, 0)
+  const vehicleAssets = (Array.isArray(state?.garage) ? state.garage : []).reduce((sum: number, vehicle: any) => {
+    const currentValue = Number(vehicle?.currentValue || 0)
+    if (currentValue > 0) return sum + currentValue
+    const purchasePrice = Number(vehicle?.purchasePrice || 0)
+    return purchasePrice > 0 ? sum + purchasePrice * 0.7 : sum
+  }, 0)
+  const realEstateEquity = (Array.isArray(state?.investmentProperties) ? state.investmentProperties : []).reduce((sum: number, property: any) => {
+    const value = Number(property?.propertyValue || 0)
+    const loan = Number(property?.loanBalance || 0)
+    return sum + Math.max(0, value - loan)
+  }, 0)
+  return Math.round((checking + savings + portfolio + vehicleAssets + realEstateEquity - debt) * 100) / 100
+}
+
 export default function Careers() {
   const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
@@ -93,6 +122,12 @@ export default function Careers() {
   const [calculatedSalaryInput, setCalculatedSalaryInput] = useState('')
   const [negotiationCalcError, setNegotiationCalcError] = useState<string | null>(null)
   const [showNegotiationPracticeMode, setShowNegotiationPracticeMode] = useState(false)
+  const netWorth = useMemo(() => estimateNetWorth(state), [state.check, state.savings, state.debt, state.portfolio, state.garage, state.investmentProperties])
+
+  const isJobVisible = (job: Job) => {
+    const threshold = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
+    return threshold <= 0 || netWorth >= threshold
+  }
 
   const getRoleExperienceMonths = (roleTitle: string) => {
     let months = 0
@@ -216,17 +251,18 @@ export default function Careers() {
   const recommendations = useMemo(() => {
     const candidates: { job: Job; breakdown: ScoreBreakdown }[] = jobBoard
       .filter((j: Job) => j.title !== state.job?.title) // Exclude current job
+      .filter((j: Job) => isJobVisible(j))
       .map((j: Job) => ({
         job: j,
         breakdown: scoreJob(j)
       }))
     candidates.sort((a, b) => b.breakdown.total - a.breakdown.total)
     return candidates
-  }, [jobBoard, state.credentials, state.transit, state.job, state.city])
+  }, [jobBoard, state.credentials, state.transit, state.job, state.city, netWorth])
 
   // Sorting
   const sortedJobs = useMemo(() => {
-    const copy = [...jobBoard]
+    const copy = [...jobBoard].filter((j: Job) => isJobVisible(j))
     switch (sort) {
       case 'certificates':
         return copy.sort((a, b) => {
@@ -250,7 +286,18 @@ export default function Careers() {
       default:
         return copy.sort((a, b) => scoreJob(b).total - scoreJob(a).total)
     }
-  }, [jobBoard, sort, state.credentials, state.transit, state.job, state.city])
+  }, [jobBoard, sort, state.credentials, state.transit, state.job, state.city, netWorth])
+
+  const wealthRecommendations = useMemo(() => {
+    return Object.entries(WEALTH_NET_WORTH_REQUIREMENTS)
+      .map(([title, minimum]) => ({
+        title,
+        minimum,
+        unlocked: netWorth >= minimum,
+        remaining: Math.max(0, minimum - netWorth),
+      }))
+      .sort((a, b) => a.minimum - b.minimum)
+  }, [netWorth])
 
   const categoryOptions = useMemo(() => {
     return Array.from(new Set<string>(jobBoard.map((j: Job) => j.cat || 'General'))).sort((a, b) => a.localeCompare(b))
@@ -451,6 +498,20 @@ export default function Careers() {
             ))}
           </div>
 
+          <div className="glass p-4 sm:p-5 mb-4 border-l-4 border-amber-500 bg-amber-50/60">
+            <p className="text-xs font-bold uppercase text-amber-700">Wealth Track Recommendations</p>
+            <p className="text-sm text-slate-700 mt-1">Current net worth: <span className="font-bold">${Math.round(netWorth).toLocaleString()}</span></p>
+            <div className="mt-2 space-y-1.5 text-sm">
+              {wealthRecommendations.map((item) => (
+                <p key={`wealth-${item.title}`} className={item.unlocked ? 'text-emerald-700 font-semibold' : 'text-slate-700'}>
+                  {item.unlocked
+                    ? `✅ ${item.title} unlocked (requires $${Math.round(item.minimum).toLocaleString()})`
+                    : `🔒 ${item.title}: need $${Math.round(item.minimum).toLocaleString()} net worth (remaining $${Math.round(item.remaining).toLocaleString()})`}
+                </p>
+              ))}
+            </div>
+          </div>
+
           {filteredRecommendations.length > 0 ? (
             <div className="glass p-4 sm:p-6 mb-4">
               <h3 className="font-bold text-lg mb-4">Jobs matched to your profile (sorted by match score)</h3>
@@ -528,7 +589,7 @@ export default function Careers() {
                                 {edMet ? (
                                   <div>{j.req ? `✓ Have ${j.req}` : '✓ No requirement'}</div>
                                 ) : (
-                                  <div>Need: {j.req}</div>
+                                  <div>✗ Need: {j.req}</div>
                                 )}
                                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
@@ -551,11 +612,11 @@ export default function Careers() {
                             {hoveredTooltip === `${j.title}-cert` && (
                               <div className="absolute z-20 bg-slate-900 text-white text-xs rounded-md px-3 py-2 top-full mt-2 left-1/2 -translate-x-1/2 w-56 max-w-[85vw] whitespace-normal text-left leading-relaxed break-words shadow-lg">
                                 {!j.certReq ? (
-                                  <div>No requirement</div>
+                                  <div>✓ No requirement</div>
                                 ) : certMet ? (
                                   <div>✓ Have {j.certReq}</div>
                                 ) : (
-                                  <div>Need: {j.certReq}</div>
+                                  <div>✗ Need: {j.certReq}</div>
                                 )}
                                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-slate-900"></div>
                               </div>
