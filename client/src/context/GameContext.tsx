@@ -1354,6 +1354,8 @@ const initialState: State = {
 	unlockedThemes: ['default'],
 	activeTheme: 'default',
 	rewardHistory: [] as any[]
+	,
+	jobMigrationBanner: null as string | null
 }
 
 const GameContext = createContext<any>(null)
@@ -1515,7 +1517,103 @@ function calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, cur
 	return Math.round(baseMaintenance * 100) / 100
 }
 
+function normalizeTitleTokens(value: string) {
+	return String(value || '')
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, ' ')
+		.split(/\s+/)
+		.filter(Boolean)
+}
+
+function isJobCredentialCompatible(job: Job | null | undefined, credentials: string[]) {
+	if (!job) return false
+	const credentialSet = new Set(Array.isArray(credentials) ? credentials : [])
+	const educationMet = !job.req || credentialSet.has(job.req)
+	const certificateMet = !job.certReq || credentialSet.has(job.certReq)
+	return educationMet && certificateMet
+}
+
+function isJobTransitCompatible(job: Job | null | undefined, transitLevel: number) {
+	if (!job) return false
+	return Number(transitLevel || 0) >= Number(job.tReq || 0)
+}
+
+function bestJobMatchForMigration(currentJob: any, credentials: string[], transitLevel: number) {
+	const title = String(currentJob?.title || '')
+	const currentBase = Number(currentJob?.base || 0)
+	const currentTokens = new Set(normalizeTitleTokens(title))
+
+	const scoreCandidate = (candidate: Job) => {
+		const candidateTokens = normalizeTitleTokens(candidate.title)
+		let overlap = 0
+		for (const token of candidateTokens) {
+			if (currentTokens.has(token)) overlap += 1
+		}
+
+		const titleScore = Math.min(24, overlap * 8)
+		const payDelta = Math.abs(Number(candidate.base || 0) - currentBase)
+		const payDistance = Math.max(1000, currentBase || 1000)
+		const payScore = Math.round((1 - Math.min(1, payDelta / payDistance)) * 22)
+		const categoryScore = (currentJob?.cat && candidate.cat === currentJob.cat ? 20 : 0)
+			+ (currentJob?.subcat && candidate.subcat === currentJob.subcat ? 14 : 0)
+		const transitScore = isJobTransitCompatible(candidate, transitLevel) ? 8 : -10
+		const certEaseScore = candidate.certReq ? 0 : 4
+		return titleScore + payScore + categoryScore + transitScore + certEaseScore
+	}
+
+	const credentialMatches = jobBoard.filter(job => isJobCredentialCompatible(job, credentials))
+	const strictMatches = credentialMatches.filter(job => isJobTransitCompatible(job, transitLevel))
+	const candidatePool = strictMatches.length > 0 ? strictMatches : credentialMatches
+
+	if (candidatePool.length === 0) {
+		return jobBoard.find(job => job.title === 'Odd Jobs') || jobBoard[0] || null
+	}
+
+	const ranked = [...candidatePool].sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
+	return ranked[0] || null
+}
+
 function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
+	const normalizedCredentials = Array.isArray(data?.credentials)
+		? data.credentials
+		: (Array.isArray(fallbackState?.credentials) ? fallbackState.credentials : [])
+	const normalizedTransitLevel = Number(data?.transit?.level ?? fallbackState?.transit?.level ?? 1)
+	const sourceJob = data?.job || fallbackState?.job || { title: 'Odd Jobs', base: 800, tReq: 1, odds: 1 }
+	const canonicalCurrent = jobBoard.find((job: Job) => job.title === sourceJob?.title)
+	const currentJobStillValid = isJobCredentialCompatible(canonicalCurrent, normalizedCredentials)
+
+	let normalizedJob = sourceJob
+	let migrationMessage: string | null = null
+	if (!canonicalCurrent || !currentJobStillValid) {
+		const migrated = bestJobMatchForMigration(sourceJob, normalizedCredentials, normalizedTransitLevel)
+		if (migrated) {
+			normalizedJob = {
+				title: migrated.title,
+				base: migrated.base,
+				tReq: migrated.tReq,
+				odds: migrated.odds,
+				cat: migrated.cat,
+				subcat: migrated.subcat,
+			}
+			if (String(sourceJob?.title || '') !== migrated.title) {
+				migrationMessage = `Career migration: ${sourceJob?.title || 'Unknown Role'} updated to ${migrated.title} to match the simplified market and your current credentials.`
+			}
+		}
+	}
+
+	const fallbackPendingJob = data?.pendingJob || null
+	const canonicalPending = fallbackPendingJob?.title
+		? jobBoard.find((job: Job) => job.title === fallbackPendingJob.title)
+		: null
+	const normalizedPendingJob = (fallbackPendingJob && !canonicalPending)
+		? bestJobMatchForMigration(fallbackPendingJob, normalizedCredentials, normalizedTransitLevel)
+		: fallbackPendingJob
+
+	const baseLogs = Array.isArray(data?.logs) ? data.logs : (Array.isArray(fallbackState?.logs) ? fallbackState.logs : [])
+	const migrationLogs = migrationMessage
+		? [...baseLogs, { date: `${Number(data?.month || fallbackState?.month || 1)}/${Number(data?.year || fallbackState?.year || 2026)}`, msg: migrationMessage }]
+		: baseLogs
+
 	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
 	const marketPrices = normalizeMarketPrices(data.marketPrices)
 	const realEstateState = normalizeRealEstateState(data)
@@ -1529,6 +1627,10 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 	return {
 		...data,
 		...realEstateState,
+		job: normalizedJob,
+		pendingJob: normalizedPendingJob,
+		logs: migrationLogs,
+		jobMigrationBanner: migrationMessage,
 		currentUser,
 		name: normalizedName,
 		isAdmin: Boolean(data.isAdmin),
@@ -3322,6 +3424,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			unlockedThemes: ['default'],
 			activeTheme: 'default',
 			rewardHistory: [],
+			jobMigrationBanner: null,
 			isAdmin: Boolean(state.isAdmin)
 		}
 		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
