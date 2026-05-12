@@ -31,6 +31,22 @@ const APPEND_ONLY_STATE_KEYS = new Set([
 
 type JobMarketState = Record<string, { capacity: number; occupied: number }>
 
+type EconomyOverrides = {
+	recessionSeverity: number
+	inflationPressure: number
+	jobAvailability: number
+	marketVolatility: number
+	nextMonthStockShock: number
+}
+
+const DEFAULT_ECONOMY_OVERRIDES: EconomyOverrides = {
+	recessionSeverity: 0,
+	inflationPressure: 0,
+	jobAvailability: 100,
+	marketVolatility: 100,
+	nextMonthStockShock: 0,
+}
+
 let cachedUserSnapshots: any[] = []
 
 type AuthResult = { ok: true; data: any } | { ok: false; error: string }
@@ -265,6 +281,18 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 			: [],
 		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
 		jobMarket: compactJobMarket,
+		economyOverrides: normalizeEconomyOverrides(snapshot.economyOverrides),
+	}
+}
+
+function normalizeEconomyOverrides(raw: any): EconomyOverrides {
+	if (!raw || typeof raw !== 'object') return { ...DEFAULT_ECONOMY_OVERRIDES }
+	return {
+		recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw.recessionSeverity || 0)))),
+		inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw.inflationPressure || 0)))),
+		jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw.jobAvailability || 100)))),
+		marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw.marketVolatility || 100)))),
+		nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw.nextMonthStockShock || 0))),
 	}
 }
 
@@ -545,6 +573,7 @@ function computeNetWorthForEligibility(state: State) {
 
 function getJobOpenings(state: State, job: Job) {
 	const slot = state.jobMarket?.[job.title]
+	const economy = normalizeEconomyOverrides(state?.economyOverrides)
 	const registeredUsers = getRegisteredUserCount()
 	const scale = capacityScaleForUsers(registeredUsers)
 	const cityUserCounts = getUserCityCounts(state)
@@ -552,7 +581,12 @@ function getJobOpenings(state: State, job: Job) {
 
 	// Job capacity generated from progression rank acts as the baseline.
 	const baseCapacity = job.capacity ?? slot?.capacity ?? 1
-	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * scale))
+	const demandMultiplier = Math.max(0.35, Math.min(1.9,
+		(economy.jobAvailability / 100)
+		* (1 - economy.recessionSeverity * 0.004)
+		* (1 - economy.inflationPressure * 0.0015)
+	))
+	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * scale * demandMultiplier))
 
 	const storedCapacity = slot?.capacity ?? dynamicCapacity
 	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.75)
@@ -565,7 +599,12 @@ function getJobOpenings(state: State, job: Job) {
 		if ((job.cat || 'Pro') === 'Entry') return Math.min(0.05, extraUsers * 0.01)
 		return Math.min(0.28, 0.03 + extraUsers * 0.025)
 	})()
-	const marketPressure = Math.max(0, Math.min(0.35, salaryPressure + monthlyPulse + cityCompetitionPressure))
+	const macroPressure = Math.max(0, Math.min(0.35,
+		economy.recessionSeverity * 0.003
+		+ economy.inflationPressure * 0.0018
+		- (economy.jobAvailability - 100) * 0.0015
+	))
+	const marketPressure = Math.max(0, Math.min(0.45, salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure))
 	const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure))
 	const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * pressuredRatio)))
 
@@ -968,14 +1007,18 @@ function normalizeRealEstateState(data: any) {
 	}
 }
 
-function advanceMarketPrices(currentPrices: any, year: number, month: number) {
+function advanceMarketPrices(currentPrices: any, year: number, month: number, overrides?: any) {
 	const base = normalizeMarketPrices(currentPrices)
+	const economy = normalizeEconomyOverrides(overrides)
 	const next: Record<string, number> = {}
+	const driftPenalty = (economy.recessionSeverity * 0.0014) + (economy.inflationPressure * 0.0008)
+	const volatilityMultiplier = Math.max(0.5, (economy.marketVolatility / 100) * (1 + economy.recessionSeverity * 0.006))
+	const shock = Number(economy.nextMonthStockShock || 0)
 	for (const asset of stockMarketAssets) {
 		const seed = hashString(`${asset.ticker}-${year}-${month}`)
 		const noise = (mulberry32(seed)() - 0.5) * 2
-		const monthlyMove = asset.drift + noise * asset.volatility
-		const boundedMove = Math.max(-0.25, Math.min(0.25, monthlyMove))
+		const monthlyMove = (asset.drift - driftPenalty) + (noise * asset.volatility * volatilityMultiplier) + shock
+		const boundedMove = Math.max(-0.45, Math.min(0.45, monthlyMove))
 		const updated = Math.max(1, base[asset.ticker] * (1 + boundedMove))
 		next[asset.ticker] = round2(updated)
 	}
@@ -1456,6 +1499,7 @@ const initialState: State = {
 	usePlainLanguage: false,
 	marketLearningLevel: 'adult',
 	marketUsePlainLanguage: false,
+	economyOverrides: { ...DEFAULT_ECONOMY_OVERRIDES },
 	realEstateLearningLevel: 'adult',
 	realEstateUsePlainLanguage: false,
 	autoInvest: {
@@ -1787,6 +1831,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		marketUsePlainLanguage: data.usePlainLanguage ?? data.marketUsePlainLanguage ?? data.realEstateUsePlainLanguage ?? false,
 		realEstateLearningLevel: data.learningLevel ?? data.marketLearningLevel ?? data.realEstateLearningLevel ?? 'adult',
 		realEstateUsePlainLanguage: data.usePlainLanguage ?? data.marketUsePlainLanguage ?? data.realEstateUsePlainLanguage ?? false,
+		economyOverrides: normalizeEconomyOverrides(data.economyOverrides),
 		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -1951,6 +1996,7 @@ function reducer(state: State, action: any) {
 			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
+			const economyOverrides = normalizeEconomyOverrides(state.economyOverrides)
 
 			// Calculate vehicle costs before checking calculation
 			let vehicleCosts = 0
@@ -2776,7 +2822,14 @@ function reducer(state: State, action: any) {
 				})
 			}
 			const stockInvestedLastMonth = round2(Number(autoInvestResult.investedAmount || 0))
-			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth)
+			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth, economyOverrides)
+			if (Math.abs(Number(economyOverrides.nextMonthStockShock || 0)) > 0.001) {
+				const shockPct = Math.round(Number(economyOverrides.nextMonthStockShock || 0) * 100)
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `🌐 Macro intervention applied: ${shockPct >= 0 ? '+' : ''}${shockPct}% market shock.`
+				})
+			}
 			const marketPriceHistory = appendMarketPriceHistory(state.marketPriceHistory, nextMarketPrices, nextMonth, nextYear)
 			creditAccountAgeMonths += 1
 
@@ -2945,6 +2998,10 @@ function reducer(state: State, action: any) {
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
 				marketPriceHistory,
+				economyOverrides: {
+					...economyOverrides,
+					nextMonthStockShock: 0,
+				},
 				portfolio: nextPortfolio,
 				investmentProperties,
 				pendingRealEstateDeals,

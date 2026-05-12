@@ -13,6 +13,21 @@ export class JobService {
   private academyCredentialSet = new Set(academyCourses.map((course) => String(course?.n || '').trim()));
   private jobTitleSet = new Set(jobBoard.map((job) => String(job?.title || '').trim()));
 
+  private normalizeEconomyOverrides(raw: any): {
+    recessionSeverity: number;
+    inflationPressure: number;
+    jobAvailability: number;
+  } {
+    if (!raw || typeof raw !== 'object') {
+      return { recessionSeverity: 0, inflationPressure: 0, jobAvailability: 100 };
+    }
+    return {
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
+      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw?.jobAvailability || 100)))),
+    };
+  }
+
   private CERT_ALIASES: Record<string, string> = {
     Security: 'Cybersecurity',
     'Content Marketing': 'Public Relations',
@@ -216,6 +231,7 @@ export class JobService {
 
   getJobOpenings(state: any, job: any): number {
     const slot = state.jobMarket?.[job.title];
+    const economy = this.normalizeEconomyOverrides(state?.economyOverrides);
     const inferredCapacity = this.inferBaseCapacity(job);
     const baseCapacity = Math.max(
       1,
@@ -223,7 +239,12 @@ export class JobService {
       Number(job?.capacity || 0),
       Number(inferredCapacity || 1),
     );
-    const dynamicCapacity = Math.max(1, Math.round(baseCapacity * 1)); // Scale would go here
+    const demandMultiplier = Math.max(0.35, Math.min(1.9,
+      (economy.jobAvailability / 100)
+      * (1 - economy.recessionSeverity * 0.004)
+      * (1 - economy.inflationPressure * 0.0015),
+    ));
+    const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier));
     const cityUsers = Math.max(1, Number(state?.cityUserCount || 1));
 
     const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity);
@@ -239,7 +260,12 @@ export class JobService {
       if ((job.cat || 'Pro') === 'Entry') return Math.min(0.05, extraUsers * 0.01);
       return Math.min(0.28, 0.03 + extraUsers * 0.025);
     })();
-    const marketPressure = Math.max(0, Math.min(0.35, salaryPressure + monthlyPulse + cityCompetitionPressure));
+    const macroPressure = Math.max(0, Math.min(0.35,
+      economy.recessionSeverity * 0.003
+      + economy.inflationPressure * 0.0018
+      - (economy.jobAvailability - 100) * 0.0015,
+    ));
+    const marketPressure = Math.max(0, Math.min(0.45, salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure));
     const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure));
     const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * pressuredRatio)));
 

@@ -77,6 +77,50 @@ export default function Admin() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
+  const economyOverrides = useMemo(() => {
+    const raw = state?.economyOverrides || {}
+    return {
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw.inflationPressure || 0)))),
+      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw.jobAvailability || 100)))),
+      marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw.marketVolatility || 100)))),
+      nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw.nextMonthStockShock || 0))),
+    }
+  }, [state?.economyOverrides])
+
+  const updateEconomyOverride = (key: string, value: number) => {
+    dispatch({
+      type: 'SET_STATE',
+      payload: {
+        economyOverrides: {
+          ...economyOverrides,
+          [key]: value,
+        },
+      },
+    })
+  }
+
+  const setStockShock = (shock: number) => {
+    updateEconomyOverride('nextMonthStockShock', shock)
+    setMessage(`Queued ${(shock * 100).toFixed(0)}% market shock for next month processing.`)
+  }
+
+  const resetEconomyOverrides = () => {
+    dispatch({
+      type: 'SET_STATE',
+      payload: {
+        economyOverrides: {
+          recessionSeverity: 0,
+          inflationPressure: 0,
+          jobAvailability: 100,
+          marketVolatility: 100,
+          nextMonthStockShock: 0,
+        },
+      },
+    })
+    setMessage('Economy controls reset to neutral baseline.')
+  }
+
   const canLoad = useMemo(() => Boolean(state?.isAdmin && state?.id && state?.authToken), [state?.isAdmin, state?.id, state?.authToken])
   const unsavedCount = useMemo(() => {
     return users.filter(user => {
@@ -410,6 +454,69 @@ export default function Admin() {
 
   return (
     <div className="space-y-4">
+      <div className="glass p-4 rounded-xl space-y-3 border-l-4 border-amber-500">
+        <h2 className="text-xl font-semibold">Admin: Economy God Controls</h2>
+        <p className="text-sm text-slate-600">These controls affect next-month stock simulation and live job-market availability for all players on this device profile.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-slate-700">Recession Severity: {economyOverrides.recessionSeverity}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={economyOverrides.recessionSeverity}
+              onChange={(e) => updateEconomyOverride('recessionSeverity', Number(e.target.value))}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-slate-700">Inflation Pressure: {economyOverrides.inflationPressure}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={economyOverrides.inflationPressure}
+              onChange={(e) => updateEconomyOverride('inflationPressure', Number(e.target.value))}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-slate-700">Available Jobs Slider: {economyOverrides.jobAvailability}%</span>
+            <input
+              type="range"
+              min={40}
+              max={180}
+              value={economyOverrides.jobAvailability}
+              onChange={(e) => updateEconomyOverride('jobAvailability', Number(e.target.value))}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-slate-700">Market Volatility: {economyOverrides.marketVolatility}%</span>
+            <input
+              type="range"
+              min={50}
+              max={220}
+              value={economyOverrides.marketVolatility}
+              onChange={(e) => updateEconomyOverride('marketVolatility', Number(e.target.value))}
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setStockShock(-0.25)} className="px-3 py-2 rounded bg-rose-700 text-white text-sm font-semibold">Trigger Crash (-25%)</button>
+          <button onClick={() => setStockShock(-0.1)} className="px-3 py-2 rounded bg-orange-600 text-white text-sm font-semibold">Trigger Correction (-10%)</button>
+          <button onClick={() => setStockShock(0.12)} className="px-3 py-2 rounded bg-emerald-700 text-white text-sm font-semibold">Trigger Rally (+12%)</button>
+          <button onClick={resetEconomyOverrides} className="px-3 py-2 rounded bg-slate-200 text-slate-800 text-sm font-semibold">Reset Controls</button>
+        </div>
+
+        <div className="text-xs text-slate-600 space-y-1">
+          <p>Recommendation: keep recession under 35% for normal play, 35-65% for hard mode, and above 65% only for crisis scenarios.</p>
+          <p>Recommendation: keep available jobs between 85% and 120% to avoid soft-locking progression tracks.</p>
+          <p>Recommendation: use market volatility above 140% only for short windows (3-6 months) or portfolio outcomes become highly swingy.</p>
+        </div>
+      </div>
+
       <div className="glass p-4 rounded-xl space-y-3">
         <h2 className="text-xl font-semibold">Admin: User Management</h2>
         <p className="text-sm text-slate-600">Your authenticated admin session is required to load and save updates.</p>
