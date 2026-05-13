@@ -1501,6 +1501,8 @@ const initialState: State = {
 	calculationStreak: 0, // Consecutive correct balance checks
 	monthlyCheckSuccesses: 0,
 	monthlyCheckFailures: 0,
+	lifetimeCheckSuccesses: 0,
+	lifetimeCheckFailures: 0,
 	debtDelinquencyStreak: 0,
 	creditAccountAgeMonths: 0,
 	creditInquiryQueue: [] as number[],
@@ -2006,16 +2008,20 @@ function reducer(state: State, action: any) {
 			let calculationStreak = Number(state.calculationStreak || 0)
 			let monthlyCheckSuccesses = Number(state.monthlyCheckSuccesses || 0)
 			let monthlyCheckFailures = Number(state.monthlyCheckFailures || 0)
+			let lifetimeCheckSuccesses = Number(state.lifetimeCheckSuccesses || 0)
+			let lifetimeCheckFailures = Number(state.lifetimeCheckFailures || 0)
 			let logs = [...state.logs]
 
 			if (done && !wasDone) {
 				calculationStreak += 1
 				monthlyCheckSuccesses += 1
+				lifetimeCheckSuccesses += 1
 			}
 
 			if (!done) {
 				calculationStreak = 0
 				monthlyCheckFailures += 1
+				lifetimeCheckFailures += 1
 			}
 
 			if (newCheck !== undefined && newCheck < 0) {
@@ -2032,6 +2038,8 @@ function reducer(state: State, action: any) {
 				calculationStreak,
 				monthlyCheckSuccesses,
 				monthlyCheckFailures,
+				lifetimeCheckSuccesses,
+				lifetimeCheckFailures,
 				paymentStreak: state.paymentStreak,
 				logs
 			}
@@ -3657,6 +3665,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			calculationStreak: 0,
 			monthlyCheckSuccesses: 0,
 			monthlyCheckFailures: 0,
+			lifetimeCheckSuccesses: 0,
+			lifetimeCheckFailures: 0,
 			debtDelinquencyStreak: 0,
 			creditAccountAgeMonths: 0,
 			creditInquiryQueue: [],
