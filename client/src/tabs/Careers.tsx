@@ -122,7 +122,27 @@ export default function Careers() {
   const [calculatedSalaryInput, setCalculatedSalaryInput] = useState('')
   const [negotiationCalcError, setNegotiationCalcError] = useState<string | null>(null)
   const [showNegotiationPracticeMode, setShowNegotiationPracticeMode] = useState(false)
+  const [applyingJobTitle, setApplyingJobTitle] = useState<string | null>(null)
+  const [applyFeedback, setApplyFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const netWorth = useMemo(() => estimateNetWorth(state), [state.check, state.savings, state.debt, state.portfolio, state.garage, state.investmentProperties])
+
+  const handleApplyJob = async (job: Job) => {
+    setApplyingJobTitle(job.title)
+    const result = await applyForJob(job)
+    setApplyingJobTitle(null)
+
+    if (!result) {
+      setApplyFeedback({ type: 'error', message: `Application could not be submitted for ${job.title}. Please try again.` })
+      return
+    }
+
+    if (result.ok) {
+      setApplyFeedback({ type: 'success', message: String(result.message || `Applied for ${job.title}`) })
+      return
+    }
+
+    setApplyFeedback({ type: 'error', message: String(result.message || `Application blocked for ${job.title}`) })
+  }
 
   const isJobVisible = (job: Job) => {
     const threshold = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
@@ -375,6 +395,27 @@ export default function Careers() {
             <button
               onClick={() => dispatch({ type: 'SET_STATE', payload: { jobMigrationBanner: null } })}
               className="self-start px-3 py-1.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 hover:bg-blue-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {applyFeedback && (
+        <div className={`glass p-4 sm:p-5 mb-5 border-l-4 ${applyFeedback.type === 'success' ? 'border-emerald-600 bg-emerald-50/70' : 'border-rose-600 bg-rose-50/70'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <p className={`font-bold ${applyFeedback.type === 'success' ? 'text-emerald-900' : 'text-rose-900'}`}>
+                {applyFeedback.type === 'success' ? 'Application Submitted' : 'Application Blocked'}
+              </p>
+              <p className={`text-sm mt-1 ${applyFeedback.type === 'success' ? 'text-emerald-800' : 'text-rose-800'}`}>
+                {applyFeedback.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setApplyFeedback(null)}
+              className={`self-start px-3 py-1.5 rounded-md text-xs font-bold ${applyFeedback.type === 'success' ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200'}`}
             >
               Dismiss
             </button>
@@ -683,8 +724,8 @@ export default function Careers() {
                           </td>
                           <td className="text-right py-2 sm:py-3 px-2 sm:px-3">
                             <button
-                              onClick={() => applyForJob(j)}
-                              disabled={!canApply || hasApplied}
+                              onClick={() => handleApplyJob(j)}
+                              disabled={!canApply || hasApplied || applyingJobTitle === j.title}
                               className={`w-full sm:w-auto py-1 px-3 rounded text-xs font-bold ${
                                 hasApplied 
                                   ? 'bg-amber-500 text-white cursor-not-allowed' 
@@ -693,7 +734,7 @@ export default function Careers() {
                                   : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                               }`}
                             >
-                              {hasApplied ? 'APPLIED' : 'APPLY'}
+                              {hasApplied ? 'APPLIED' : applyingJobTitle === j.title ? 'APPLYING...' : 'APPLY'}
                             </button>
                           </td>
                         </tr>
@@ -819,11 +860,11 @@ export default function Careers() {
                       <button disabled className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold">CURRENT</button>
                     ) : (
                       <button
-                        onClick={() => applyForJob(j)}
-                        disabled={!canApply || hasApplied}
+                        onClick={() => handleApplyJob(j)}
+                        disabled={!canApply || hasApplied || applyingJobTitle === j.title}
                         className={`w-full py-2 ${hasApplied ? 'bg-amber-500 text-white cursor-not-allowed' : canApply ? 'bg-slate-900 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'} rounded-lg text-xs font-bold`}
                       >
-                        {hasApplied ? 'APPLIED' : 'APPLY'}
+                        {hasApplied ? 'APPLIED' : applyingJobTitle === j.title ? 'APPLYING...' : 'APPLY'}
                       </button>
                     )}
                   </div>

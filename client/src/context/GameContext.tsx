@@ -75,6 +75,23 @@ function capacityScaleForUsers(registeredUsers: number) {
 	return Math.min(1.35, Math.max(0.9, 0.78 + registeredUsers * 0.12))
 }
 
+function inferBaseCapacity(job: any) {
+	const category = String(job?.cat || 'Pro')
+	const salary = Number(job?.base || 0)
+	if (category === 'Entry') return 24
+	if (category === 'Military') return 12
+	if (category === 'Trades') return 14
+	if (category === 'Healthcare') return 10
+	if (category === 'Technology') return 10
+	if (salary >= 10000) return 4
+	if (salary >= 7000) return 6
+	return 8
+}
+
+function normalizeCredential(value: any) {
+	return String(value || '').trim().toLowerCase()
+}
+
 async function authenticateUser(username: string, password: string) {
 	const payload = JSON.stringify({ username, password })
 	const headers = { 'Content-Type': 'application/json' }
@@ -241,7 +258,7 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 	const compactJobMarket = requestedTitles.reduce((acc: Record<string, any>, title: string) => {
 		const slot = snapshot?.jobMarket?.[title]
 		const fallbackJob = jobBoard.find((job: Job) => job.title === title)
-		const fallbackCapacity = Math.max(1, Math.round(Number(fallbackJob?.capacity || 8)))
+		const fallbackCapacity = Math.max(1, Math.round(Number(fallbackJob?.capacity || inferBaseCapacity(fallbackJob))))
 		const normalizedSlot = slot && typeof slot === 'object'
 			? slot
 			: {
@@ -574,22 +591,25 @@ function computeNetWorthForEligibility(state: State) {
 function getJobOpenings(state: State, job: Job) {
 	const slot = state.jobMarket?.[job.title]
 	const economy = normalizeEconomyOverrides(state?.economyOverrides)
-	const registeredUsers = getRegisteredUserCount()
-	const scale = capacityScaleForUsers(registeredUsers)
 	const cityUserCounts = getUserCityCounts(state)
 	const cityUsers = Math.max(1, Number(cityUserCounts[state?.city?.name || ''] || 1))
 
-	// Job capacity generated from progression rank acts as the baseline.
-	const baseCapacity = job.capacity ?? slot?.capacity ?? 1
+	const inferredCapacity = inferBaseCapacity(job)
+	const baseCapacity = Math.max(
+		1,
+		Number(slot?.capacity || 0),
+		Number(job?.capacity || 0),
+		Number(inferredCapacity || 1),
+	)
 	const demandMultiplier = Math.max(0.35, Math.min(1.9,
 		(economy.jobAvailability / 100)
 		* (1 - economy.recessionSeverity * 0.004)
 		* (1 - economy.inflationPressure * 0.0015)
 	))
-	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * scale * demandMultiplier))
+	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier))
 
-	const storedCapacity = slot?.capacity ?? dynamicCapacity
-	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.75)
+	const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity)
+	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68)
 	const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75
 	const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000))
 	const monthlyPulseSeed = titleSeed(`${job.title}-${state.month}-${state.year}`)
@@ -612,8 +632,10 @@ function getJobOpenings(state: State, job: Job) {
 }
 
 function getJobEligibility(state: State, job: Job) {
-	const educationMet = !job.req || state.credentials.includes(job.req)
-	const certificationMet = !job.certReq || state.credentials.includes(job.certReq)
+	const credentials = Array.isArray(state?.credentials) ? state.credentials : []
+	const normalizedCredentials = new Set(credentials.map((value: any) => normalizeCredential(value)).filter(Boolean))
+	const educationMet = !job.req || normalizedCredentials.has(normalizeCredential(job.req))
+	const certificationMet = !job.certReq || normalizedCredentials.has(normalizeCredential(job.certReq))
 	const transitMet = state.transit.level >= job.tReq
 	const netWorth = computeNetWorthForEligibility(state)
 	const wealthRequirement = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
@@ -3751,19 +3773,41 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
 	async function applyForJob(job: Job) {
 		const result = await applyForJobOnServer(state, job.title)
-		if (!result) return
+		if (!result) {
+			return { ok: false, reason: 'network-error', message: 'Unable to apply right now. Please try again.' }
+		}
+
+		const mergedLogs = Array.isArray(result.logEntries)
+			? [...(Array.isArray(state.logs) ? state.logs : []), ...result.logEntries]
+			: Array.isArray(result.logs)
+				? result.logs
+				: state.logs
 
 		dispatch({
 			type: 'SET_STATE',
 			payload: {
 				applications: Array.isArray(result.applications) ? result.applications : state.applications,
-				logs: Array.isArray(result.logEntries)
-					? [...(Array.isArray(state.logs) ? state.logs : []), ...result.logEntries]
-					: Array.isArray(result.logs)
-						? result.logs
-						: state.logs,
+				logs: mergedLogs,
 			},
 		})
+
+		const latestLogMessage = Array.isArray(result.logEntries) && result.logEntries.length
+			? String(result.logEntries[result.logEntries.length - 1]?.msg || '')
+			: ''
+
+		if (result.applied) {
+			return {
+				ok: true,
+				reason: 'applied',
+				message: latestLogMessage || `Applied for ${job.title}`,
+			}
+		}
+
+		return {
+			ok: false,
+			reason: String(result.reason || 'ineligible'),
+			message: latestLogMessage || `Application blocked for ${job.title}`,
+		}
 	}
 
 	function refreshRealEstateMarket() {
