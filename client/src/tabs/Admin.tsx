@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
 
+const ECONOMY_PRESET_STORAGE_KEY = 'life-sim:admin-economy-preset:v1'
+
 type AdminUserRow = {
   id: string
   username: string
@@ -46,6 +48,7 @@ type ManageDraft = {
   username: string
   password: string
   confirmPassword: string
+  assignedJobTitle: string
 }
 
 function rowChanged(current: AdminUserRow, baseline: AdminUserRow) {
@@ -59,10 +62,11 @@ function rowChanged(current: AdminUserRow, baseline: AdminUserRow) {
 }
 
 export default function Admin() {
-  const { state, dispatch, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, refreshPeerSnapshots } = useGame()
+  const { state, dispatch, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, refreshPeerSnapshots, jobBoard, saveGame, loadGame } = useGame()
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [baseUsers, setBaseUsers] = useState<Record<string, AdminUserRow>>({})
   const [pendingPasswords, setPendingPasswords] = useState<Record<string, string>>({})
+  const [pendingAssignedJobs, setPendingAssignedJobs] = useState<Record<string, string>>({})
   const [searchQuery, setSearchQuery] = useState('')
   const [educationFilter, setEducationFilter] = useState('all')
   const [creditFilter, setCreditFilter] = useState('all')
@@ -73,9 +77,18 @@ export default function Admin() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [savingAll, setSavingAll] = useState(false)
+  const [applyingEconomy, setApplyingEconomy] = useState(false)
+  const [economyApplyMonths, setEconomyApplyMonths] = useState<number>(0)
   const [manageDraft, setManageDraft] = useState<ManageDraft | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  const sortedJobTitles = useMemo(() => {
+    return [...(Array.isArray(jobBoard) ? jobBoard : [])]
+      .map((job: any) => String(job?.title || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b))
+  }, [jobBoard])
 
   const economyOverrides = useMemo(() => {
     const raw = state?.economyOverrides || {}
@@ -125,9 +138,12 @@ export default function Admin() {
   const unsavedCount = useMemo(() => {
     return users.filter(user => {
       const baseline = baseUsers[user.id]
-      return !!baseline && (rowChanged(user, baseline) || Boolean(pendingPasswords[user.id]))
+      const queuedJob = String(pendingAssignedJobs[user.id] || '').trim()
+      const baselineJob = String(baseline?.progression?.jobTitle || '').trim()
+      const jobChanged = queuedJob.length > 0 && queuedJob !== baselineJob
+      return !!baseline && (rowChanged(user, baseline) || Boolean(pendingPasswords[user.id]) || jobChanged)
     }).length
-  }, [users, baseUsers, pendingPasswords])
+  }, [users, baseUsers, pendingPasswords, pendingAssignedJobs])
   const educationOptions = useMemo(() => {
     return Array.from(new Set(users.map(user => user.progression?.educationLevel || 'Unknown'))).sort((a, b) => a.localeCompare(b))
   }, [users])
@@ -277,6 +293,11 @@ export default function Admin() {
       delete next[user.id]
       return next
     })
+    setPendingAssignedJobs(prev => {
+      const next = { ...prev }
+      delete next[user.id]
+      return next
+    })
     setManageDraft(prev => (prev?.id === user.id ? null : prev))
 
     await refreshPeerSnapshots()
@@ -299,6 +320,7 @@ export default function Admin() {
     setUsers(response)
     setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
     setPendingPasswords({})
+    setPendingAssignedJobs({})
     setMessage(`Loaded ${response.length} users.`)
   }
 
@@ -331,6 +353,7 @@ export default function Admin() {
       username: user.username,
       password: '',
       confirmPassword: '',
+      assignedJobTitle: String(pendingAssignedJobs[user.id] || user.progression?.jobTitle || ''),
     })
   }
 
@@ -368,6 +391,15 @@ export default function Admin() {
       return next
     })
 
+    setPendingAssignedJobs(prev => {
+      const next = { ...prev }
+      const selected = String(manageDraft.assignedJobTitle || '').trim()
+      const baselineJob = String(baseUsers[manageDraft.id]?.progression?.jobTitle || '').trim()
+      if (selected && selected !== baselineJob) next[manageDraft.id] = selected
+      else delete next[manageDraft.id]
+      return next
+    })
+
     setManageDraft(null)
     setMessage(`Queued profile changes for ${username}.`)
   }
@@ -379,7 +411,10 @@ export default function Admin() {
     }
     const dirty = users.filter(user => {
       const baseline = baseUsers[user.id]
-      return !!baseline && (rowChanged(user, baseline) || Boolean(pendingPasswords[user.id]))
+      const queuedJob = String(pendingAssignedJobs[user.id] || '').trim()
+      const baselineJob = String(baseline?.progression?.jobTitle || '').trim()
+      const jobChanged = queuedJob.length > 0 && queuedJob !== baselineJob
+      return !!baseline && (rowChanged(user, baseline) || Boolean(pendingPasswords[user.id]) || jobChanged)
     })
 
     if (!dirty.length) {
@@ -395,6 +430,7 @@ export default function Admin() {
     const savedMap: Record<string, AdminUserRow> = {}
 
     for (const row of dirty) {
+      const queuedJob = String(pendingAssignedJobs[row.id] || '').trim()
       const saved = await saveUserAsAdmin(row.id, {
         checking: Number(row.balances.checking || 0),
         savings: Number(row.balances.savings || 0),
@@ -402,6 +438,7 @@ export default function Admin() {
         isAdmin: Boolean(row.isAdmin),
         username: row.username,
         password: pendingPasswords[row.id],
+        jobTitle: queuedJob || undefined,
       })
 
       if (!saved) {
@@ -421,6 +458,11 @@ export default function Admin() {
         for (const id of Object.keys(savedMap)) delete next[id]
         return next
       })
+      setPendingAssignedJobs(prev => {
+        const next = { ...prev }
+        for (const id of Object.keys(savedMap)) delete next[id]
+        return next
+      })
 
       const selfUpdated = state?.id ? savedMap[state.id] : null
       if (selfUpdated) {
@@ -435,6 +477,9 @@ export default function Admin() {
             debt: Number(selfUpdated.balances?.debt || 0),
           },
         })
+        if (pendingAssignedJobs[state.id]) {
+          await loadGame()
+        }
       }
 
       await refreshPeerSnapshots()
@@ -446,6 +491,118 @@ export default function Admin() {
     if (!failed.length) {
       setMessage(`Saved ${Object.keys(savedMap).length} user updates.`)
     }
+  }
+
+  const saveEconomyPreset = async () => {
+    localStorage.setItem(ECONOMY_PRESET_STORAGE_KEY, JSON.stringify({
+      economyOverrides,
+      economyApplyMonths: Math.max(0, Math.floor(Number(economyApplyMonths || 0))),
+    }))
+    const saved = await saveGame()
+    if (!saved) {
+      setError('Saved locally, but could not persist your admin profile to the server.')
+      return
+    }
+    setError('')
+    setMessage('Economy sliders saved locally and to your admin profile.')
+  }
+
+  const loadEconomyPreset = () => {
+    const raw = localStorage.getItem(ECONOMY_PRESET_STORAGE_KEY)
+    if (!raw) {
+      setError('No saved economy preset found on this browser.')
+      return
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      const preset = parsed?.economyOverrides || {}
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          economyOverrides: {
+            recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(preset.recessionSeverity || 0)))),
+            inflationPressure: Math.max(0, Math.min(100, Math.round(Number(preset.inflationPressure || 0)))),
+            jobAvailability: Math.max(40, Math.min(180, Math.round(Number(preset.jobAvailability || 100)))),
+            marketVolatility: Math.max(50, Math.min(220, Math.round(Number(preset.marketVolatility || 100)))),
+            nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(preset.nextMonthStockShock || 0))),
+          },
+        },
+      })
+      setEconomyApplyMonths(Math.max(0, Math.floor(Number(parsed?.economyApplyMonths || 0))))
+      setError('')
+      setMessage('Loaded saved economy preset.')
+    } catch {
+      setError('Saved economy preset is corrupted. Please resave it.')
+    }
+  }
+
+  const applyEconomyToAllUsers = async () => {
+    if (!state?.authToken) {
+      setError('You must be logged in to apply economy settings to all users.')
+      return
+    }
+
+    setApplyingEconomy(true)
+    setError('')
+    setMessage('')
+
+    let targetUsers = users
+    if (!targetUsers.length) {
+      const response = await listUsersForAdmin()
+      if (!response) {
+        setApplyingEconomy(false)
+        setError('Unable to load users for economy broadcast.')
+        return
+      }
+      targetUsers = response
+      setUsers(response)
+      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
+    }
+
+    const failed: string[] = []
+    const savedMap: Record<string, AdminUserRow> = {}
+    const normalizedMonths = Math.max(0, Math.floor(Number(economyApplyMonths || 0)))
+
+    for (const row of targetUsers) {
+      const saved = await saveUserAsAdmin(row.id, {
+        checking: Number(row.balances.checking || 0),
+        savings: Number(row.balances.savings || 0),
+        debt: Number(row.balances.debt || 0),
+        isAdmin: Boolean(row.isAdmin),
+        username: row.username,
+        economyOverrides,
+        economyApplyMonths: normalizedMonths,
+      })
+
+      if (!saved) {
+        failed.push(row.username)
+      } else {
+        savedMap[row.id] = saved
+      }
+    }
+
+    setApplyingEconomy(false)
+
+    if (Object.keys(savedMap).length) {
+      setUsers(prev => prev.map(user => savedMap[user.id] || user))
+      setBaseUsers(prev => ({ ...prev, ...savedMap }))
+      if (state?.id && savedMap[state.id]) {
+        dispatch({
+          type: 'SET_STATE',
+          payload: {
+            economyOverrides,
+            economyOverrideMonthsRemaining: normalizedMonths,
+          },
+        })
+      }
+      await refreshPeerSnapshots()
+    }
+
+    if (failed.length) {
+      setError(`Economy broadcast failed for: ${failed.join(', ')}`)
+      return
+    }
+    setMessage(`Applied economy sliders to ${Object.keys(savedMap).length} users${normalizedMonths > 0 ? ` for ${normalizedMonths} month${normalizedMonths === 1 ? '' : 's'}` : ' (persistent until changed)'}.`)
   }
 
   if (!state?.isAdmin) {
@@ -508,6 +665,30 @@ export default function Admin() {
           <button onClick={() => setStockShock(-0.1)} className="px-3 py-2 rounded bg-orange-600 text-white text-sm font-semibold">Trigger Correction (-10%)</button>
           <button onClick={() => setStockShock(0.12)} className="px-3 py-2 rounded bg-emerald-700 text-white text-sm font-semibold">Trigger Rally (+12%)</button>
           <button onClick={resetEconomyOverrides} className="px-3 py-2 rounded bg-slate-200 text-slate-800 text-sm font-semibold">Reset Controls</button>
+          <button onClick={saveEconomyPreset} className="px-3 py-2 rounded bg-slate-900 text-white text-sm font-semibold">Save Sliders</button>
+          <button onClick={loadEconomyPreset} className="px-3 py-2 rounded bg-slate-200 text-slate-800 text-sm font-semibold">Load Saved Sliders</button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-slate-700">Apply sliders to all users for this many months (optional)</span>
+            <input
+              type="number"
+              min={0}
+              max={36}
+              value={economyApplyMonths}
+              onChange={(e) => setEconomyApplyMonths(Math.max(0, Math.min(36, Number(e.target.value || 0))))}
+              className="p-2 border rounded text-sm w-full max-w-sm"
+            />
+            <span className="text-xs text-slate-500">Use 0 for persistent until changed. Positive values auto-expire after that many processed months.</span>
+          </label>
+          <button
+            onClick={applyEconomyToAllUsers}
+            disabled={applyingEconomy}
+            className="px-4 py-2 rounded bg-indigo-700 text-white text-sm font-semibold disabled:opacity-60"
+          >
+            {applyingEconomy ? 'Applying...' : 'Apply Sliders To All Users'}
+          </button>
         </div>
 
         <div className="text-xs text-slate-600 space-y-1">
@@ -700,6 +881,7 @@ export default function Admin() {
                 <td className="py-2 pr-3">
                   <div className="text-xs space-y-1 min-w-[240px]">
                     <div><span className="font-semibold">Job:</span> {user.progression?.jobTitle || 'Unknown'}</div>
+                    {pendingAssignedJobs[user.id] ? <div className="text-indigo-700"><span className="font-semibold">Queued Job:</span> {pendingAssignedJobs[user.id]}</div> : null}
                     <div><span className="font-semibold">Edu:</span> {user.progression?.educationLevel || 'Unknown'} ({user.progression?.credentialsCount || 0} creds)</div>
                     <div><span className="font-semibold">Date:</span> M{user.progression?.month || 0} / Y{user.progression?.year || 0} · Tenure {user.progression?.tenureMonths || 0}mo</div>
                     <div><span className="font-semibold">Credit/Happiness:</span> {user.progression?.creditScore || 0} / {user.progression?.happiness || 0}</div>
@@ -760,6 +942,19 @@ export default function Admin() {
                   onChange={(e) => setManageDraft({ ...manageDraft, username: e.target.value })}
                   className="p-2 border rounded"
                 />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs uppercase font-semibold text-slate-500">Assign Job</span>
+                <select
+                  value={manageDraft.assignedJobTitle}
+                  onChange={(e) => setManageDraft({ ...manageDraft, assignedJobTitle: e.target.value })}
+                  className="p-2 border rounded"
+                >
+                  <option value="">Keep current job</option>
+                  {sortedJobTitles.map((title) => (
+                    <option key={title} value={title}>{title}</option>
+                  ))}
+                </select>
               </label>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

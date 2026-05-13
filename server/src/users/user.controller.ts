@@ -37,6 +37,15 @@ export class UserController {
       isAdmin?: boolean;
       username?: string;
       password?: string;
+      jobTitle?: string;
+      economyOverrides?: {
+        recessionSeverity?: number;
+        inflationPressure?: number;
+        jobAvailability?: number;
+        marketVolatility?: number;
+        nextMonthStockShock?: number;
+      };
+      economyApplyMonths?: number;
     },
   ) {
     return this.userService.adminUpdateUser(authorization, targetUserId, {
@@ -46,6 +55,9 @@ export class UserController {
       isAdmin: body.isAdmin,
       username: body.username,
       password: body.password,
+      jobTitle: body.jobTitle,
+      economyOverrides: body.economyOverrides,
+      economyApplyMonths: body.economyApplyMonths,
     });
   }
 
