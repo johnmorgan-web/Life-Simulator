@@ -30,6 +30,19 @@ const PASSWORD_COMPLEXITY_REGEX = /^(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const USERNAME_CREATE_REGEX = /^[A-Za-z0-9]+$/;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 
+const ADMIN_GIFT_TEMPLATES: Record<string, string> = {
+  job: 'Congratulations on the new job!',
+  graduation: 'Congratulations on your graduation!',
+  car: 'Congrats on your new car purchase!',
+  promotion: 'Congratulations on your promotion!',
+  certification: 'Congrats on earning your new certification!',
+  streak: 'Great consistency this month. Keep the streak alive!',
+  'recovery-grant': 'Recovery support grant: keep rebuilding momentum.',
+  'hardship-relief': 'Hardship relief support has been approved this month.',
+  'transition-support': 'Workforce transition support granted for your next step.',
+  milestone: 'Great progress this month. Keep going!',
+};
+
 @Injectable()
 export class UserService implements OnModuleInit {
   private readonly authSessions = new Map<string, { userId: string; expiresAt: number }>();
@@ -50,6 +63,36 @@ export class UserService implements OnModuleInit {
       jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw?.jobAvailability || 100)))),
       marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw?.marketVolatility || 100)))),
       nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw?.nextMonthStockShock || 0))),
+    };
+  }
+
+  private normalizeHistoricalEconomicEvent(raw: any) {
+    if (raw === null) return null;
+    if (!raw || typeof raw !== 'object') return null;
+
+    const id = String(raw?.id || '').trim();
+    const title = String(raw?.title || '').trim();
+    if (!id || !title) return null;
+
+    const effectsRaw = raw?.effects && typeof raw.effects === 'object' ? raw.effects : {};
+    return {
+      id,
+      title,
+      era: String(raw?.era || 'Historical Event'),
+      summary: String(raw?.summary || ''),
+      totalMonths: Math.max(1, Math.min(36, Math.floor(Number(raw?.totalMonths || raw?.monthsRemaining || 1)))),
+      monthsRemaining: Math.max(0, Math.min(36, Math.floor(Number(raw?.monthsRemaining || raw?.totalMonths || 1)))),
+      startedMonth: Math.max(1, Math.min(12, Number(raw?.startedMonth || 1))),
+      startedYear: Math.max(1, Number(raw?.startedYear || 2026)),
+      effects: {
+        jobLossChance: Math.max(0, Math.min(1, Number(effectsRaw?.jobLossChance || 0))),
+        forcedDowngradeChance: Math.max(0, Math.min(1, Number(effectsRaw?.forcedDowngradeChance || 0))),
+        payCutPercent: Math.max(0, Math.min(0.9, Number(effectsRaw?.payCutPercent || 0))),
+        monthlyStockShock: Math.max(-0.7, Math.min(0.7, Number(effectsRaw?.monthlyStockShock || 0))),
+        essentialCostIncreasePercent: Math.max(0, Math.min(0.6, Number(effectsRaw?.essentialCostIncreasePercent || 0))),
+        creditDragPerMonth: Math.max(0, Math.min(50, Number(effectsRaw?.creditDragPerMonth || 0))),
+        jobSearchBlocked: Boolean(effectsRaw?.jobSearchBlocked),
+      },
     };
   }
 
@@ -264,6 +307,9 @@ export class UserService implements OnModuleInit {
         creditScore: Number((state as any).credit || 0),
         happiness: Number((state as any).happiness || 0),
         netWorth,
+        historicalEventTitle: String((state as any).historicalEconomicEvent?.title || ''),
+        historicalEventMonthsRemaining: Math.max(0, Number((state as any).historicalEconomicEvent?.monthsRemaining || 0)),
+        historicalEventResetNextMonth: Boolean((state as any).historicalEventResetNextMonth),
       },
       updatedAt: entity.updatedAt,
     };
@@ -452,6 +498,26 @@ export class UserService implements OnModuleInit {
         nextMonthStockShock?: number;
       };
       economyApplyMonths?: number;
+      historicalEconomicEvent?: {
+        id?: string;
+        title?: string;
+        era?: string;
+        summary?: string;
+        totalMonths?: number;
+        monthsRemaining?: number;
+        startedMonth?: number;
+        startedYear?: number;
+        effects?: {
+          jobLossChance?: number;
+          forcedDowngradeChance?: number;
+          payCutPercent?: number;
+          monthlyStockShock?: number;
+          essentialCostIncreasePercent?: number;
+          creditDragPerMonth?: number;
+          jobSearchBlocked?: boolean;
+        };
+      } | null;
+      historicalEventResetNextMonth?: boolean;
     },
   ) {
     await this.assertAdminSession(authorization);
@@ -588,6 +654,42 @@ export class UserService implements OnModuleInit {
       nextState.economyOverrideMonthsRemaining = Math.max(0, Math.floor(Number(changes.economyApplyMonths || 0)));
     }
 
+    if (changes.historicalEconomicEvent !== undefined) {
+      nextState.historicalEconomicEvent = this.normalizeHistoricalEconomicEvent(changes.historicalEconomicEvent);
+      nextState.historicalEventResetNextMonth = false;
+      const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
+      const year = Math.max(1, Number(nextState.year || 2026));
+      const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
+      if (nextState.historicalEconomicEvent) {
+        const eventTitle = String(nextState.historicalEconomicEvent.title || 'Historical Event');
+        const months = Math.max(0, Number(nextState.historicalEconomicEvent.monthsRemaining || 0));
+        logs.push({
+          date: `${month}/${year}`,
+          msg: `📚 Admin activated historical scenario: ${eventTitle} (${months} month${months === 1 ? '' : 's'})`,
+        });
+      } else {
+        logs.push({
+          date: `${month}/${year}`,
+          msg: '📚 Admin cleared historical scenario effects.',
+        });
+      }
+      nextState.logs = logs;
+    }
+
+    if (changes.historicalEventResetNextMonth !== undefined) {
+      nextState.historicalEventResetNextMonth = Boolean(changes.historicalEventResetNextMonth);
+      const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
+      const year = Math.max(1, Number(nextState.year || 2026));
+      const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
+      logs.push({
+        date: `${month}/${year}`,
+        msg: nextState.historicalEventResetNextMonth
+          ? '🛟 Admin scheduled return to normal circumstances next month.'
+          : '🛟 Admin canceled next-month normalization schedule.',
+      });
+      nextState.logs = logs;
+    }
+
     user.state = this.buildPersistedState(nextState);
     user.updatedAt = new Date();
     const saved = await this.userStateRepository.save(user);
@@ -623,5 +725,92 @@ export class UserService implements OnModuleInit {
 
     const result = await this.userStateRepository.delete({ id: normalizedTargetId });
     return Number(result.affected || 0) > 0;
+  }
+
+  async adminGiftUser(
+    authorization: string | undefined,
+    targetUserId: string,
+    payload: { amount?: number; templateId?: string },
+  ) {
+    const actingUser = await this.assertAdminSession(authorization);
+
+    const normalizedTargetId = String(targetUserId || '').trim();
+    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
+    if (normalizedTargetId === actingUser.id) throw new BadRequestException('Cannot gift yourself');
+
+    const amount = Number(payload?.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException('Gift amount must be a positive number');
+    }
+
+    const targetUser = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
+    if (!targetUser) throw new BadRequestException('Target user not found');
+
+    const senderState = { ...(actingUser.state || {}) } as Record<string, any>;
+    const recipientState = { ...(targetUser.state || {}) } as Record<string, any>;
+
+    const senderLedger = Array.isArray(senderState.ledger) ? senderState.ledger : [];
+    const allChecksComplete = senderLedger.length > 0 && senderLedger.every((entry: any) => Boolean(entry?.done));
+    if (!allChecksComplete) {
+      throw new ForbiddenException('Complete all ledger checks before gifting players money');
+    }
+
+    const senderChecking = Number(senderState.check || 0);
+    if (!Number.isFinite(senderChecking) || senderChecking - amount < 0) {
+      throw new BadRequestException('Insufficient checking balance to send this gift');
+    }
+
+    const month = Math.max(1, Math.min(12, Number(senderState.month || recipientState.month || 1)));
+    const year = Math.max(1, Number(senderState.year || recipientState.year || 2026));
+    const templateId = String(payload?.templateId || '').trim();
+    const templateMessage = ADMIN_GIFT_TEMPLATES[templateId];
+    if (!templateMessage) {
+      throw new BadRequestException('Invalid gift message template');
+    }
+
+    senderState.check = Math.round((senderChecking - amount) * 100) / 100;
+    const senderLogs = Array.isArray(senderState.logs) ? [...senderState.logs] : [];
+    senderLogs.push({
+      date: `${month}/${year}`,
+      msg: `🎁 You sent $${amount.toFixed(2)} to ${targetUser.username} (${templateMessage}).`,
+    });
+    senderState.logs = senderLogs;
+
+    const pendingGifts = Array.isArray(recipientState.pendingAdminGifts) ? [...recipientState.pendingAdminGifts] : [];
+    pendingGifts.push({
+      amount: Math.round(amount * 100) / 100,
+      fromAdminId: actingUser.id,
+      fromAdminUsername: actingUser.username,
+      message: templateMessage,
+      templateId,
+      queuedMonth: month,
+      queuedYear: year,
+      queuedAt: new Date().toISOString(),
+    });
+    recipientState.pendingAdminGifts = pendingGifts;
+
+    const recipientLogs = Array.isArray(recipientState.logs) ? [...recipientState.logs] : [];
+    recipientLogs.push({
+      date: `${month}/${year}`,
+      msg: `📨 Admin support gift queued for next month from ${actingUser.username}: +$${amount.toFixed(2)} (${templateMessage}).`,
+    });
+    recipientState.logs = recipientLogs;
+
+    actingUser.state = this.buildPersistedState(senderState);
+    actingUser.updatedAt = new Date();
+    targetUser.state = this.buildPersistedState(recipientState);
+    targetUser.updatedAt = new Date();
+
+    await this.userStateRepository.save(actingUser);
+    await this.userStateRepository.save(targetUser);
+
+    return {
+      ok: true,
+      targetUserId: targetUser.id,
+      targetUsername: targetUser.username,
+      amount: Math.round(amount * 100) / 100,
+      templateId,
+      message: templateMessage,
+    };
   }
 }

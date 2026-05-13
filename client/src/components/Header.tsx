@@ -21,6 +21,9 @@ function formatHeaderCurrency(value: number) {
 
 export default function Header({ state, onVerify, verifyEnabled }: any) {
   const { logout, affluenceComparison: affluence, saveStatus, lastSavedAt } = useGame()
+  const activeHistoricalEvent = state?.historicalEconomicEvent && Number(state.historicalEconomicEvent?.monthsRemaining || 0) > 0
+    ? state.historicalEconomicEvent
+    : null
   const logoutDisabled = saveStatus === 'saving'
   const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
   const currentWidth = Math.max(0, Math.min(100, (affluence.currentAffluence / meterMax) * 100))
@@ -109,6 +112,20 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           </div>
         </div>
       </div>
+      {activeHistoricalEvent ? (
+        <div className="max-w-[98vw] mx-auto mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-[11px] font-bold uppercase text-amber-800 tracking-wide">Historical Reenactment Active</p>
+          <p className="text-sm font-semibold text-amber-900 mt-1">
+            {String(activeHistoricalEvent.title || 'Economic Scenario')} ({String(activeHistoricalEvent.era || 'Historical')})
+          </p>
+          <p className="text-xs text-amber-800 mt-1">
+            {String(activeHistoricalEvent.summary || 'This scenario is currently modifying your financial conditions.')}
+          </p>
+          <p className="text-xs font-semibold text-amber-900 mt-1">
+            {Number(activeHistoricalEvent.monthsRemaining || 0)} month(s) remaining out of {Number(activeHistoricalEvent.totalMonths || 0)}.
+          </p>
+        </div>
+      ) : null}
     </header>
   )
 }
