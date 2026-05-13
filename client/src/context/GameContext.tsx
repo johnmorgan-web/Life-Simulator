@@ -1822,6 +1822,15 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 	return {
 		...data,
 		...realEstateState,
+		check: Number(data?.check ?? fallbackState?.check ?? 1200),
+		savings: Number(data?.savings ?? fallbackState?.savings ?? 0),
+		debt: Math.max(0, Number(data?.debt ?? fallbackState?.debt ?? 0)),
+		credit: Math.max(300, Math.min(850, Number(data?.credit ?? fallbackState?.credit ?? 600))),
+		month: Math.max(1, Math.min(12, Number(data?.month ?? fallbackState?.month ?? 2))),
+		year: Math.max(1, Number(data?.year ?? fallbackState?.year ?? 2026)),
+		tenure: Math.max(0, Number(data?.tenure ?? fallbackState?.tenure ?? 0)),
+		jobStartMonth: Math.max(1, Math.min(12, Number(data?.jobStartMonth ?? fallbackState?.jobStartMonth ?? 2))),
+		jobStartYear: Math.max(1, Number(data?.jobStartYear ?? fallbackState?.jobStartYear ?? 2026)),
 		job: normalizedJob,
 		pendingJob: normalizedPendingJob,
 		logs: migrationLogs,
@@ -3188,6 +3197,9 @@ function reducer(state: State, action: any) {
 export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(reducer, initialState)
 	const stateRef = useRef(state)
+	const saveInFlightRef = useRef<Promise<boolean> | null>(null)
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+	const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
 	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
 	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
 	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
@@ -3423,9 +3435,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			buildLedger(safePaySave, safePayDebt, latest)
-			setTimeout(() => {
-				saveGame(latest)
-			}, 60)
+			void saveGame(latest)
 		}
 
 		setTimeout(finalizeMonth, 0)
@@ -3475,26 +3485,52 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	async function openSettlement() {
 		await evaluateApplications()
 		dispatch({ type: 'SET_STATE', payload: { showSettlement: true } })
-		setTimeout(() => {
-			saveGame(stateRef.current)
-		}, 60)
+		void saveGame(stateRef.current)
 	}
 
 	// --- Save / Load / Auth ---
 
 	async function saveGame(stateOverride?: any) {
-		const snapshot = stateOverride ?? state
+		const snapshot = stateOverride ?? stateRef.current
 		if (!snapshot?.id) return false
-		const payload = buildPartialStateUpdate(snapshot)
-		if (!payload) return true
-		if (!('currentUser' in payload) && snapshot.currentUser) {
-			payload.currentUser = snapshot.currentUser
+
+		if (saveInFlightRef.current) {
+			try {
+				await saveInFlightRef.current
+			} catch {
+				// Continue attempting the new save even if a prior one failed.
+			}
 		}
-		const saved = await persistUserState(snapshot.id, payload)
-		if (!saved) return false
-		resetDirtyTracking(snapshot)
-		await refreshPeerSnapshots()
-		return true
+
+		const savePromise = (async () => {
+			const payload = buildPartialStateUpdate(snapshot)
+			if (!payload) {
+				setSaveStatus('saved')
+				if (!lastSavedAt) setLastSavedAt(Date.now())
+				return true
+			}
+			if (!('currentUser' in payload) && snapshot.currentUser) {
+				payload.currentUser = snapshot.currentUser
+			}
+			setSaveStatus('saving')
+			const saved = await persistUserState(snapshot.id, payload)
+			if (!saved) {
+				setSaveStatus('error')
+				return false
+			}
+			resetDirtyTracking(snapshot)
+			setSaveStatus('saved')
+			setLastSavedAt(Date.now())
+			await refreshPeerSnapshots()
+			return true
+		})()
+
+		saveInFlightRef.current = savePromise
+		try {
+			return await savePromise
+		} finally {
+			if (saveInFlightRef.current === savePromise) saveInFlightRef.current = null
+		}
 	}
 
 	async function spinRewardWheel() {
@@ -3726,7 +3762,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		return { ok: true }
 	}
 
-	function logout() {
+	async function logout() {
+		const snapshot = stateRef.current
+		if (snapshot?.id && snapshot?.currentUser) {
+			await saveGame(snapshot)
+		}
+		if (saveInFlightRef.current) {
+			try {
+				await saveInFlightRef.current
+			} catch {
+				// Ignore final-save errors so logout can proceed.
+			}
+		}
 		resetDirtyTracking({})
 		dispatch({ type: 'SET_STATE', payload: { currentUser: null, isAdmin: false, authToken: null } })
 	}
@@ -3758,10 +3805,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	useEffect(() => {
-		if (!state.currentUser) return
-		saveGame()
+		if (!state.currentUser || !state.id) return
+		const timer = setTimeout(() => {
+			if (dirtyStateKeysRef.current.size === 0) return
+			void saveGame(stateRef.current)
+		}, 700)
+		return () => clearTimeout(timer)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [state.currentUser, state.unlockedThemes, state.activeTheme])
+	}, [state])
+
+	useEffect(() => {
+		if (saveStatus !== 'saved') return
+		const timer = setTimeout(() => {
+			setSaveStatus((prev) => (prev === 'saved' ? 'idle' : prev))
+		}, 1800)
+		return () => clearTimeout(timer)
+	}, [saveStatus])
 
 	function triggerCelebration(event: 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow') {
 		dispatch({ type: 'TRIGGER_CELEBRATION', payload: event })
@@ -3942,7 +4001,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
 			{children}
 		</GameContext.Provider>
 	)
