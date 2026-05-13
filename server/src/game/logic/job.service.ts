@@ -4,6 +4,9 @@ import jobBoard from '../../data/jobBoard.constants';
 
 @Injectable()
 export class JobService {
+  private normalizeCredential(value: any): string {
+    return String(value || '').trim().toLowerCase();
+  }
   private WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
     'Tech Startup Founder': 250000,
     Millionaire: 500000,
@@ -279,8 +282,11 @@ export class JobService {
     const roleReqFromReq = normalized.roleReqFromReq;
 
     const credentials = Array.isArray(state?.credentials) ? state.credentials : [];
-    const educationMet = !resolvedReq || credentials.includes(resolvedReq);
-    const certificationMet = !resolvedCertReq || credentials.includes(resolvedCertReq);
+    const normalizedCredentials = new Set(
+      credentials.map((value: any) => this.normalizeCredential(value)).filter(Boolean),
+    );
+    const educationMet = !resolvedReq || normalizedCredentials.has(this.normalizeCredential(resolvedReq));
+    const certificationMet = !resolvedCertReq || normalizedCredentials.has(this.normalizeCredential(resolvedCertReq));
     const transitMet = state.transit.level >= job.tReq;
     const netWorth = this.computeNetWorth(state);
     const wealthRequirement = Number(this.WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0);
