@@ -20,10 +20,27 @@ function formatHeaderCurrency(value: number) {
 }
 
 export default function Header({ state, onVerify, verifyEnabled }: any) {
-  const { logout, affluenceComparison: affluence } = useGame()
+  const { logout, affluenceComparison: affluence, saveStatus, lastSavedAt } = useGame()
+  const logoutDisabled = saveStatus === 'saving'
   const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
   const currentWidth = Math.max(0, Math.min(100, (affluence.currentAffluence / meterMax) * 100))
   const averageWidth = Math.max(0, Math.min(100, (affluence.average / meterMax) * 100))
+  const saveIndicator = (() => {
+    if (!state?.currentUser) return null
+    if (saveStatus === 'saving') {
+      return { label: 'Saving...', className: 'bg-amber-100 text-amber-800 border-amber-200' }
+    }
+    if (saveStatus === 'error') {
+      return { label: 'Save Failed', className: 'bg-rose-100 text-rose-700 border-rose-200' }
+    }
+    if (saveStatus === 'saved') {
+      return { label: 'Saved', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+    }
+    if (lastSavedAt) {
+      return { label: 'Autosave Ready', className: 'bg-slate-100 text-slate-600 border-slate-200' }
+    }
+    return { label: 'Ready', className: 'bg-slate-100 text-slate-600 border-slate-200' }
+  })()
 
   return (
     <header className="p-3 sm:p-5 bg-white border-b border-slate-200 sticky top-0 z-40">
@@ -65,6 +82,11 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           <div className="text-left sm:text-right mr-0 sm:mr-2">
             <span className="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold uppercase">{state.city.name}</span>
             <p className="text-base font-bold text-slate-500">{new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+            {saveIndicator ? (
+              <div className={`mt-1 inline-flex items-center px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wide ${saveIndicator.className}`}>
+                {saveIndicator.label}
+              </div>
+            ) : null}
             <div className="xl:hidden mt-2 w-[170px] sm:ml-auto bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
               <p className="text-[10px] font-bold text-slate-600">Affluence #{affluence.rank}/{affluence.count}</p>
               <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
@@ -76,7 +98,13 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
             </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button onClick={() => logout()} className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 hover:bg-rose-100">Logout</button>
+            <button
+              onClick={() => logout()}
+              disabled={logoutDisabled}
+              className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold ${logoutDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}
+            >
+              {logoutDisabled ? 'Saving...' : 'Logout'}
+            </button>
             <button onClick={onVerify} disabled={!verifyEnabled} className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-bold uppercase transition-all ${verifyEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Verify Journal</button>
           </div>
         </div>
