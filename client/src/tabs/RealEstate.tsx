@@ -73,6 +73,216 @@ function propertyConditionTrend(property: any, currentMonth: number, currentYear
   return { label: 'Rapid Decay', tone: 'text-rose-700' }
 }
 
+function percent(value: number) {
+  return `${value.toFixed(1)}%`
+}
+
+function getRealEstateVocabulary(learningLevel: LearningLevel, usePlainLanguage: boolean) {
+  if (usePlainLanguage) {
+    if (learningLevel === 'elementary') {
+      return {
+        monthlySectionTitle: 'Monthly Money View',
+        grossLabel: 'Money In',
+        operatingLabel: 'Property Bills',
+        debtLabel: 'Loan Payment',
+        netLabel: 'Money Left',
+        marginLabel: 'Profit Share',
+        breakevenLabel: 'Units Needed To Break Even',
+        scenarioSectionTitle: 'What-if Outcomes',
+        askingLabel: 'Price',
+        rentPerUnitLabel: 'Rent Per Home',
+        capRateLabel: 'Yearly Return',
+        incomeModelLabel: 'How It Pays You',
+        estCashRequiredLabel: 'Money Needed (Cash Buy)',
+        estCashToCloseLabel: 'Money Needed To Close',
+        foreclosureLabel: 'Bank Sale',
+        learningLevelLabel: 'Learning Level',
+        plainLanguageLabel: 'Simple Words',
+        refreshMarketLabel: 'Refresh Market',
+        buyModeLabel: 'Buy Mode',
+        mortgageOptionLabel: 'Loan',
+        cashOptionLabel: 'Cash (discount)',
+        termLabel: 'Loan Length',
+        downPaymentLabel: 'Down Payment',
+        lowLabel: 'Low',
+        highLabel: 'High',
+      }
+    }
+    if (learningLevel === 'middle-school') {
+      return {
+        monthlySectionTitle: 'Monthly Profit View',
+        grossLabel: 'Income',
+        operatingLabel: 'Operating Bills',
+        debtLabel: 'Debt Payment',
+        netLabel: 'Net Profit',
+        marginLabel: 'Profit Margin',
+        breakevenLabel: 'Break-even Occupancy',
+        scenarioSectionTitle: 'What-if Outcomes',
+        askingLabel: 'Asking Price',
+        rentPerUnitLabel: 'Rent / Unit',
+        capRateLabel: 'Cap Rate',
+        incomeModelLabel: 'Income Model',
+        estCashRequiredLabel: 'Estimated Cash Required',
+        estCashToCloseLabel: 'Estimated Cash To Close',
+        foreclosureLabel: 'Foreclosure Listing',
+        learningLevelLabel: 'Learning Level',
+        plainLanguageLabel: 'Plain Language',
+        refreshMarketLabel: 'Refresh Shared Market',
+        buyModeLabel: 'Buy Mode',
+        mortgageOptionLabel: 'Mortgage',
+        cashOptionLabel: 'Cash (discounted)',
+        termLabel: 'Term',
+        downPaymentLabel: 'Down Payment',
+        lowLabel: 'Low',
+        highLabel: 'High',
+      }
+    }
+  }
+
+  if (learningLevel === 'high-school') {
+    return {
+      monthlySectionTitle: 'Monthly P&L Snapshot',
+      grossLabel: 'Gross Revenue',
+      operatingLabel: 'Operating Costs',
+      debtLabel: 'Debt Service',
+      netLabel: 'Net Cashflow',
+      marginLabel: 'Net Margin',
+      breakevenLabel: 'Break-even Occupancy',
+      scenarioSectionTitle: 'Scenario Matrix',
+      askingLabel: 'Asking',
+      rentPerUnitLabel: 'Rent/Unit',
+      capRateLabel: 'Cap Rate',
+      incomeModelLabel: 'Income Model',
+      estCashRequiredLabel: 'Est. Cash Required',
+      estCashToCloseLabel: 'Est. Cash To Close',
+      foreclosureLabel: 'Foreclosure Listing',
+      learningLevelLabel: 'Learning Level',
+      plainLanguageLabel: 'Plain Language',
+      refreshMarketLabel: 'Refresh Shared Market',
+      buyModeLabel: 'Buy Mode',
+      mortgageOptionLabel: 'Mortgage',
+      cashOptionLabel: 'Cash (discounted)',
+      termLabel: 'Term',
+      downPaymentLabel: 'Down Payment',
+      lowLabel: 'Low',
+      highLabel: 'High',
+    }
+  }
+
+  return {
+    monthlySectionTitle: 'Monthly P&L Snapshot',
+    grossLabel: 'Gross Revenue',
+    operatingLabel: 'Operating Expenses',
+    debtLabel: 'Debt Service',
+    netLabel: 'Net Cashflow',
+    marginLabel: 'Net Margin',
+    breakevenLabel: 'Break-even Occupancy',
+    scenarioSectionTitle: 'Scenario Matrix',
+    askingLabel: 'Asking',
+    rentPerUnitLabel: 'Rent/Unit',
+    capRateLabel: 'Cap Rate',
+    incomeModelLabel: 'Income Model',
+    estCashRequiredLabel: 'Est. Cash Required',
+    estCashToCloseLabel: 'Est. Cash To Close',
+    foreclosureLabel: 'Foreclosure Listing',
+    learningLevelLabel: 'Learning Level',
+    plainLanguageLabel: 'Plain Language',
+    refreshMarketLabel: 'Refresh Shared Market',
+    buyModeLabel: 'Buy Mode',
+    mortgageOptionLabel: 'Mortgage',
+    cashOptionLabel: 'Cash (discounted)',
+    termLabel: 'Term',
+    downPaymentLabel: 'Down Payment',
+    lowLabel: 'Low',
+    highLabel: 'High',
+  }
+}
+
+function amenityUpkeepRate(amenities: string[]) {
+  return amenities.reduce((sum, amenity) => sum + Number(amenityImpact[amenity]?.upkeepRate || 0), 0)
+}
+
+function getMaintenanceEducation(learningLevel: LearningLevel, usePlainLanguage: boolean) {
+  if (usePlainLanguage) {
+    if (learningLevel === 'elementary') {
+      return {
+        summary: 'Fix-up plans help your building stay healthy. More care now means fewer expensive problems later.',
+        leanTooltip: 'Spend less now. Saves money today, but the building wears out faster.',
+        balancedTooltip: 'Normal care level. Good mix of cost and protection.',
+        protectiveTooltip: 'Spend more now to protect the building and slow wear.',
+        refreshTooltip: 'Small makeover. Lower budget and smaller improvement.',
+        modernizeTooltip: 'Bigger upgrade. Better improvement with medium budget.',
+        signatureTooltip: 'Top-level makeover. Most expensive, but strongest improvement.',
+        optionsTitle: 'What these buttons do',
+        leanLine: 'Lean Maintenance: spend less each month, but condition drops faster.',
+        balancedLine: 'Balanced Maintenance: standard spending and steady protection.',
+        protectiveLine: 'Protective Maintenance: higher spending to keep quality high.',
+        refreshLine: 'Refresh Plan: smaller renovation budget with lighter results.',
+        modernizeLine: 'Modernize Plan: fuller renovation with stronger results.',
+        signatureLine: 'Signature Reposition: premium renovation for maximum improvement.',
+        valueRecoveryLine: 'Value Recovery: how much of renovation spending turns into higher property value.',
+      }
+    }
+    if (learningLevel === 'middle-school') {
+      return {
+        summary: 'Renovation improves condition over time, while maintenance controls how quickly the building wears down.',
+        leanTooltip: 'Lower monthly upkeep costs, but faster condition decline.',
+        balancedTooltip: 'Standard upkeep cost and balanced condition protection.',
+        protectiveTooltip: 'Higher upkeep cost to better preserve condition and value.',
+        refreshTooltip: 'Lower-cost renovation with moderate condition recovery.',
+        modernizeTooltip: 'Mid-cost renovation with stronger condition and value recovery.',
+        signatureTooltip: 'Premium renovation with strongest condition recovery and value lift.',
+        optionsTitle: 'What these options mean',
+        leanLine: 'Lean Maintenance: reduced upkeep spend (0.8x), faster wear.',
+        balancedLine: 'Balanced Maintenance: standard upkeep spend (1.0x).',
+        protectiveLine: 'Protective Maintenance: higher upkeep spend (1.2x), slower wear.',
+        refreshLine: 'Refresh Plan: lighter renovation at 55% budget with partial value recovery.',
+        modernizeLine: 'Modernize Plan: broader renovation at 95% budget with stronger value recovery.',
+        signatureLine: 'Signature Reposition: premium renovation at 135% budget with highest value recovery.',
+        valueRecoveryLine: 'Value Recovery Rate: percent of renovation spending that converts into property value.',
+      }
+    }
+  }
+
+  if (learningLevel === 'high-school') {
+    return {
+      summary: 'Renovations restore condition incrementally while maintenance intensity determines ongoing decay velocity.',
+      leanTooltip: 'Lower opex profile, but accelerates condition depreciation.',
+      balancedTooltip: 'Neutral upkeep posture with moderate condition preservation.',
+      protectiveTooltip: 'Higher opex posture to suppress decay and preserve valuation.',
+      refreshTooltip: 'Lower-capex renovation tranche with limited value recapture.',
+      modernizeTooltip: 'Core-capex renovation with stronger condition and valuation recapture.',
+      signatureTooltip: 'Premium capex repositioning with maximal condition recovery and value accretion.',
+      optionsTitle: 'What these options mean',
+      leanLine: 'Lean Maintenance: Reduced upkeep spend (0.8x). Improves short-run cashflow but increases long-run condition drag.',
+      balancedLine: 'Balanced Maintenance: Standard upkeep spend (1.0x). Keeps condition relatively stable without overspending.',
+      protectiveLine: 'Protective Maintenance: Elevated upkeep spend (1.2x). Slows decay materially and protects future value.',
+      refreshLine: 'Refresh Plan: Light renovation at 55% budget. Partial condition recovery and lower value conversion efficiency.',
+      modernizeLine: 'Modernize Plan: Fuller renovation at 95% budget. Better condition restoration and stronger value conversion.',
+      signatureLine: 'Signature Reposition: Premium overhaul at 135% budget. Maximum condition restoration and strongest value accretion.',
+      valueRecoveryLine: 'Value Recovery Rate: Share of renovation spend that converts into incremental asset value; >1.0 implies net value creation.',
+    }
+  }
+
+  return {
+    summary: 'Renovations restore condition progressively while maintenance intensity governs structural decay and long-horizon asset preservation.',
+    leanTooltip: 'Lower ongoing operating expenditure, with elevated condition degradation risk over time.',
+    balancedTooltip: 'Baseline operating posture balancing expenditure control and condition retention.',
+    protectiveTooltip: 'Higher recurring expenditure to minimize deterioration and preserve valuation resilience.',
+    refreshTooltip: 'Lower-capital renovation scope with partial condition normalization and moderate value recapture.',
+    modernizeTooltip: 'Comprehensive renovation scope delivering stronger condition normalization and valuation recapture.',
+    signatureTooltip: 'Premium repositioning program with maximal condition uplift and top-tier value accretion potential.',
+    optionsTitle: 'What these options mean',
+    leanLine: 'Lean Maintenance: Reduced upkeep spend (0.8x). Enhances near-term free cash flow but compounds deferred maintenance risk.',
+    balancedLine: 'Balanced Maintenance: Standard upkeep spend (1.0x). Maintains operational stability without excess cost intensity.',
+    protectiveLine: 'Protective Maintenance: Higher upkeep spend (1.2x). Dampens decay trajectory and defends long-term equity value.',
+    refreshLine: 'Refresh Plan: Light-capex renovation at 55% budget. Delivers targeted condition lift with limited value conversion.',
+    modernizeLine: 'Modernize Plan: Core-capex renovation at 95% budget. Improves physical condition and supports stronger valuation recapture.',
+    signatureLine: 'Signature Reposition: Premium-capex renovation at 135% budget. Maximizes condition recovery and value accretion.',
+    valueRecoveryLine: 'Value Recovery Rate: Ratio of renovation spend that capitalizes into asset value; values above 1.0 indicate positive value arbitrage.',
+  }
+}
+
 export default function RealEstate() {
   const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts } = useGame()
   const learningLevel: LearningLevel = state.learningLevel || state.realEstateLearningLevel || state.marketLearningLevel || 'adult'
@@ -129,6 +339,43 @@ export default function RealEstate() {
       }
     }).sort((a: any, b: any) => b.listingCount - a.listingCount)
   }, [cityData, cityUserCounts, market, properties])
+
+  const vocabulary = useMemo(() => getRealEstateVocabulary(learningLevel, usePlainLanguage), [learningLevel, usePlainLanguage])
+  const maintenanceEducation = useMemo(() => getMaintenanceEducation(learningLevel, usePlainLanguage), [learningLevel, usePlainLanguage])
+
+  const lastMonthBreakdownByProperty = useMemo(() => {
+    const rows = Array.isArray(state.realEstateLastMonthPropertyBreakdown) ? state.realEstateLastMonthPropertyBreakdown : []
+    return rows.reduce((acc: Record<string, any>, row: any) => {
+      acc[String(row.propertyId || '')] = row
+      return acc
+    }, {})
+  }, [state.realEstateLastMonthPropertyBreakdown])
+
+  const scenarioProjection = (property: any, occupancyRate: number, conditionAssumption: number) => {
+    const units = Math.max(1, Number(property.units || 1))
+    const occupiedUnits = Math.max(0, Math.min(units, Math.round(units * occupancyRate)))
+    const rentPerUnit = Math.max(450, Number(property.rentPerUnit || 0))
+    const propertyValue = Math.max(60000, Number(property.propertyValue || 0))
+    const debtService = Math.max(0, Number(property.monthlyDebtService || 0))
+    const city = (Array.isArray(cityData) ? cityData : []).find((c: any) => c.name === property.cityName) || { p: 1, r: 1 }
+    const upkeepRate = amenityUpkeepRate(Array.isArray(property.amenities) ? property.amenities : [])
+    const annualTaxRate = 0.009 + Number(city.p || 1) * 0.003
+    const annualInsuranceRate = 0.0035 + Number(city.r || 1) * 0.001
+    const annualMaintenanceRate = 0.014 + (Math.max(0, 85 - conditionAssumption) * 0.00025) + upkeepRate
+    const operatingCosts = Math.round((propertyValue * (annualTaxRate + annualInsuranceRate + annualMaintenanceRate) / 12) * 100) / 100
+    const gross = Math.round((occupiedUnits * rentPerUnit) * 100) / 100
+    const net = Math.round((gross - operatingCosts - debtService) * 100) / 100
+    const margin = gross > 0 ? (net / gross) * 100 : -100
+    return { gross, operatingCosts, debtService, net, margin }
+  }
+
+  const breakEvenOccupancyPercent = (property: any, conditionAssumption: number) => {
+    const units = Math.max(1, Number(property.units || 1))
+    const rentPerUnit = Math.max(450, Number(property.rentPerUnit || 0))
+    const projection = scenarioProjection(property, 1, conditionAssumption)
+    const breakEvenUnits = (projection.operatingCosts + projection.debtService) / Math.max(1, rentPerUnit)
+    return Math.max(0, Math.min(100, (breakEvenUnits / units) * 100))
+  }
 
   const submitOffer = (listing: any) => {
     const result = submitRealEstateOffer(listing, { downPaymentPct, purchaseMode, mortgageTermYears })
@@ -231,7 +478,7 @@ export default function RealEstate() {
         <p className="text-xs text-slate-600 mt-1">{selectedCity} currently has {selectedCityInsights.usersInCity} active user{selectedCityInsights.usersInCity === 1 ? '' : 's'} with {selectedCityInsights.pressureLabel.toLowerCase()} supply pressure ({selectedCityInsights.pressureMultiplier.toFixed(2)}x demand).</p>
         <div className="flex flex-wrap gap-3 mt-3">
           <label className="text-sm text-slate-700 flex items-center gap-2">
-            Learning level
+            {vocabulary.learningLevelLabel}
             <select
               value={learningLevel}
               onChange={(e) => dispatch({
@@ -263,9 +510,9 @@ export default function RealEstate() {
                 },
               })}
             />
-            Plain language
+            {vocabulary.plainLanguageLabel}
           </label>
-          <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => refreshRealEstateMarket()}>Refresh Shared Market</button>
+          <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => refreshRealEstateMarket()}>{vocabulary.refreshMarketLabel}</button>
           <select
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value)}
@@ -276,15 +523,15 @@ export default function RealEstate() {
             ))}
           </select>
           <label className="text-sm text-slate-700 flex items-center gap-2">
-            Buy Mode
+            {vocabulary.buyModeLabel}
             <select value={purchaseMode} onChange={(e) => setPurchaseMode(e.target.value === 'cash' ? 'cash' : 'mortgage')} className="px-2 py-1 rounded border border-slate-300 bg-white">
-              <option value="mortgage">Mortgage</option>
-              <option value="cash">Cash (discounted)</option>
+              <option value="mortgage">{vocabulary.mortgageOptionLabel}</option>
+              <option value="cash">{vocabulary.cashOptionLabel}</option>
             </select>
           </label>
           {purchaseMode === 'mortgage' ? (
             <label className="text-sm text-slate-700 flex items-center gap-2">
-              Term
+              {vocabulary.termLabel}
               <select value={String(mortgageTermYears)} onChange={(e) => setMortgageTermYears(Number(e.target.value) === 15 ? 15 : 30)} className="px-2 py-1 rounded border border-slate-300 bg-white">
                 <option value="15">15 years</option>
                 <option value="30">30 years</option>
@@ -293,7 +540,7 @@ export default function RealEstate() {
           ) : null}
           {purchaseMode === 'mortgage' ? (
             <label className="text-sm text-slate-700 flex items-center gap-2">
-            Down Payment
+            {vocabulary.downPaymentLabel}
             <select
               value={String(downPaymentPct)}
               onChange={(e) => setDownPaymentPct(Number(e.target.value))}
@@ -358,27 +605,27 @@ export default function RealEstate() {
               </div>
               <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
                 <div>
-                  <p className="text-[10px] uppercase text-slate-500">Asking</p>
+                  <p className="text-[10px] uppercase text-slate-500">{vocabulary.askingLabel}</p>
                   <p className="font-bold text-slate-800">{currency(listing.askingPrice)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase text-slate-500">Rent/Unit</p>
+                  <p className="text-[10px] uppercase text-slate-500">{vocabulary.rentPerUnitLabel}</p>
                   <p className="font-bold text-slate-800">{currency(listing.askingRentPerUnit)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase text-slate-500">Cap Rate</p>
+                  <p className="text-[10px] uppercase text-slate-500">{vocabulary.capRateLabel}</p>
                   <p className="font-bold text-slate-800">{capRate.toFixed(1)}%</p>
                 </div>
               </div>
               <p className="text-xs text-slate-600 mt-2">Amenities: {(listing.amenities || []).join(', ') || 'None listed'}</p>
-              <p className="text-xs text-slate-600 mt-1">Income model: {listing.incomeLabel || 'Monthly Rent'}</p>
+              <p className="text-xs text-slate-600 mt-1">{vocabulary.incomeModelLabel}: {listing.incomeLabel || 'Monthly Rent'}</p>
               <p className="text-[11px] text-slate-700 mt-1">{listingEducationBlurb(listing, learningLevel, usePlainLanguage)}</p>
               <p className="text-xs text-slate-700 mt-1 font-semibold">
                 {purchaseMode === 'cash'
-                  ? `Est. cash required: ${currency(estimatedCashPurchase(listing))}`
-                  : `Est. cash to close: ${currency(estimatedMortgageCash(listing))}`}
+                  ? `${vocabulary.estCashRequiredLabel}: ${currency(estimatedCashPurchase(listing))}`
+                  : `${vocabulary.estCashToCloseLabel}: ${currency(estimatedMortgageCash(listing))}`}
               </p>
-              {listing.foreclosure ? <p className="text-[11px] font-bold text-rose-700 mt-1">Foreclosure listing</p> : null}
+              {listing.foreclosure ? <p className="text-[11px] font-bold text-rose-700 mt-1">{vocabulary.foreclosureLabel}</p> : null}
             </div>
           )
         })}
@@ -408,12 +655,23 @@ export default function RealEstate() {
                 .filter((a) => !(property.amenities || []).includes(a))
                 .sort((a, b) => Number(amenityImpact[a]?.installCost || 0) - Number(amenityImpact[b]?.installCost || 0))
               const conditionTrend = propertyConditionTrend(property, Number(state.month || 1), Number(state.year || 2026))
+              const lastMonth = lastMonthBreakdownByProperty[String(property.id)]
+              const grossIncome = Number(lastMonth?.grossIncome ?? 0)
+              const operatingCosts = Number(lastMonth?.operatingCosts ?? 0)
+              const debtService = Number(lastMonth?.debtService ?? Number(property.monthlyDebtService || 0))
+              const netCashflow = Number(lastMonth?.netCashflow ?? property.lastNetCashflow ?? 0)
+              const marginPercent = grossIncome > 0 ? (netCashflow / grossIncome) * 100 : -100
+              const breakEven = breakEvenOccupancyPercent(property, Number(property.condition || 70))
+              const lowOccLowCond = scenarioProjection(property, 0.6, 45)
+              const lowOccHighCond = scenarioProjection(property, 0.6, 90)
+              const highOccLowCond = scenarioProjection(property, 0.95, 45)
+              const highOccHighCond = scenarioProjection(property, 0.95, 90)
               return (
                 <div key={property.id} className="bg-slate-50 rounded p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-semibold">{property.templateName} - {property.cityName}</p>
                     <p className={`font-bold ${Number(property.lastNetCashflow || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      Last net: {currency(property.lastNetCashflow)}
+                      {vocabulary.netLabel}: {currency(property.lastNetCashflow)}
                     </p>
                   </div>
                   <p className="text-xs text-slate-600 mt-1">
@@ -429,13 +687,71 @@ export default function RealEstate() {
                     Condition trend: {conditionTrend.label}
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Renovations restore condition a little each month. Maintenance level reduces how fast the building wears down.
+                    {maintenanceEducation.summary}
                   </p>
                   {Number(property.renovationMonthsRemaining || 0) > 0 ? (
                     <p className="text-[11px] text-indigo-700 font-semibold mt-1">
                       Active renovation: {property.renovationPlan || 'Capital Plan'} with about {currency(property.renovationBudgetRemaining)} left to spend.
                     </p>
                   ) : null}
+
+                  <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+                    <p className="text-xs font-semibold text-slate-800">{vocabulary.monthlySectionTitle}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-2 text-[11px]">
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className="uppercase text-[10px] text-slate-500">{vocabulary.grossLabel}</p>
+                        <p className="font-semibold text-slate-800">{currency(grossIncome)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className="uppercase text-[10px] text-slate-500">{vocabulary.operatingLabel}</p>
+                        <p className="font-semibold text-slate-800">{currency(operatingCosts)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className="uppercase text-[10px] text-slate-500">{vocabulary.debtLabel}</p>
+                        <p className="font-semibold text-slate-800">{currency(debtService)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className="uppercase text-[10px] text-slate-500">{vocabulary.netLabel}</p>
+                        <p className={`font-semibold ${netCashflow >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(netCashflow)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className="uppercase text-[10px] text-slate-500">{vocabulary.marginLabel}</p>
+                        <p className={`font-semibold ${marginPercent >= 15 ? 'text-emerald-700' : marginPercent >= 5 ? 'text-amber-700' : 'text-rose-700'}`}>{percent(marginPercent)}</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-2">{vocabulary.breakevenLabel}: <span className="font-semibold">{percent(breakEven)}</span></p>
+                  </div>
+
+                  <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+                    <p className="text-xs font-semibold text-slate-800">{vocabulary.scenarioSectionTitle}</p>
+                    <p className="text-[11px] text-slate-600 mt-1">Rows are occupancy levels. Columns are condition levels.</p>
+                    <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+                      <div className="bg-slate-50 rounded p-2" />
+                      <div className="bg-slate-50 rounded p-2 text-slate-700 font-semibold">{vocabulary.lowLabel} condition</div>
+                      <div className="bg-slate-50 rounded p-2 text-slate-700 font-semibold">{vocabulary.highLabel} condition</div>
+
+                      <div className="bg-slate-50 rounded p-2 text-slate-700 font-semibold">{vocabulary.lowLabel} occupancy</div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className={`font-semibold ${lowOccLowCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(lowOccLowCond.net)}</p>
+                        <p className="text-slate-500">{percent(lowOccLowCond.margin)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className={`font-semibold ${lowOccHighCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(lowOccHighCond.net)}</p>
+                        <p className="text-slate-500">{percent(lowOccHighCond.margin)}</p>
+                      </div>
+
+                      <div className="bg-slate-50 rounded p-2 text-slate-700 font-semibold">{vocabulary.highLabel} occupancy</div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className={`font-semibold ${highOccLowCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(highOccLowCond.net)}</p>
+                        <p className="text-slate-500">{percent(highOccLowCond.margin)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2">
+                        <p className={`font-semibold ${highOccHighCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(highOccHighCond.net)}</p>
+                        <p className="text-slate-500">{percent(highOccHighCond.margin)}</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span className="tooltip-anchor">
                       <button
@@ -444,7 +760,7 @@ export default function RealEstate() {
                       >
                         Lean Maintenance
                       </button>
-                      <span className="tooltip-bubble">Lean Maintenance: Spend less on upkeep. Lowers ongoing costs but the building condition decays faster over time.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.leanTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -453,7 +769,7 @@ export default function RealEstate() {
                       >
                         Balanced Maintenance
                       </button>
-                      <span className="tooltip-bubble">Balanced Maintenance: Standard upkeep spending. Condition holds roughly steady without over-investing.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.balancedTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -462,7 +778,7 @@ export default function RealEstate() {
                       >
                         Protective Maintenance
                       </button>
-                      <span className="tooltip-bubble">Protective Maintenance: Higher spending on upkeep. Significantly slows condition decay and preserves asset value long-term.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.protectiveTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -472,7 +788,7 @@ export default function RealEstate() {
                       >
                         Refresh Plan
                       </button>
-                      <span className="tooltip-bubble">Refresh Plan: Light touch renovation at 55% of standard budget. Cosmetic fixes only, restores some condition with a 76% value recovery rate on dollars spent.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.refreshTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -482,7 +798,7 @@ export default function RealEstate() {
                       >
                         Modernize Plan
                       </button>
-                      <span className="tooltip-bubble">Modernize Plan: Full renovation at 95% of standard budget. Upgrades systems and finishes, restores more condition with a 92% value recovery rate on dollars spent.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.modernizeTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -492,20 +808,20 @@ export default function RealEstate() {
                       >
                         {Number(property.renovationMonthsRemaining || 0) > 0 ? `Renovating (${property.renovationMonthsRemaining} mo)` : 'Signature Reposition'}
                       </button>
-                      <span className="tooltip-bubble">Signature Reposition: Premium overhaul at 135% of standard budget. Full repositioning maximizes condition recovery and can add value faster than cost at a 108% recovery rate.<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble">{maintenanceEducation.signatureTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => sellInvestmentProperty(property.id)}>Sell & Relist</button>
                   </div>
                   <details className="mt-3">
-                    <summary className="text-[11px] text-slate-500 cursor-pointer select-none hover:text-slate-700">▸ What do these options mean?</summary>
+                    <summary className="text-[11px] text-slate-500 cursor-pointer select-none hover:text-slate-700">▸ {maintenanceEducation.optionsTitle}</summary>
                     <div className="mt-2 space-y-1 text-[11px] text-slate-600 bg-slate-100 rounded p-2">
-                      <p><strong>Lean Maintenance</strong> — Reduced upkeep spend (0.8×). Saves money each month but the building wears down faster. Best when cash flow is tight and the property is already in good shape.</p>
-                      <p><strong>Balanced Maintenance</strong> — Standard upkeep spend (1×). Keeps condition roughly stable over time without over-investing.</p>
-                      <p><strong>Protective Maintenance</strong> — Higher upkeep spend (1.2×). Significantly slows condition decay. Best for older buildings or high-value assets where condition loss is expensive to recover.</p>
-                      <p><strong>Refresh Plan</strong> — Light cosmetic renovation at a smaller budget (55%). Recovers some condition. Only 76 cents of every dollar spent converts to property value growth.</p>
-                      <p><strong>Modernize Plan</strong> — Full systems-and-finishes renovation at a standard budget (95%). Stronger condition recovery. 92 cents of every dollar spent adds to property value.</p>
-                      <p><strong>Signature Reposition</strong> — Premium overhaul at an elevated budget (135%). Maximum condition recovery and highest value accretion: every dollar spent returns $1.08 in property value growth, making it a net value creator.</p>
-                      <p><strong>Value Recovery Rate</strong> — The portion of renovation spending that converts into increased property value. Above 1.0 means the renovation literally grows the asset faster than it costs.</p>
+                      <p><strong>Lean Maintenance</strong> - {maintenanceEducation.leanLine}</p>
+                      <p><strong>Balanced Maintenance</strong> - {maintenanceEducation.balancedLine}</p>
+                      <p><strong>Protective Maintenance</strong> - {maintenanceEducation.protectiveLine}</p>
+                      <p><strong>Refresh Plan</strong> - {maintenanceEducation.refreshLine}</p>
+                      <p><strong>Modernize Plan</strong> - {maintenanceEducation.modernizeLine}</p>
+                      <p><strong>Signature Reposition</strong> - {maintenanceEducation.signatureLine}</p>
+                      <p><strong>Value Recovery Rate</strong> - {maintenanceEducation.valueRecoveryLine}</p>
                     </div>
                   </details>
                   <div className="mt-2 text-xs text-slate-600">Amenities: {(property.amenities || []).map((amenity: string) => titleizeAmenity(amenity)).join(', ') || 'None'}</div>
