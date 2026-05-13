@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { GameService } from '../game/logic/game.service';
 import { GameState } from '../game/types/game.types';
 import { UserStateEntity } from './entities/user-state.entity';
+import jobBoard from '../data/jobBoard.constants';
 
 const NON_PERSISTED_STATE_KEYS = new Set<string>([
   'jobMarket',
@@ -32,6 +33,25 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 @Injectable()
 export class UserService implements OnModuleInit {
   private readonly authSessions = new Map<string, { userId: string; expiresAt: number }>();
+
+  private normalizeEconomyOverrides(raw: any) {
+    if (!raw || typeof raw !== 'object') {
+      return {
+        recessionSeverity: 0,
+        inflationPressure: 0,
+        jobAvailability: 100,
+        marketVolatility: 100,
+        nextMonthStockShock: 0,
+      };
+    }
+    return {
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
+      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw?.jobAvailability || 100)))),
+      marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw?.marketVolatility || 100)))),
+      nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw?.nextMonthStockShock || 0))),
+    };
+  }
 
   constructor(
     @InjectRepository(UserStateEntity)
@@ -423,6 +443,15 @@ export class UserService implements OnModuleInit {
       isAdmin?: boolean;
       username?: string;
       password?: string;
+      jobTitle?: string;
+      economyOverrides?: {
+        recessionSeverity?: number;
+        inflationPressure?: number;
+        jobAvailability?: number;
+        marketVolatility?: number;
+        nextMonthStockShock?: number;
+      };
+      economyApplyMonths?: number;
     },
   ) {
     await this.assertAdminSession(authorization);
@@ -487,6 +516,76 @@ export class UserService implements OnModuleInit {
         throw new BadRequestException('Password must be at least 8 characters and include 1 number and 1 symbol');
       }
       user.passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+    }
+
+    if (changes.jobTitle !== undefined) {
+      const requestedTitle = String(changes.jobTitle || '').trim();
+      if (!requestedTitle) {
+        throw new BadRequestException('Job title is required when assigning a job');
+      }
+      const selectedJob = jobBoard.find((job: any) => String(job?.title || '') === requestedTitle);
+      if (!selectedJob) {
+        throw new BadRequestException('Invalid job title');
+      }
+
+      const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
+      const year = Math.max(1, Number(nextState.year || 2026));
+      const priorJob = nextState.job && typeof nextState.job === 'object' ? nextState.job : null;
+      const priorTitle = String(priorJob?.title || '').trim();
+      const priorTenure = Math.max(0, Number(nextState.tenure || 0));
+
+      if (priorTitle && priorTitle !== requestedTitle) {
+        const careerHistory = Array.isArray(nextState.careerHistory) ? [...nextState.careerHistory] : [];
+        careerHistory.unshift({
+          title: priorTitle,
+          months: priorTenure,
+          startMonth: Number(nextState.jobStartMonth || month),
+          startYear: Number(nextState.jobStartYear || year),
+          endMonth: month,
+          endYear: year,
+        });
+        nextState.careerHistory = careerHistory.slice(0, 60);
+      }
+
+      nextState.job = {
+        title: selectedJob.title,
+        base: Number(selectedJob.base || 0),
+        tReq: Number(selectedJob.tReq || 1),
+        odds: Number(selectedJob.odds || 1),
+        cat: selectedJob.cat,
+        subcat: selectedJob.subcat,
+      };
+      nextState.pendingJob = null;
+      nextState.tenure = 0;
+      nextState.jobStartMonth = month;
+      nextState.jobStartYear = year;
+
+      const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
+      logs.push({
+        date: `${month}/${year}`,
+        msg: `🛠️ Admin reassigned career to ${selectedJob.title}`,
+      });
+      nextState.logs = logs;
+    }
+
+    if (changes.economyOverrides !== undefined) {
+      nextState.economyOverrides = this.normalizeEconomyOverrides(changes.economyOverrides);
+      if (changes.economyApplyMonths !== undefined) {
+        nextState.economyOverrideMonthsRemaining = Math.max(0, Math.floor(Number(changes.economyApplyMonths || 0)));
+      }
+      const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
+      const year = Math.max(1, Number(nextState.year || 2026));
+      const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
+      const months = Number(nextState.economyOverrideMonthsRemaining || 0);
+      logs.push({
+        date: `${month}/${year}`,
+        msg: months > 0
+          ? `📈 Admin economy controls applied for ${months} month${months === 1 ? '' : 's'}.`
+          : '📈 Admin economy controls saved (persistent until changed).',
+      });
+      nextState.logs = logs;
+    } else if (changes.economyApplyMonths !== undefined) {
+      nextState.economyOverrideMonthsRemaining = Math.max(0, Math.floor(Number(changes.economyApplyMonths || 0)));
     }
 
     user.state = this.buildPersistedState(nextState);

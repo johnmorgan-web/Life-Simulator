@@ -164,6 +164,15 @@ async function adminUpdateUserById(
 		isAdmin: boolean
 		username?: string
 		password?: string
+		jobTitle?: string
+		economyOverrides?: {
+			recessionSeverity: number
+			inflationPressure: number
+			jobAvailability: number
+			marketVolatility: number
+			nextMonthStockShock: number
+		}
+		economyApplyMonths?: number
 	},
 ) {
 	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}`, {
@@ -311,6 +320,10 @@ function normalizeEconomyOverrides(raw: any): EconomyOverrides {
 		marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw.marketVolatility || 100)))),
 		nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw.nextMonthStockShock || 0))),
 	}
+}
+
+function normalizeEconomyApplyMonths(value: any) {
+	return Math.max(0, Math.floor(Number(value || 0)))
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -1522,6 +1535,7 @@ const initialState: State = {
 	marketLearningLevel: 'adult',
 	marketUsePlainLanguage: false,
 	economyOverrides: { ...DEFAULT_ECONOMY_OVERRIDES },
+	economyOverrideMonthsRemaining: 0,
 	realEstateLearningLevel: 'adult',
 	realEstateUsePlainLanguage: false,
 	autoInvest: {
@@ -1863,6 +1877,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		realEstateLearningLevel: data.learningLevel ?? data.marketLearningLevel ?? data.realEstateLearningLevel ?? 'adult',
 		realEstateUsePlainLanguage: data.usePlainLanguage ?? data.marketUsePlainLanguage ?? data.realEstateUsePlainLanguage ?? false,
 		economyOverrides: normalizeEconomyOverrides(data.economyOverrides),
+		economyOverrideMonthsRemaining: normalizeEconomyApplyMonths(data.economyOverrideMonthsRemaining),
 		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -2028,6 +2043,7 @@ function reducer(state: State, action: any) {
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
 			const economyOverrides = normalizeEconomyOverrides(state.economyOverrides)
+			const economyOverrideMonthsRemaining = normalizeEconomyApplyMonths(state.economyOverrideMonthsRemaining)
 
 			// Calculate vehicle costs before checking calculation
 			let vehicleCosts = 0
@@ -2979,6 +2995,17 @@ function reducer(state: State, action: any) {
 				celebration = 'achievement'
 			}
 
+			const nextEconomyMonthsRemaining = economyOverrideMonthsRemaining > 0
+				? Math.max(0, economyOverrideMonthsRemaining - 1)
+				: 0
+			const economyCampaignExpired = economyOverrideMonthsRemaining > 0 && nextEconomyMonthsRemaining === 0
+			if (economyCampaignExpired) {
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: '📉 Admin economy campaign expired. Sliders reset to neutral baseline.',
+				})
+			}
+
 			return {
 				...state,
 				check: resultingCheck,
@@ -3029,10 +3056,13 @@ function reducer(state: State, action: any) {
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
 				marketPriceHistory,
-				economyOverrides: {
-					...economyOverrides,
-					nextMonthStockShock: 0,
-				},
+				economyOverrides: economyCampaignExpired
+					? { ...DEFAULT_ECONOMY_OVERRIDES }
+					: {
+						...economyOverrides,
+						nextMonthStockShock: 0,
+					},
+				economyOverrideMonthsRemaining: nextEconomyMonthsRemaining,
 				portfolio: nextPortfolio,
 				investmentProperties,
 				pendingRealEstateDeals,
@@ -3650,6 +3680,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			marketUsePlainLanguage: false,
 			realEstateLearningLevel: 'adult',
 			realEstateUsePlainLanguage: false,
+			economyOverrides: { ...DEFAULT_ECONOMY_OVERRIDES },
+			economyOverrideMonthsRemaining: 0,
 			autoInvest: {
 				enabled: false,
 				monthlyAmount: 0,
@@ -3793,6 +3825,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			username?: string
 			name?: string
 			password?: string
+			jobTitle?: string
+			economyOverrides?: {
+				recessionSeverity: number
+				inflationPressure: number
+				jobAvailability: number
+				marketVolatility: number
+				nextMonthStockShock: number
+			}
+			economyApplyMonths?: number
 		},
 	) {
 		if (!state.id || !state.isAdmin || !state.authToken) return null
