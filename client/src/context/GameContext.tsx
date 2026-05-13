@@ -39,12 +39,44 @@ type EconomyOverrides = {
 	nextMonthStockShock: number
 }
 
+type HistoricalEconomicEventEffects = {
+	jobLossChance: number
+	forcedDowngradeChance: number
+	payCutPercent: number
+	monthlyStockShock: number
+	essentialCostIncreasePercent: number
+	creditDragPerMonth: number
+	jobSearchBlocked: boolean
+}
+
+type HistoricalEconomicEventState = {
+	id: string
+	title: string
+	era: string
+	summary: string
+	totalMonths: number
+	monthsRemaining: number
+	startedMonth: number
+	startedYear: number
+	effects: HistoricalEconomicEventEffects
+}
+
 const DEFAULT_ECONOMY_OVERRIDES: EconomyOverrides = {
 	recessionSeverity: 0,
 	inflationPressure: 0,
 	jobAvailability: 100,
 	marketVolatility: 100,
 	nextMonthStockShock: 0,
+}
+
+const DEFAULT_HISTORICAL_EVENT_EFFECTS: HistoricalEconomicEventEffects = {
+	jobLossChance: 0,
+	forcedDowngradeChance: 0,
+	payCutPercent: 0,
+	monthlyStockShock: 0,
+	essentialCostIncreasePercent: 0,
+	creditDragPerMonth: 0,
+	jobSearchBlocked: false,
 }
 
 let cachedUserSnapshots: any[] = []
@@ -173,6 +205,18 @@ async function adminUpdateUserById(
 			nextMonthStockShock: number
 		}
 		economyApplyMonths?: number
+		historicalEconomicEvent?: {
+			id: string
+			title: string
+			era: string
+			summary: string
+			totalMonths: number
+			monthsRemaining: number
+			startedMonth: number
+			startedYear: number
+			effects: HistoricalEconomicEventEffects
+		} | null
+		historicalEventResetNextMonth?: boolean
 	},
 ) {
 	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}`, {
@@ -198,6 +242,27 @@ async function adminDeleteUserById(targetUserId: string, authToken: string) {
 	if (!response.ok) return false
 	const result = await response.json()
 	return Boolean(result)
+}
+
+async function adminGiftUserById(
+	targetUserId: string,
+	authToken: string,
+	payload: { amount: number; templateId: string },
+) {
+	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}/gift`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${authToken}`,
+		},
+		body: JSON.stringify(payload),
+	})
+	if (!response.ok) {
+		const error = await extractErrorMessage(response, 'Unable to send admin gift.')
+		return { ok: false, error }
+	}
+	const data = await response.json()
+	return { ok: true, data }
 }
 
 async function persistUserState(id: string, state: any) {
@@ -324,6 +389,39 @@ function normalizeEconomyOverrides(raw: any): EconomyOverrides {
 
 function normalizeEconomyApplyMonths(value: any) {
 	return Math.max(0, Math.floor(Number(value || 0)))
+}
+
+function normalizeHistoricalEconomicEvent(raw: any): HistoricalEconomicEventState | null {
+	if (!raw || typeof raw !== 'object') return null
+	const id = String(raw.id || '').trim()
+	const title = String(raw.title || '').trim()
+	if (!id || !title) return null
+
+	const effectsRaw = raw.effects && typeof raw.effects === 'object' ? raw.effects : {}
+	const effects: HistoricalEconomicEventEffects = {
+		jobLossChance: Math.max(0, Math.min(1, Number(effectsRaw.jobLossChance || 0))),
+		forcedDowngradeChance: Math.max(0, Math.min(1, Number(effectsRaw.forcedDowngradeChance || 0))),
+		payCutPercent: Math.max(0, Math.min(0.9, Number(effectsRaw.payCutPercent || 0))),
+		monthlyStockShock: Math.max(-0.7, Math.min(0.7, Number(effectsRaw.monthlyStockShock || 0))),
+		essentialCostIncreasePercent: Math.max(0, Math.min(0.6, Number(effectsRaw.essentialCostIncreasePercent || 0))),
+		creditDragPerMonth: Math.max(0, Math.min(50, Number(effectsRaw.creditDragPerMonth || 0))),
+		jobSearchBlocked: Boolean(effectsRaw.jobSearchBlocked),
+	}
+
+	const totalMonths = Math.max(1, Math.min(36, Math.floor(Number(raw.totalMonths || raw.monthsRemaining || 1))))
+	const monthsRemaining = Math.max(0, Math.min(totalMonths, Math.floor(Number(raw.monthsRemaining || totalMonths))))
+
+	return {
+		id,
+		title,
+		era: String(raw.era || 'Historical Event'),
+		summary: String(raw.summary || ''),
+		totalMonths,
+		monthsRemaining,
+		startedMonth: Math.max(1, Math.min(12, Number(raw.startedMonth || 1))),
+		startedYear: Math.max(1, Number(raw.startedYear || 2026)),
+		effects: { ...DEFAULT_HISTORICAL_EVENT_EFFECTS, ...effects },
+	}
 }
 
 const hasAnyKeyword = (text: string, keywords: string[]) => keywords.some(k => text.includes(k))
@@ -1538,6 +1636,9 @@ const initialState: State = {
 	marketUsePlainLanguage: false,
 	economyOverrides: { ...DEFAULT_ECONOMY_OVERRIDES },
 	economyOverrideMonthsRemaining: 0,
+	historicalEconomicEvent: null as HistoricalEconomicEventState | null,
+	historicalEventResetNextMonth: false,
+	pendingAdminGifts: [] as any[],
 	realEstateLearningLevel: 'adult',
 	realEstateUsePlainLanguage: false,
 	autoInvest: {
@@ -1880,6 +1981,9 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		realEstateUsePlainLanguage: data.usePlainLanguage ?? data.marketUsePlainLanguage ?? data.realEstateUsePlainLanguage ?? false,
 		economyOverrides: normalizeEconomyOverrides(data.economyOverrides),
 		economyOverrideMonthsRemaining: normalizeEconomyApplyMonths(data.economyOverrideMonthsRemaining),
+		historicalEconomicEvent: normalizeHistoricalEconomicEvent(data.historicalEconomicEvent),
+		historicalEventResetNextMonth: Boolean(data.historicalEventResetNextMonth),
+		pendingAdminGifts: Array.isArray(data.pendingAdminGifts) ? data.pendingAdminGifts : [],
 		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -2050,8 +2154,11 @@ function reducer(state: State, action: any) {
 			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
 			const nextYear = state.month === 12 ? state.year + 1 : state.year
-			const economyOverrides = normalizeEconomyOverrides(state.economyOverrides)
+			let economyOverrides = normalizeEconomyOverrides(state.economyOverrides)
 			const economyOverrideMonthsRemaining = normalizeEconomyApplyMonths(state.economyOverrideMonthsRemaining)
+			const activeHistoricalEvent = normalizeHistoricalEconomicEvent(state.historicalEconomicEvent)
+			const shouldResetHistoricalEventNextMonth = Boolean(state.historicalEventResetNextMonth)
+			const effectiveHistoricalEvent = shouldResetHistoricalEventNextMonth ? null : activeHistoricalEvent
 
 			// Calculate vehicle costs before checking calculation
 			let vehicleCosts = 0
@@ -2131,6 +2238,20 @@ function reducer(state: State, action: any) {
 			const maxMonthlyLuxuryEventSpend = Math.max(Number(state.maxMonthlyLuxuryEventSpend || 0), Number(monthlyLuxuryEventSpend || 0))
 
 			let resultingCheck = check
+			const pendingAdminGifts = Array.isArray(state.pendingAdminGifts) ? state.pendingAdminGifts : []
+			if (pendingAdminGifts.length > 0) {
+				for (const gift of pendingAdminGifts) {
+					const amount = round2(Math.max(0, Number(gift?.amount || 0)))
+					if (amount <= 0) continue
+					const sender = String(gift?.fromAdminUsername || 'Admin')
+					const msg = String(gift?.message || '').trim()
+					resultingCheck = round2(resultingCheck + amount)
+					logs.push({
+						date: `${nextMonth}/${nextYear}`,
+						msg: `🎁 Admin gift received from ${sender}: +$${amount.toFixed(2)}${msg ? ` (${msg})` : ''}`,
+					})
+				}
+			}
 
 			const eduProgress = { ...state.eduProgress }
 			let activeEdu = state.activeEdu
@@ -2336,6 +2457,88 @@ function reducer(state: State, action: any) {
 					celebration = 'pay-bump'
 					newLastAutoBumpMonth = nextMonth
 					newLastAutoBumpYear = nextYear
+				}
+			}
+
+			if (effectiveHistoricalEvent && effectiveHistoricalEvent.monthsRemaining > 0) {
+				const eventEffects = effectiveHistoricalEvent.effects || DEFAULT_HISTORICAL_EVENT_EFFECTS
+				const oddJobsRole = jobBoard.find((j: Job) => j.title === 'Odd Jobs') || { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 }
+				const eventSeedBase = `${state.currentUser || state.id || 'user'}-${nextYear}-${nextMonth}-${effectiveHistoricalEvent.id}`
+
+				const layoffRoll = mulberry32(hashString(`${eventSeedBase}-layoff`))()
+				if (eventEffects.jobLossChance > 0 && updatedJob.title !== 'Odd Jobs' && layoffRoll < eventEffects.jobLossChance) {
+					careerHistory.push({
+						title: updatedJob.title,
+						startMonth: state.jobStartMonth,
+						startYear: state.jobStartYear,
+						endMonth: nextMonth,
+						endYear: nextYear,
+						months: tenure,
+					})
+					updatedJob = {
+						title: oddJobsRole.title,
+						base: Number(oddJobsRole.base || 600),
+						tReq: Number(oddJobsRole.tReq || 1),
+						odds: Number(oddJobsRole.odds || 1),
+						cat: (oddJobsRole as any).cat,
+						subcat: (oddJobsRole as any).subcat,
+					}
+					tenure = 0
+					lastNegotiationMonth = null
+					lastNegotiationYear = null
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🧭 ${effectiveHistoricalEvent.title}: layoff event forced a move to ${updatedJob.title}.` })
+				} else {
+					const downgradeRoll = mulberry32(hashString(`${eventSeedBase}-downgrade`))()
+					if (eventEffects.forcedDowngradeChance > 0 && updatedJob.title !== 'Odd Jobs' && downgradeRoll < eventEffects.forcedDowngradeChance) {
+						careerHistory.push({
+							title: updatedJob.title,
+							startMonth: state.jobStartMonth,
+							startYear: state.jobStartYear,
+							endMonth: nextMonth,
+							endYear: nextYear,
+							months: tenure,
+						})
+						updatedJob = {
+							title: oddJobsRole.title,
+							base: Number(oddJobsRole.base || 600),
+							tReq: Number(oddJobsRole.tReq || 1),
+							odds: Number(oddJobsRole.odds || 1),
+							cat: (oddJobsRole as any).cat,
+							subcat: (oddJobsRole as any).subcat,
+						}
+						tenure = 0
+						lastNegotiationMonth = null
+						lastNegotiationYear = null
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `📉 ${effectiveHistoricalEvent.title}: workforce contraction downgraded your role to ${updatedJob.title}.` })
+					}
+				}
+
+				const payCutAmount = round2(Math.max(0, updatedJob.base * city.p * 0.8 * Number(eventEffects.payCutPercent || 0)))
+				if (payCutAmount > 0) {
+					resultingCheck = fix(resultingCheck - payCutAmount)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `💼 ${effectiveHistoricalEvent.title}: paycheck compression -$${payCutAmount.toFixed(2)} this month.` })
+				}
+
+				const costShock = round2(Math.max(0, updatedJob.base * city.p * 0.8 * Number(eventEffects.essentialCostIncreasePercent || 0)))
+				if (costShock > 0) {
+					resultingCheck = fix(resultingCheck - costShock)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🧾 ${effectiveHistoricalEvent.title}: essential cost surge -$${costShock.toFixed(2)} this month.` })
+				}
+
+				if (resultingCheck < 0) {
+					const scenarioShortfall = fix(Math.abs(resultingCheck))
+					newDebt = fix(newDebt + scenarioShortfall)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Auto-loan taken: $${scenarioShortfall.toFixed(2)} to cover historical scenario shortfall` })
+					resultingCheck = 0
+				}
+
+				const forcedShock = Math.max(-0.7, Math.min(0.7, Number(eventEffects.monthlyStockShock || 0)))
+				if (Math.abs(forcedShock) > 0.001) {
+					const mergedShock = Math.max(-0.7, Math.min(0.7, Number(economyOverrides.nextMonthStockShock || 0) + forcedShock))
+					economyOverrides = {
+						...economyOverrides,
+						nextMonthStockShock: mergedShock,
+					}
 				}
 			}
 
@@ -2902,6 +3105,21 @@ function reducer(state: State, action: any) {
 				})
 			}
 
+			if (effectiveHistoricalEvent && effectiveHistoricalEvent.monthsRemaining > 0) {
+				const drag = Math.max(0, Math.floor(Number(effectiveHistoricalEvent.effects?.creditDragPerMonth || 0)))
+				if (drag > 0) {
+					const beforeDrag = credit
+					credit = Math.max(300, credit - drag)
+					const appliedDrag = beforeDrag - credit
+					if (appliedDrag > 0) {
+						logs.push({
+							date: `${nextMonth}/${nextYear}`,
+							msg: `📉 ${effectiveHistoricalEvent.title}: macro credit drag -${appliedDrag} (${credit})`
+						})
+					}
+				}
+			}
+
 			let supplementalCreditDelta = 0
 			const supplementalNotes: string[] = []
 
@@ -3007,10 +3225,26 @@ function reducer(state: State, action: any) {
 				? Math.max(0, economyOverrideMonthsRemaining - 1)
 				: 0
 			const economyCampaignExpired = economyOverrideMonthsRemaining > 0 && nextEconomyMonthsRemaining === 0
+			const nextHistoricalMonthsRemaining = effectiveHistoricalEvent && effectiveHistoricalEvent.monthsRemaining > 0
+				? Math.max(0, effectiveHistoricalEvent.monthsRemaining - 1)
+				: 0
+			const historicalEventExpired = Boolean(effectiveHistoricalEvent && effectiveHistoricalEvent.monthsRemaining > 0 && nextHistoricalMonthsRemaining === 0)
 			if (economyCampaignExpired) {
 				logs.push({
 					date: `${nextMonth}/${nextYear}`,
 					msg: '📉 Admin economy campaign expired. Sliders reset to neutral baseline.',
+				})
+			}
+			if (historicalEventExpired && effectiveHistoricalEvent) {
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `📚 Historical scenario complete: ${effectiveHistoricalEvent.title} has ended.`,
+				})
+			}
+			if (shouldResetHistoricalEventNextMonth) {
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: '🛟 Normal circumstances restored this month by admin reset schedule.',
 				})
 			}
 
@@ -3064,13 +3298,17 @@ function reducer(state: State, action: any) {
 				marketPricesPrevious: previousMarketPrices,
 				marketPrices: nextMarketPrices,
 				marketPriceHistory,
-				economyOverrides: economyCampaignExpired
+				economyOverrides: (economyCampaignExpired || shouldResetHistoricalEventNextMonth)
 					? { ...DEFAULT_ECONOMY_OVERRIDES }
 					: {
 						...economyOverrides,
 						nextMonthStockShock: 0,
 					},
-				economyOverrideMonthsRemaining: nextEconomyMonthsRemaining,
+				economyOverrideMonthsRemaining: shouldResetHistoricalEventNextMonth ? 0 : nextEconomyMonthsRemaining,
+				historicalEconomicEvent: effectiveHistoricalEvent && nextHistoricalMonthsRemaining > 0
+					? { ...effectiveHistoricalEvent, monthsRemaining: nextHistoricalMonthsRemaining }
+					: null,
+				historicalEventResetNextMonth: false,
 				portfolio: nextPortfolio,
 				investmentProperties,
 				pendingRealEstateDeals,
@@ -3090,6 +3328,7 @@ function reducer(state: State, action: any) {
 				rewardCategoryQueue,
 				lastAchievementCategory,
 				celebration,
+				pendingAdminGifts: [],
 				monthlyCheckSuccesses: 0,
 				monthlyCheckFailures: 0,
 				skippedPaymentThisMonth: false
@@ -3692,6 +3931,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			realEstateUsePlainLanguage: false,
 			economyOverrides: { ...DEFAULT_ECONOMY_OVERRIDES },
 			economyOverrideMonthsRemaining: 0,
+			historicalEconomicEvent: null,
+			historicalEventResetNextMonth: false,
+			pendingAdminGifts: [],
 			autoInvest: {
 				enabled: false,
 				monthlyAmount: 0,
@@ -3844,6 +4086,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				nextMonthStockShock: number
 			}
 			economyApplyMonths?: number
+			historicalEconomicEvent?: HistoricalEconomicEventState | null
+			historicalEventResetNextMonth?: boolean
 		},
 	) {
 		if (!state.id || !state.isAdmin || !state.authToken) return null
@@ -3853,6 +4097,26 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	async function deleteUserAsAdmin(targetUserId: string) {
 		if (!state.id || !state.isAdmin || !state.authToken) return false
 		return adminDeleteUserById(targetUserId, String(state.authToken))
+	}
+
+	async function sendAdminGift(targetUserId: string, amount: number, templateId: string) {
+		if (!state.id || !state.isAdmin || !state.authToken) {
+			return { ok: false, error: 'Admin authentication required.' }
+		}
+		const result = await adminGiftUserById(targetUserId, String(state.authToken), {
+			amount: Math.max(0, Number(amount || 0)),
+			templateId: String(templateId || '').trim(),
+		})
+		if (!result.ok) return result
+
+		const updatedSelf = await fetchUserById(state.id)
+		if (updatedSelf) {
+			const normalized = normalizeLoadedUserState(updatedSelf, stateRef.current, state.currentUser || state.username || 'Player')
+			resetDirtyTracking(normalized)
+			dispatch({ type: 'SET_STATE', payload: normalized })
+		}
+		await refreshPeerSnapshots()
+		return { ok: true }
 	}
 
 	useEffect(() => {
@@ -3882,6 +4146,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	async function applyForJob(job: Job) {
+		const activeHistoricalEvent = normalizeHistoricalEconomicEvent(state.historicalEconomicEvent)
+		if (activeHistoricalEvent && activeHistoricalEvent.monthsRemaining > 0 && activeHistoricalEvent.effects.jobSearchBlocked) {
+			const blockMessage = `Applications paused: ${activeHistoricalEvent.title} is active for ${activeHistoricalEvent.monthsRemaining} more month${activeHistoricalEvent.monthsRemaining === 1 ? '' : 's'}.`
+			dispatch({
+				type: 'SET_STATE',
+				payload: {
+					logs: [
+						...(Array.isArray(state.logs) ? state.logs : []),
+						{ date: `${state.month}/${state.year}`, msg: `⛔ ${blockMessage}` },
+					],
+				},
+			})
+			return { ok: false, reason: 'historical-event-hiring-freeze', message: blockMessage }
+		}
+
 		const result = await applyForJobOnServer(state, job.title)
 		if (!result) {
 			return { ok: false, reason: 'network-error', message: 'Unable to apply right now. Please try again.' }
@@ -4052,7 +4331,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
 			{children}
 		</GameContext.Provider>
 	)

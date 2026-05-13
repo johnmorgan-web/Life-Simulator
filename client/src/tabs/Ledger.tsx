@@ -1,8 +1,83 @@
 
+import { useEffect, useMemo, useState } from 'react'
+import { useGame } from '../context/GameContext'
+
 export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
+  const { state, listUsersForAdmin, sendAdminGift } = useGame()
   const fmt = format || ((n: number) => n.toFixed(2))
   // show the Auto Check button only during development or for admins
   const showAutoCheck = isAdmin || import.meta.env.DEV || (import.meta.env.VITE_SHOW_AUTO_CHECK === 'true')
+  const allChecksCompleted = Array.isArray(ledger) && ledger.length > 0 && ledger.every((tx: any) => Boolean(tx?.done))
+  const [giftUsers, setGiftUsers] = useState<any[]>([])
+  const [giftLoaded, setGiftLoaded] = useState(false)
+  const [giftTargetId, setGiftTargetId] = useState('')
+  const [giftAmount, setGiftAmount] = useState('')
+  const [giftTemplate, setGiftTemplate] = useState('job')
+  const [giftSending, setGiftSending] = useState(false)
+  const [giftFeedback, setGiftFeedback] = useState('')
+
+  const giftTemplates = useMemo(() => ([
+    { id: 'job', label: 'Congrats: New Job' },
+    { id: 'graduation', label: 'Congrats: Graduation' },
+    { id: 'car', label: 'Congrats: New Car' },
+    { id: 'promotion', label: 'Congrats: Promotion' },
+    { id: 'certification', label: 'Congrats: Certification' },
+    { id: 'streak', label: 'Congrats: Strong Streak' },
+    { id: 'recovery-grant', label: 'Historical: Recovery Grant' },
+    { id: 'hardship-relief', label: 'Historical: Hardship Relief' },
+    { id: 'transition-support', label: 'Historical: Workforce Transition Support' },
+    { id: 'milestone', label: 'General Milestone' },
+  ]), [])
+
+  useEffect(() => {
+    if (!state?.isAdmin || !allChecksCompleted || giftLoaded) return
+    let cancelled = false
+    listUsersForAdmin().then((users: any) => {
+      if (cancelled || !Array.isArray(users)) return
+      const filtered = users.filter((u: any) => String(u?.id || '') !== String(state?.id || ''))
+      setGiftUsers(filtered)
+      if (!giftTargetId && filtered.length > 0) setGiftTargetId(String(filtered[0].id || ''))
+      setGiftLoaded(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [state?.isAdmin, state?.id, allChecksCompleted, giftLoaded, giftTargetId, listUsersForAdmin])
+
+  const handleSendGift = async () => {
+    const amount = Number(giftAmount || 0)
+    if (!allChecksCompleted) {
+      setGiftFeedback('Complete every ledger check before sending gifts.')
+      return
+    }
+    if (!giftTargetId) {
+      setGiftFeedback('Select a recipient first.')
+      return
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setGiftFeedback('Enter a valid gift amount greater than zero.')
+      return
+    }
+    if (Number(state?.check || 0) - amount < 0) {
+      setGiftFeedback('Gift blocked: this amount would make checking negative.')
+      return
+    }
+
+    setGiftSending(true)
+    setGiftFeedback('')
+    const chosenTemplate = giftTemplates.find((template) => template.id === giftTemplate) || giftTemplates[giftTemplates.length - 1]
+    const result = await sendAdminGift(giftTargetId, amount, chosenTemplate.id)
+    setGiftSending(false)
+
+    if (!result?.ok) {
+      setGiftFeedback(String(result?.error || 'Unable to send gift right now.'))
+      return
+    }
+
+    setGiftAmount('')
+    setGiftFeedback('Gift sent. Recipient will receive it at the start of their next month.')
+  }
+
   return (
     <div className="glass p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap justify-between items-center gap-2">
@@ -15,6 +90,54 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
           }} className="py-2 px-3 bg-slate-900 text-white rounded">Auto Check</button>
         )}
       </div>
+
+      {state?.isAdmin ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <p className="text-xs font-bold uppercase text-amber-800">Admin Quick Gift</p>
+          <p className="text-xs text-amber-900">Available only after all ledger checks are complete. Gift is delivered to the selected player when they begin next month.</p>
+          {!allChecksCompleted ? (
+            <p className="text-xs text-rose-700 font-semibold">Finish all ledger checks to unlock gifting.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <select
+                value={giftTargetId}
+                onChange={(e) => setGiftTargetId(e.target.value)}
+                className="p-2 border rounded text-sm bg-white"
+              >
+                {giftUsers.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                step="1"
+                value={giftAmount}
+                onChange={(e) => setGiftAmount(e.target.value)}
+                placeholder="Gift amount"
+                className="p-2 border rounded text-sm"
+              />
+              <select
+                value={giftTemplate}
+                onChange={(e) => setGiftTemplate(e.target.value)}
+                className="p-2 border rounded text-sm bg-white"
+              >
+                {giftTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleSendGift}
+                disabled={giftSending || !giftTargetId}
+                className="px-3 py-2 rounded bg-amber-700 text-white text-sm font-semibold disabled:opacity-60"
+              >
+                {giftSending ? 'Sending...' : 'Send Gift'}
+              </button>
+            </div>
+          )}
+          {giftFeedback ? <p className="text-xs font-semibold text-amber-900">{giftFeedback}</p> : null}
+        </div>
+      ) : null}
 
       <div className="md:hidden space-y-3">
         {ledger.map((tx: any) => (

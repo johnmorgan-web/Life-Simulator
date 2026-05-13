@@ -46,6 +46,26 @@ export class UserController {
         nextMonthStockShock?: number;
       };
       economyApplyMonths?: number;
+      historicalEconomicEvent?: {
+        id?: string;
+        title?: string;
+        era?: string;
+        summary?: string;
+        totalMonths?: number;
+        monthsRemaining?: number;
+        startedMonth?: number;
+        startedYear?: number;
+        effects?: {
+          jobLossChance?: number;
+          forcedDowngradeChance?: number;
+          payCutPercent?: number;
+          monthlyStockShock?: number;
+          essentialCostIncreasePercent?: number;
+          creditDragPerMonth?: number;
+          jobSearchBlocked?: boolean;
+        };
+      } | null;
+      historicalEventResetNextMonth?: boolean;
     },
   ) {
     return this.userService.adminUpdateUser(authorization, targetUserId, {
@@ -58,6 +78,20 @@ export class UserController {
       jobTitle: body.jobTitle,
       economyOverrides: body.economyOverrides,
       economyApplyMonths: body.economyApplyMonths,
+      historicalEconomicEvent: body.historicalEconomicEvent,
+      historicalEventResetNextMonth: body.historicalEventResetNextMonth,
+    });
+  }
+
+  @Post('admin/:targetUserId/gift')
+  async adminGiftUser(
+    @Param('targetUserId') targetUserId: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { amount?: number; templateId?: string },
+  ) {
+    return this.userService.adminGiftUser(authorization, targetUserId, {
+      amount: body.amount,
+      templateId: body.templateId,
     });
   }
 
