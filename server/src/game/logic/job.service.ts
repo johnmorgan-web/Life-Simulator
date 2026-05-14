@@ -232,6 +232,30 @@ export class JobService {
     return Math.max(1, base - drop - scarcityCut);
   }
 
+  private inferTrackIndex(job: any): number {
+    const targetTitle = String(job?.title || '').trim();
+    const targetCat = String(job?.cat || '').trim();
+    const targetSubcat = String(job?.subcat || '').trim();
+    if (!targetTitle) return -1;
+
+    const sameTrack = jobBoard
+      .filter((candidate: any) =>
+        String(candidate?.cat || '').trim() === targetCat
+        && String(candidate?.subcat || '').trim() === targetSubcat,
+      )
+      .sort((a: any, b: any) => Number(a?.base || 0) - Number(b?.base || 0));
+
+    return sameTrack.findIndex((candidate: any) => String(candidate?.title || '').trim() === targetTitle);
+  }
+
+  private inferTrackExperienceMonths(job: any): number {
+    const idx = this.inferTrackIndex(job);
+    if (idx < 0) return 6;
+    if (idx >= 4) return 12;
+    if (idx >= 2) return 6;
+    return 3;
+  }
+
   getJobOpenings(state: any, job: any): number {
     const slot = state.jobMarket?.[job.title];
     const economy = this.normalizeEconomyOverrides(state?.economyOverrides);
@@ -304,7 +328,8 @@ export class JobService {
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months`;
     } else if (roleReqFromReq) {
-      const reqMonths = 6;
+      const explicit = this.explicitExperienceRequirement(String(job?.title || ''));
+      const reqMonths = Number(explicit?.minMonths || this.inferTrackExperienceMonths(job));
       const actualMonths = this.getRoleExperienceMonths(state, roleReqFromReq);
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months in ${roleReqFromReq}`;
