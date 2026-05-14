@@ -65,6 +65,16 @@ export default function Transit() {
     return !!vehicle.financed || vehicle.condition === 'lease' || (vehicle.monthsRemaining || 0) > 0
   }
 
+  const hasChauffeurEligibleVehicle = (garageList: any[]) => {
+    if (!Array.isArray(garageList) || garageList.length === 0) return false
+    return garageList.some((g: any) => {
+      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === g.vehicleId)
+      if (!vehicle) return false
+      const cls = String(vehicle.class || '').toLowerCase()
+      return cls === 'luxury' || cls === 'unrealistic'
+    })
+  }
+
   const createGarageEntryId = (vehicleId: string, condition: string) => {
     const nonce = Math.random().toString(36).slice(2, 8)
     return `${vehicleId}-${condition}-${state.month}-${state.year}-${Date.now()}-${nonce}`
@@ -235,7 +245,15 @@ export default function Transit() {
     let monthsRemaining = 0
 
     if (condition === 'lease') {
-      monthlyPayment = vehicle.leasePrice
+      monthlyPayment = Math.round(Number(vehicle.leasePrice || 0) * 100) / 100
+      if (monthlyPayment <= 0) {
+        alert('This lease is unavailable because lease pricing is missing.')
+        return
+      }
+      if (state.check < monthlyPayment) {
+        alert(`Insufficient checking balance to start this lease. First payment due at signing: $${monthlyPayment.toLocaleString()}.`)
+        return
+      }
       monthsRemaining = 36
       price = 0
     } else if (condition === 'new') {
@@ -375,6 +393,7 @@ export default function Transit() {
       }
     } else {
       // Lease
+      const newCheck = Math.round((state.check - monthlyPayment) * 100) / 100
       const newVehicle = {
         id: createGarageEntryId(vehicle.id, 'lease'),
         vehicleId: vehicle.id,
@@ -387,15 +406,21 @@ export default function Transit() {
         monthsRemaining,
         purchasedNew: false,
         for_sale: false,
-        currentValue: 0
+        currentValue: 0,
+        dueAtSigning: monthlyPayment
       }
       dispatch({
         type: 'SET_STATE',
         payload: {
+          check: newCheck,
           garage: [...garage, newVehicle],
           ownsVehicle: state.ownsVehicle || newVehicle,
           transit: syncTransitForGarage([...garage, newVehicle], state.transit),
-          pendingTransit: null
+          pendingTransit: null,
+          logs: [
+            ...(Array.isArray(state.logs) ? state.logs : []),
+            { date: `${state.month}/${state.year}`, msg: `🚗 Lease started: ${vehicle.name} (first payment at signing: $${monthlyPayment.toFixed(2)})` }
+          ]
         }
       })
     }
@@ -512,8 +537,13 @@ export default function Transit() {
           )}
           <div className="grid grid-cols-3 gap-4">
             {transitOptions.map((o: TransitOption) => {
-              const requiresVehicle = o.l === 3 && (o.n.includes('Car') || o.n.includes('Chauffer') || o.n.includes('Helicopter'))
-              const canSelect = !requiresVehicle || (state.garage && state.garage.length > 0)
+              const isChauffeurOption = String(o.n).toLowerCase().includes('chauffeur')
+              const requiresVehicle = o.l === 3 && (o.n.includes('Car') || o.n.includes('Chauffeur') || o.n.includes('Helicopter'))
+              const hasVehicle = Array.isArray(state.garage) && state.garage.length > 0
+              const hasChauffeurService = Boolean(state.luxuryServices?.chauffer)
+              const hasEligibleChauffeurVehicle = hasChauffeurEligibleVehicle(state.garage || [])
+              const canUseChauffeur = hasChauffeurService && hasEligibleChauffeurVehicle
+              const canSelect = isChauffeurOption ? canUseChauffeur : (!requiresVehicle || hasVehicle)
               const disabled = !canSelect
               
               return (
@@ -521,7 +551,23 @@ export default function Transit() {
                   <h4 className="font-bold">{o.n}</h4>
                   <p className="text-sm">${o.c}/mo</p>
                   {o.subText && <p className="text-xs text-slate-400">{o.subText}</p>}
-                  {disabled && <p className="text-xs text-red-600 font-bold mt-2">Requires vehicle ownership</p>}
+                  {disabled && !isChauffeurOption && <p className="text-xs text-red-600 font-bold mt-2">Requires vehicle ownership</p>}
+                  {disabled && isChauffeurOption && <p className="text-xs text-red-600 font-bold mt-2">Requires hired chauffeur service and a Luxury/High-Level vehicle</p>}
+                  {isChauffeurOption ? (
+                    <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] space-y-1">
+                      <p className={`font-semibold ${hasChauffeurService ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {hasChauffeurService ? 'Requirement 1 met: Personal Chauffeur is hired.' : 'Requirement 1 missing: Hire Personal Chauffeur in Lifestyle.'}
+                      </p>
+                      <p className={`font-semibold ${hasEligibleChauffeurVehicle ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {hasEligibleChauffeurVehicle ? 'Requirement 2 met: Luxury/High-Level vehicle detected.' : 'Requirement 2 missing: Own at least one Luxury or High-Level vehicle.'}
+                      </p>
+                      {!canUseChauffeur ? (
+                        <p className="text-slate-600">Recommendation: complete both requirements to unlock L5 Chauffeur Service next month.</p>
+                      ) : (
+                        <p className="text-emerald-700">Ready: selecting this sets L5 Chauffeur Service to pending.</p>
+                      )}
+                    </div>
+                  ) : null}
                   {state.transit.name === o.n ? (
                     <button disabled className="mt-4 w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold">CURRENT</button>
                   ) : state.pendingTransit?.n === o.n ? (
@@ -952,9 +998,36 @@ export default function Transit() {
               </div>
             )}
 
+            {String(transitConfirm?.n || '').toLowerCase().includes('chauffeur') && (
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-300 space-y-1">
+                <p className="text-xs font-bold text-amber-800">Chauffeur Eligibility</p>
+                <p className={`text-xs font-semibold ${state.luxuryServices?.chauffer ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {state.luxuryServices?.chauffer
+                    ? 'Requirement 1 met: Personal Chauffeur is hired.'
+                    : 'Requirement 1 missing: Hire Personal Chauffeur in Lifestyle.'}
+                </p>
+                <p className={`text-xs font-semibold ${hasChauffeurEligibleVehicle(state.garage || []) ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {hasChauffeurEligibleVehicle(state.garage || [])
+                    ? 'Requirement 2 met: Luxury/High-Level vehicle detected.'
+                    : 'Requirement 2 missing: Own at least one Luxury or High-Level vehicle.'}
+                </p>
+                <p className="text-xs text-amber-900">
+                  Recommendation: complete both requirements to unlock and keep L5 Chauffeur Service active.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <button
                 onClick={() => {
+                  const isChauffeurOption = String(transitConfirm?.n || '').toLowerCase().includes('chauffeur')
+                  if (isChauffeurOption) {
+                    const canUseChauffeur = Boolean(state.luxuryServices?.chauffer) && hasChauffeurEligibleVehicle(state.garage || [])
+                    if (!canUseChauffeur) {
+                      alert('To use Chauffeur transit, hire Personal Chauffeur in Lifestyle and own a Luxury or High-Level vehicle.')
+                      return
+                    }
+                  }
                   dispatch({ type: 'SET_STATE', payload: { pendingTransit: transitConfirm } })
                   setTransitConfirm(null)
                 }}

@@ -17,6 +17,8 @@ export class LedgerService {
     const fix = (n: number) => this.utils.fix(n);
     const ledger: any[] = [];
     let id = 0;
+    const chauffeurActive = Boolean(state?.luxuryServices?.chauffer)
+      && this.vehicleService.garageHasChauffeurEligibleVehicle(Array.isArray(state?.garage) ? state.garage : []);
 
     const job = state.pendingJob || state.job;
 
@@ -143,7 +145,7 @@ export class LedgerService {
     const housingPaymentForUtilities = mortgagePayment > 0 ? mortgagePayment : rent;
 
     // Transportation
-    if (!state.luxuryServices?.chauffer) {
+    if (!chauffeurActive) {
       const transitCost = applyLedgerDecimalVariance(
         state.transit?.cost || 0,
         `transit-${state.transit?.name}`,
@@ -347,7 +349,7 @@ export class LedgerService {
           });
         }
 
-        if (!state.luxuryServices?.chauffer) {
+        if (!chauffeurActive) {
           const gasCost = this.vehicleService.calculateMonthlyGasCost(g);
           if (gasCost > 0) {
             const adjustedGasCost = applyLedgerDecimalVariance(gasCost, `vehicle-gas-${g.id}`);
