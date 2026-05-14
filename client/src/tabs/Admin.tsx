@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
-// ...existing code...
-
-// ...existing code...
+import { findHistoricalScenarioById, historicalEconomicEventScenarios } from '../constants/historicalEconomicEvents.constants'
 
 type AdminUserRow = {
   id: string
@@ -30,7 +28,9 @@ type AdminUserRow = {
     creditScore: number
     happiness: number
     netWorth: number
-    // ...removed event fields...
+    historicalEventTitle?: string
+    historicalEventMonthsRemaining?: number
+    historicalEventResetNextMonth?: boolean
   }
 }
 
@@ -79,7 +79,10 @@ export default function Admin() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [savingAll, setSavingAll] = useState(false)
-  // ...removed event/economy override state...
+  const [applyingHistoricalEvent, setApplyingHistoricalEvent] = useState(false)
+  const [resettingHistoricalEvent, setResettingHistoricalEvent] = useState(false)
+  const [selectedHistoricalScenarioId, setSelectedHistoricalScenarioId] = useState<string>(historicalEconomicEventScenarios[0]?.id || '')
+  const [historicalEventApplyMonths, setHistoricalEventApplyMonths] = useState<number>(historicalEconomicEventScenarios[0]?.defaultDurationMonths || 6)
   const [manageDraft, setManageDraft] = useState<ManageDraft | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -91,15 +94,9 @@ export default function Admin() {
       .sort((a, b) => a.localeCompare(b))
   }, [jobBoard])
 
-  // ...removed event scenario selection...
-
-  // ...removed economy override logic...
-
-  // ...removed economy override logic...
-
-  // ...removed stock shock logic...
-
-  // ...removed reset economy logic...
+  const selectedHistoricalScenario = useMemo(() => {
+    return findHistoricalScenarioById(selectedHistoricalScenarioId)
+  }, [selectedHistoricalScenarioId])
 
   const canLoad = useMemo(() => Boolean(state?.isAdmin && state?.id && state?.authToken), [state?.isAdmin, state?.id, state?.authToken])
   const unsavedCount = useMemo(() => {
@@ -460,15 +457,153 @@ export default function Admin() {
     }
   }
 
-  // ...removed save economy preset logic...
+  const applyHistoricalEventToAllUsers = async () => {
+    if (!state?.authToken) {
+      setError('You must be logged in to apply historical events.')
+      return
+    }
 
-  // ...removed load economy preset logic...
+    if (!selectedHistoricalScenario) {
+      setError('Select a historical event scenario first.')
+      return
+    }
 
-  // ...removed apply economy to all users logic...
+    const normalizedMonths = Math.max(1, Math.min(36, Math.floor(Number(historicalEventApplyMonths || selectedHistoricalScenario.defaultDurationMonths || 6))))
 
-  // ...removed apply historical event to all users logic...
+    setApplyingHistoricalEvent(true)
+    setError('')
+    setMessage('')
 
-  // ...removed schedule reset historical event logic...
+    let targetUsers = users
+    if (!targetUsers.length) {
+      const response = await listUsersForAdmin()
+      if (!response) {
+        setApplyingHistoricalEvent(false)
+        setError('Unable to load users for historical event broadcast.')
+        return
+      }
+      targetUsers = response
+      setUsers(response)
+      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
+    }
+
+    const failed: string[] = []
+    const savedMap: Record<string, AdminUserRow> = {}
+    const skippedActive: string[] = []
+
+    for (const row of targetUsers) {
+      const activeMonths = Math.max(0, Number(row.progression?.historicalEventMonthsRemaining || 0))
+      const alreadyResetScheduled = Boolean(row.progression?.historicalEventResetNextMonth)
+      if (activeMonths > 0 && !alreadyResetScheduled) {
+        skippedActive.push(row.username)
+        continue
+      }
+
+      const startMonth = Math.max(1, Math.min(12, Number(row.progression?.month || state.month || 1)))
+      const startYear = Math.max(1, Number(row.progression?.year || state.year || 2026))
+      const saved = await saveUserAsAdmin(row.id, {
+        checking: Number(row.balances.checking || 0),
+        savings: Number(row.balances.savings || 0),
+        debt: Number(row.balances.debt || 0),
+        isAdmin: Boolean(row.isAdmin),
+        username: row.username,
+        economyOverrides: selectedHistoricalScenario.economyOverrides,
+        economyApplyMonths: normalizedMonths,
+        historicalEventResetNextMonth: false,
+        historicalEconomicEvent: {
+          id: selectedHistoricalScenario.id,
+          title: selectedHistoricalScenario.title,
+          era: selectedHistoricalScenario.era,
+          summary: selectedHistoricalScenario.summary,
+          totalMonths: normalizedMonths,
+          monthsRemaining: normalizedMonths,
+          startedMonth: startMonth,
+          startedYear: startYear,
+          effects: selectedHistoricalScenario.effects,
+        },
+      })
+
+      if (!saved) {
+        failed.push(row.username)
+      } else {
+        savedMap[row.id] = saved
+      }
+    }
+
+    setApplyingHistoricalEvent(false)
+
+    if (Object.keys(savedMap).length) {
+      setUsers(prev => prev.map(user => savedMap[user.id] || user))
+      setBaseUsers(prev => ({ ...prev, ...savedMap }))
+      await refreshPeerSnapshots()
+    }
+
+    if (failed.length) {
+      setError(`Historical event broadcast failed for: ${failed.join(', ')}`)
+      return
+    }
+
+    const skippedSummary = skippedActive.length
+      ? ` Skipped ${skippedActive.length} active user${skippedActive.length === 1 ? '' : 's'} still progressing through existing scenarios.`
+      : ''
+    setMessage(`Applied historical scenario "${selectedHistoricalScenario.title}" to ${Object.keys(savedMap).length} users for ${normalizedMonths} month${normalizedMonths === 1 ? '' : 's'}.${skippedSummary}`)
+  }
+
+  const scheduleResetHistoricalEventForAllUsers = async () => {
+    if (!state?.authToken) {
+      setError('You must be logged in to schedule historical reset.')
+      return
+    }
+
+    setResettingHistoricalEvent(true)
+    setError('')
+    setMessage('')
+
+    let targetUsers = users
+    if (!targetUsers.length) {
+      const response = await listUsersForAdmin()
+      if (!response) {
+        setResettingHistoricalEvent(false)
+        setError('Unable to load users for reset scheduling.')
+        return
+      }
+      targetUsers = response
+      setUsers(response)
+      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
+    }
+
+    const failed: string[] = []
+    const savedMap: Record<string, AdminUserRow> = {}
+
+    for (const row of targetUsers) {
+      const saved = await saveUserAsAdmin(row.id, {
+        checking: Number(row.balances.checking || 0),
+        savings: Number(row.balances.savings || 0),
+        debt: Number(row.balances.debt || 0),
+        isAdmin: Boolean(row.isAdmin),
+        username: row.username,
+        historicalEventResetNextMonth: true,
+      })
+
+      if (!saved) failed.push(row.username)
+      else savedMap[row.id] = saved
+    }
+
+    setResettingHistoricalEvent(false)
+
+    if (Object.keys(savedMap).length) {
+      setUsers(prev => prev.map(user => savedMap[user.id] || user))
+      setBaseUsers(prev => ({ ...prev, ...savedMap }))
+      await refreshPeerSnapshots()
+    }
+
+    if (failed.length) {
+      setError(`Reset scheduling failed for: ${failed.join(', ')}`)
+      return
+    }
+
+    setMessage(`Scheduled reset to normal circumstances next month for ${Object.keys(savedMap).length} users.`)
+  }
 
   if (!state?.isAdmin) {
     return <div className="glass p-4 rounded-xl">Admin access required.</div>
@@ -476,6 +611,79 @@ export default function Admin() {
 
   return (
     <div className="space-y-4">
+      <div className="glass p-4 rounded-xl space-y-3 border-l-4 border-indigo-500">
+        <h2 className="text-xl font-semibold">Admin: Historical Crisis Events</h2>
+        <p className="text-sm text-slate-600">Run structured economic scenarios to teach risk management, emergency savings, and diversification. Job availability remains deterministic, but crisis effects can still impact job outcomes, income, and market conditions.</p>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-semibold text-indigo-800">Scenario</span>
+          <select
+            value={selectedHistoricalScenarioId}
+            onChange={(e) => {
+              const nextId = e.target.value
+              setSelectedHistoricalScenarioId(nextId)
+              const nextScenario = findHistoricalScenarioById(nextId)
+              if (nextScenario) setHistoricalEventApplyMonths(nextScenario.defaultDurationMonths)
+            }}
+            className="p-2 border rounded text-sm bg-white"
+          >
+            {historicalEconomicEventScenarios.map((scenario) => (
+              <option key={scenario.id} value={scenario.id}>{scenario.title} ({scenario.era})</option>
+            ))}
+          </select>
+        </label>
+
+        {selectedHistoricalScenario ? (
+          <div className="rounded-lg border border-indigo-100 bg-white/80 p-3 space-y-2">
+            <p className="text-sm font-semibold text-indigo-900">{selectedHistoricalScenario.title}</p>
+            <p className="text-xs text-indigo-800">{selectedHistoricalScenario.summary}</p>
+            <div className="text-xs text-indigo-900 space-y-1">
+              <p><span className="font-semibold">Default Duration:</span> {selectedHistoricalScenario.defaultDurationMonths} month(s)</p>
+              <p><span className="font-semibold">Learning Focus:</span> maintain cash reserves, avoid over-concentration, and prepare for volatility.</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-indigo-700">Affected Values</p>
+              <ul className="list-disc ml-5 mt-1 text-xs text-indigo-900 space-y-1">
+                {selectedHistoricalScenario.affectedValues.map((value) => (
+                  <li key={value}>{value}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-semibold text-indigo-800">Scenario duration in months</span>
+            <input
+              type="number"
+              min={1}
+              max={36}
+              value={historicalEventApplyMonths}
+              onChange={(e) => setHistoricalEventApplyMonths(Math.max(1, Math.min(36, Number(e.target.value || 1))))}
+              className="p-2 border rounded text-sm w-full max-w-sm bg-white"
+            />
+          </label>
+          <button
+            onClick={applyHistoricalEventToAllUsers}
+            disabled={applyingHistoricalEvent || !selectedHistoricalScenario}
+            className="px-4 py-2 rounded bg-indigo-700 text-white text-sm font-semibold disabled:opacity-60"
+          >
+            {applyingHistoricalEvent ? 'Applying Scenario...' : 'Apply Scenario To All Users'}
+          </button>
+        </div>
+
+        <div className="pt-2 border-t border-indigo-200">
+          <button
+            onClick={scheduleResetHistoricalEventForAllUsers}
+            disabled={resettingHistoricalEvent}
+            className="px-4 py-2 rounded bg-amber-600 text-white text-sm font-semibold disabled:opacity-60"
+          >
+            {resettingHistoricalEvent ? 'Scheduling Reset...' : 'Reset All Users To Normal Next Month'}
+          </button>
+        </div>
+      </div>
+
       <div className="glass p-4 rounded-xl space-y-3">
         <h2 className="text-xl font-semibold">Admin: User Management</h2>
         <p className="text-sm text-slate-600">Your authenticated admin session is required to load and save updates.</p>
