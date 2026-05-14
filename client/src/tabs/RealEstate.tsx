@@ -292,6 +292,7 @@ export default function RealEstate() {
   const [purchaseMode, setPurchaseMode] = useState<'cash' | 'mortgage'>('mortgage')
   const [mortgageTermYears, setMortgageTermYears] = useState<15 | 30>(30)
   const [projectionModal, setProjectionModal] = useState<{ propertyId: string; amenity: string } | null>(null)
+  const [listingCalcOpen, setListingCalcOpen] = useState<Record<string, boolean>>({})
 
   const market = (state.realEstateMarket || {}) as Record<string, any[]>
   const marketMeta = (state.realEstateMarketMeta || {}) as any
@@ -471,6 +472,39 @@ export default function RealEstate() {
     return Math.round(price * downPaymentPct + price * 0.025)
   }
 
+  const scenarioForListing = (listing: any, occupancyRate: number, conditionAssumption: number) => {
+    const units = Math.max(1, Number(listing.units || 1))
+    const rentPerUnit = Math.max(450, Number(listing.askingRentPerUnit || 0))
+    const price = Math.max(60000, Number(listing.askingPrice || 0))
+    const city = (Array.isArray(cityData) ? cityData : []).find((c: any) => c.name === listing.cityName || c.name === selectedCity) || { p: 1, r: 1 }
+    const upkeepRate = amenityUpkeepRate(Array.isArray(listing.amenities) ? listing.amenities : [])
+    const annualTaxRate = 0.009 + Number(city.p || 1) * 0.003
+    const annualInsuranceRate = 0.0035 + Number(city.r || 1) * 0.001
+    const annualMaintenanceRate = 0.014 + (Math.max(0, 85 - conditionAssumption) * 0.00025) + upkeepRate
+    const operatingCosts = Math.round((price * (annualTaxRate + annualInsuranceRate + annualMaintenanceRate) / 12) * 100) / 100
+    let debtService = 0
+    if (purchaseMode === 'mortgage') {
+      const loanAmount = price * (1 - downPaymentPct)
+      const annualRate = 0.068
+      const monthlyRate = annualRate / 12
+      const n = mortgageTermYears * 12
+      debtService = Math.round((loanAmount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1))
+    }
+    const occupiedUnits = Math.max(0, Math.min(units, Math.round(units * occupancyRate)))
+    const gross = Math.round(occupiedUnits * rentPerUnit * 100) / 100
+    const net = Math.round((gross - operatingCosts - debtService) * 100) / 100
+    const margin = gross > 0 ? (net / gross) * 100 : -100
+    return { gross, operatingCosts, debtService, net, margin }
+  }
+
+  const listingBreakEven = (listing: any, conditionAssumption: number) => {
+    const units = Math.max(1, Number(listing.units || 1))
+    const rentPerUnit = Math.max(450, Number(listing.askingRentPerUnit || 0))
+    const full = scenarioForListing(listing, 1, conditionAssumption)
+    const breakEvenUnits = (full.operatingCosts + full.debtService) / Math.max(1, rentPerUnit)
+    return Math.max(0, Math.min(100, (breakEvenUnits / units) * 100))
+  }
+
   return (
     <div className="space-y-6">
       <div className="glass p-4">
@@ -626,6 +660,62 @@ export default function RealEstate() {
                   : `${vocabulary.estCashToCloseLabel}: ${currency(estimatedMortgageCash(listing))}`}
               </p>
               {listing.foreclosure ? <p className="text-[11px] font-bold text-rose-700 mt-1">{vocabulary.foreclosureLabel}</p> : null}
+              <button
+                className="mt-2 px-2 py-1 text-xs rounded bg-indigo-100 text-indigo-800 hover:bg-indigo-200 w-full text-left"
+                onClick={() => setListingCalcOpen((prev) => ({ ...prev, [listing.id]: !prev[listing.id] }))}
+              >
+                {listingCalcOpen[listing.id] ? '▾ Hide Pre-Offer Analysis' : '▸ Analyze Before Making an Offer'}
+              </button>
+              {listingCalcOpen[listing.id] && (() => {
+                const lowOccLowCond = scenarioForListing(listing, 0.6, 45)
+                const lowOccHighCond = scenarioForListing(listing, 0.6, 90)
+                const highOccLowCond = scenarioForListing(listing, 0.95, 45)
+                const highOccHighCond = scenarioForListing(listing, 0.95, 90)
+                const breakEvenLow = listingBreakEven(listing, 45)
+                const breakEvenHigh = listingBreakEven(listing, 90)
+                return (
+                  <div className="mt-2 bg-indigo-50 border border-indigo-200 rounded p-3">
+                    <p className="text-xs font-semibold text-indigo-900 mb-1">{vocabulary.scenarioSectionTitle} — Pre-Offer Estimate</p>
+                    <p className="text-[11px] text-indigo-700 mb-2">Based on current {purchaseMode === 'mortgage' ? `${mortgageTermYears}Y mortgage, ${Math.round(downPaymentPct * 100)}% down` : 'cash purchase'} at asking price. Rows: occupancy. Columns: condition.</p>
+                    <div className="grid grid-cols-3 gap-1 text-[11px]">
+                      <div className="bg-white rounded p-1" />
+                      <div className="bg-white rounded p-1 text-slate-700 font-semibold">{vocabulary.lowLabel} condition</div>
+                      <div className="bg-white rounded p-1 text-slate-700 font-semibold">{vocabulary.highLabel} condition</div>
+
+                      <div className="bg-white rounded p-1 text-slate-700 font-semibold">{vocabulary.lowLabel} occupancy</div>
+                      <div className="bg-white rounded p-1">
+                        <p className={`font-semibold ${lowOccLowCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(lowOccLowCond.net)}/mo</p>
+                        <p className="text-slate-500">{percent(lowOccLowCond.margin)}</p>
+                      </div>
+                      <div className="bg-white rounded p-1">
+                        <p className={`font-semibold ${lowOccHighCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(lowOccHighCond.net)}/mo</p>
+                        <p className="text-slate-500">{percent(lowOccHighCond.margin)}</p>
+                      </div>
+
+                      <div className="bg-white rounded p-1 text-slate-700 font-semibold">{vocabulary.highLabel} occupancy</div>
+                      <div className="bg-white rounded p-1">
+                        <p className={`font-semibold ${highOccLowCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(highOccLowCond.net)}/mo</p>
+                        <p className="text-slate-500">{percent(highOccLowCond.margin)}</p>
+                      </div>
+                      <div className="bg-white rounded p-1">
+                        <p className={`font-semibold ${highOccHighCond.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{currency(highOccHighCond.net)}/mo</p>
+                        <p className="text-slate-500">{percent(highOccHighCond.margin)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="bg-white rounded p-2">
+                        <p className="text-slate-500 uppercase text-[10px]">{vocabulary.operatingLabel} (avg)</p>
+                        <p className="font-semibold text-slate-800">{currency(Math.round((lowOccLowCond.operatingCosts + highOccHighCond.operatingCosts) / 2))}/mo</p>
+                      </div>
+                      <div className="bg-white rounded p-2">
+                        <p className="text-slate-500 uppercase text-[10px]">{vocabulary.debtLabel}</p>
+                        <p className="font-semibold text-slate-800">{currency(highOccHighCond.debtService)}/mo</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-indigo-800 mt-2">{vocabulary.breakevenLabel}: <span className="font-semibold">{percent(breakEvenLow)}</span> (low cond.) / <span className="font-semibold">{percent(breakEvenHigh)}</span> (high cond.)</p>
+                  </div>
+                )
+              })()}
             </div>
           )
         })}
