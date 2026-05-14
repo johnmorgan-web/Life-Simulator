@@ -60,7 +60,7 @@ export class UserService implements OnModuleInit {
     return {
       recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
       inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
-      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw?.jobAvailability || 100)))),
+      jobAvailability: 100, // always deterministic, not event/admin modifiable
       marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw?.marketVolatility || 100)))),
       nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw?.nextMonthStockShock || 0))),
     };

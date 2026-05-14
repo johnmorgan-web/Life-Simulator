@@ -21,13 +21,14 @@ export class JobService {
     inflationPressure: number;
     jobAvailability: number;
   } {
+    // jobAvailability is always 100, not event/admin modifiable
     if (!raw || typeof raw !== 'object') {
       return { recessionSeverity: 0, inflationPressure: 0, jobAvailability: 100 };
     }
     return {
       recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
       inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
-      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw?.jobAvailability || 100)))),
+      jobAvailability: 100,
     };
   }
 
@@ -267,7 +268,7 @@ export class JobService {
       Number(inferredCapacity || 1),
     );
     const demandMultiplier = Math.max(0.35, Math.min(1.9,
-      (economy.jobAvailability / 100)
+      (1) // jobAvailability is always 100, so this is 1
       * (1 - economy.recessionSeverity * 0.004)
       * (1 - economy.inflationPressure * 0.0015),
     ));
@@ -290,7 +291,8 @@ export class JobService {
     const macroPressure = Math.max(0, Math.min(0.35,
       economy.recessionSeverity * 0.003
       + economy.inflationPressure * 0.0018
-      - (economy.jobAvailability - 100) * 0.0015,
+      // jobAvailability is always 100, so this term is always 0
+      // - (economy.jobAvailability - 100) * 0.0015
     ));
     const marketPressure = Math.max(0, Math.min(0.45, salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure));
     const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure));
