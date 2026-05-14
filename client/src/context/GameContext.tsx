@@ -2232,7 +2232,8 @@ function reducer(state: State, action: any) {
 				if (refreshedPrimary) ownsVehicle = refreshedPrimary
 			}
 
-			const check = fix(state.check - (paySave + payDebt + vehicleCosts))
+			// Ledger rows already include vehicle-related monthly costs. Subtract only explicit settlement transfers here.
+			const check = fix(state.check - (paySave + payDebt))
 			const monthlyGasPaid = sumLedgerAmounts(state.ledger, (desc) => desc.includes('Gas'))
 			const monthlyUtilitiesPaid = sumLedgerAmounts(state.ledger, (desc) => desc.includes('Utilities & Phone/Internet'))
 			const monthlyLuxuryEventSpend = sumLedgerAmounts(state.ledger, (desc) => desc === 'Entertainment' || desc === 'Subscription Entertainment')
@@ -3714,7 +3715,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 				return
 			}
 
-			buildLedger(safePaySave, safePayDebt, latest)
+			// Reducer already applies paySave/payDebt to checking before month advances.
+			// Rebuilding with non-zero settlement values would subtract them a second time.
+			buildLedger(0, 0, latest)
 			void saveGame(latest)
 		}
 
