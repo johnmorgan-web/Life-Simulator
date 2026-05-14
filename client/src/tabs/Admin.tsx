@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy'
-import { findHistoricalScenarioById, historicalEconomicEventScenarios } from '../constants/historicalEconomicEvents.constants'
+// ...existing code...
 
-const ECONOMY_PRESET_STORAGE_KEY = 'life-sim:admin-economy-preset:v1'
+// ...existing code...
 
 type AdminUserRow = {
   id: string
@@ -30,9 +30,7 @@ type AdminUserRow = {
     creditScore: number
     happiness: number
     netWorth: number
-    historicalEventTitle?: string
-    historicalEventMonthsRemaining?: number
-    historicalEventResetNextMonth?: boolean
+    // ...removed event fields...
   }
 }
 
@@ -81,12 +79,7 @@ export default function Admin() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [savingAll, setSavingAll] = useState(false)
-  const [applyingEconomy, setApplyingEconomy] = useState(false)
-  const [applyingHistoricalEvent, setApplyingHistoricalEvent] = useState(false)
-  const [resettingHistoricalEvent, setResettingHistoricalEvent] = useState(false)
-  const [economyApplyMonths, setEconomyApplyMonths] = useState<number>(0)
-  const [selectedHistoricalScenarioId, setSelectedHistoricalScenarioId] = useState<string>(historicalEconomicEventScenarios[0]?.id || '')
-  const [historicalEventApplyMonths, setHistoricalEventApplyMonths] = useState<number>(historicalEconomicEventScenarios[0]?.defaultDurationMonths || 6)
+  // ...removed event/economy override state...
   const [manageDraft, setManageDraft] = useState<ManageDraft | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -98,53 +91,15 @@ export default function Admin() {
       .sort((a, b) => a.localeCompare(b))
   }, [jobBoard])
 
-  const selectedHistoricalScenario = useMemo(() => {
-    return findHistoricalScenarioById(selectedHistoricalScenarioId)
-  }, [selectedHistoricalScenarioId])
+  // ...removed event scenario selection...
 
-  const economyOverrides = useMemo(() => {
-    const raw = state?.economyOverrides || {}
-    return {
-      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw.recessionSeverity || 0)))),
-      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw.inflationPressure || 0)))),
-      jobAvailability: Math.max(40, Math.min(180, Math.round(Number(raw.jobAvailability || 100)))),
-      marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw.marketVolatility || 100)))),
-      nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw.nextMonthStockShock || 0))),
-    }
-  }, [state?.economyOverrides])
+  // ...removed economy override logic...
 
-  const updateEconomyOverride = (key: string, value: number) => {
-    dispatch({
-      type: 'SET_STATE',
-      payload: {
-        economyOverrides: {
-          ...economyOverrides,
-          [key]: value,
-        },
-      },
-    })
-  }
+  // ...removed economy override logic...
 
-  const setStockShock = (shock: number) => {
-    updateEconomyOverride('nextMonthStockShock', shock)
-    setMessage(`Queued ${(shock * 100).toFixed(0)}% market shock for next month processing.`)
-  }
+  // ...removed stock shock logic...
 
-  const resetEconomyOverrides = () => {
-    dispatch({
-      type: 'SET_STATE',
-      payload: {
-        economyOverrides: {
-          recessionSeverity: 0,
-          inflationPressure: 0,
-          jobAvailability: 100,
-          marketVolatility: 100,
-          nextMonthStockShock: 0,
-        },
-      },
-    })
-    setMessage('Economy controls reset to neutral baseline.')
-  }
+  // ...removed reset economy logic...
 
   const canLoad = useMemo(() => Boolean(state?.isAdmin && state?.id && state?.authToken), [state?.isAdmin, state?.id, state?.authToken])
   const unsavedCount = useMemo(() => {
@@ -505,291 +460,15 @@ export default function Admin() {
     }
   }
 
-  const saveEconomyPreset = async () => {
-    localStorage.setItem(ECONOMY_PRESET_STORAGE_KEY, JSON.stringify({
-      economyOverrides,
-      economyApplyMonths: Math.max(0, Math.floor(Number(economyApplyMonths || 0))),
-    }))
-    const saved = await saveGame()
-    if (!saved) {
-      setError('Saved locally, but could not persist your admin profile to the server.')
-      return
-    }
-    setError('')
-    setMessage('Economy sliders saved locally and to your admin profile.')
-  }
+  // ...removed save economy preset logic...
 
-  const loadEconomyPreset = () => {
-    const raw = localStorage.getItem(ECONOMY_PRESET_STORAGE_KEY)
-    if (!raw) {
-      setError('No saved economy preset found on this browser.')
-      return
-    }
-    try {
-      const parsed = JSON.parse(raw)
-      const preset = parsed?.economyOverrides || {}
-      dispatch({
-        type: 'SET_STATE',
-        payload: {
-          economyOverrides: {
-            recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(preset.recessionSeverity || 0)))),
-            inflationPressure: Math.max(0, Math.min(100, Math.round(Number(preset.inflationPressure || 0)))),
-            jobAvailability: Math.max(40, Math.min(180, Math.round(Number(preset.jobAvailability || 100)))),
-            marketVolatility: Math.max(50, Math.min(220, Math.round(Number(preset.marketVolatility || 100)))),
-            nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(preset.nextMonthStockShock || 0))),
-          },
-        },
-      })
-      setEconomyApplyMonths(Math.max(0, Math.floor(Number(parsed?.economyApplyMonths || 0))))
-      setError('')
-      setMessage('Loaded saved economy preset.')
-    } catch {
-      setError('Saved economy preset is corrupted. Please resave it.')
-    }
-  }
+  // ...removed load economy preset logic...
 
-  const applyEconomyToAllUsers = async () => {
-    if (!state?.authToken) {
-      setError('You must be logged in to apply economy settings to all users.')
-      return
-    }
+  // ...removed apply economy to all users logic...
 
-    setApplyingEconomy(true)
-    setError('')
-    setMessage('')
+  // ...removed apply historical event to all users logic...
 
-    let targetUsers = users
-    if (!targetUsers.length) {
-      const response = await listUsersForAdmin()
-      if (!response) {
-        setApplyingEconomy(false)
-        setError('Unable to load users for economy broadcast.')
-        return
-      }
-      targetUsers = response
-      setUsers(response)
-      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
-    }
-
-    const failed: string[] = []
-    const savedMap: Record<string, AdminUserRow> = {}
-    const normalizedMonths = Math.max(0, Math.floor(Number(economyApplyMonths || 0)))
-
-    for (const row of targetUsers) {
-      const saved = await saveUserAsAdmin(row.id, {
-        checking: Number(row.balances.checking || 0),
-        savings: Number(row.balances.savings || 0),
-        debt: Number(row.balances.debt || 0),
-        isAdmin: Boolean(row.isAdmin),
-        username: row.username,
-        economyOverrides,
-        economyApplyMonths: normalizedMonths,
-      })
-
-      if (!saved) {
-        failed.push(row.username)
-      } else {
-        savedMap[row.id] = saved
-      }
-    }
-
-    setApplyingEconomy(false)
-
-    if (Object.keys(savedMap).length) {
-      setUsers(prev => prev.map(user => savedMap[user.id] || user))
-      setBaseUsers(prev => ({ ...prev, ...savedMap }))
-      if (state?.id && savedMap[state.id]) {
-        dispatch({
-          type: 'SET_STATE',
-          payload: {
-            economyOverrides,
-            economyOverrideMonthsRemaining: normalizedMonths,
-          },
-        })
-      }
-      await refreshPeerSnapshots()
-    }
-
-    if (failed.length) {
-      setError(`Economy broadcast failed for: ${failed.join(', ')}`)
-      return
-    }
-    setMessage(`Applied economy sliders to ${Object.keys(savedMap).length} users${normalizedMonths > 0 ? ` for ${normalizedMonths} month${normalizedMonths === 1 ? '' : 's'}` : ' (persistent until changed)'}.`)
-  }
-
-  const applyHistoricalEventToAllUsers = async () => {
-    if (!state?.authToken) {
-      setError('You must be logged in to apply historical events.')
-      return
-    }
-
-    if (!selectedHistoricalScenario) {
-      setError('Select a historical event scenario first.')
-      return
-    }
-
-    const normalizedMonths = Math.max(1, Math.min(36, Math.floor(Number(historicalEventApplyMonths || selectedHistoricalScenario.defaultDurationMonths || 6))))
-
-    setApplyingHistoricalEvent(true)
-    setError('')
-    setMessage('')
-
-    let targetUsers = users
-    if (!targetUsers.length) {
-      const response = await listUsersForAdmin()
-      if (!response) {
-        setApplyingHistoricalEvent(false)
-        setError('Unable to load users for historical event broadcast.')
-        return
-      }
-      targetUsers = response
-      setUsers(response)
-      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
-    }
-
-    const failed: string[] = []
-    const savedMap: Record<string, AdminUserRow> = {}
-    const skippedActive: string[] = []
-
-    for (const row of targetUsers) {
-      const activeMonths = Math.max(0, Number(row.progression?.historicalEventMonthsRemaining || 0))
-      const alreadyResetScheduled = Boolean(row.progression?.historicalEventResetNextMonth)
-      if (activeMonths > 0 && !alreadyResetScheduled) {
-        skippedActive.push(row.username)
-        continue
-      }
-
-      const startMonth = Math.max(1, Math.min(12, Number(row.progression?.month || state.month || 1)))
-      const startYear = Math.max(1, Number(row.progression?.year || state.year || 2026))
-      const saved = await saveUserAsAdmin(row.id, {
-        checking: Number(row.balances.checking || 0),
-        savings: Number(row.balances.savings || 0),
-        debt: Number(row.balances.debt || 0),
-        isAdmin: Boolean(row.isAdmin),
-        username: row.username,
-        economyOverrides: selectedHistoricalScenario.economyOverrides,
-        economyApplyMonths: normalizedMonths,
-        historicalEventResetNextMonth: false,
-        historicalEconomicEvent: {
-          id: selectedHistoricalScenario.id,
-          title: selectedHistoricalScenario.title,
-          era: selectedHistoricalScenario.era,
-          summary: selectedHistoricalScenario.summary,
-          totalMonths: normalizedMonths,
-          monthsRemaining: normalizedMonths,
-          startedMonth: startMonth,
-          startedYear: startYear,
-          effects: selectedHistoricalScenario.effects,
-        },
-      })
-
-      if (!saved) {
-        failed.push(row.username)
-      } else {
-        savedMap[row.id] = saved
-      }
-    }
-
-    setApplyingHistoricalEvent(false)
-
-    if (Object.keys(savedMap).length) {
-      setUsers(prev => prev.map(user => savedMap[user.id] || user))
-      setBaseUsers(prev => ({ ...prev, ...savedMap }))
-
-      if (state?.id && savedMap[state.id]) {
-        dispatch({
-          type: 'SET_STATE',
-          payload: {
-            economyOverrides: selectedHistoricalScenario.economyOverrides,
-            economyOverrideMonthsRemaining: normalizedMonths,
-            historicalEventResetNextMonth: false,
-            historicalEconomicEvent: {
-              id: selectedHistoricalScenario.id,
-              title: selectedHistoricalScenario.title,
-              era: selectedHistoricalScenario.era,
-              summary: selectedHistoricalScenario.summary,
-              totalMonths: normalizedMonths,
-              monthsRemaining: normalizedMonths,
-              startedMonth: state.month,
-              startedYear: state.year,
-              effects: selectedHistoricalScenario.effects,
-            },
-          },
-        })
-      }
-
-      await refreshPeerSnapshots()
-    }
-
-    if (failed.length) {
-      setError(`Historical event broadcast failed for: ${failed.join(', ')}`)
-      return
-    }
-
-    const skippedSummary = skippedActive.length
-      ? ` Skipped ${skippedActive.length} active user${skippedActive.length === 1 ? '' : 's'} still progressing through existing scenarios.`
-      : ''
-    setMessage(`Applied historical scenario "${selectedHistoricalScenario.title}" to ${Object.keys(savedMap).length} users for ${normalizedMonths} month${normalizedMonths === 1 ? '' : 's'}.${skippedSummary}`)
-  }
-
-  const scheduleResetHistoricalEventForAllUsers = async () => {
-    if (!state?.authToken) {
-      setError('You must be logged in to schedule historical reset.')
-      return
-    }
-
-    setResettingHistoricalEvent(true)
-    setError('')
-    setMessage('')
-
-    let targetUsers = users
-    if (!targetUsers.length) {
-      const response = await listUsersForAdmin()
-      if (!response) {
-        setResettingHistoricalEvent(false)
-        setError('Unable to load users for reset scheduling.')
-        return
-      }
-      targetUsers = response
-      setUsers(response)
-      setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
-    }
-
-    const failed: string[] = []
-    const savedMap: Record<string, AdminUserRow> = {}
-
-    for (const row of targetUsers) {
-      const saved = await saveUserAsAdmin(row.id, {
-        checking: Number(row.balances.checking || 0),
-        savings: Number(row.balances.savings || 0),
-        debt: Number(row.balances.debt || 0),
-        isAdmin: Boolean(row.isAdmin),
-        username: row.username,
-        historicalEventResetNextMonth: true,
-      })
-
-      if (!saved) failed.push(row.username)
-      else savedMap[row.id] = saved
-    }
-
-    setResettingHistoricalEvent(false)
-
-    if (Object.keys(savedMap).length) {
-      setUsers(prev => prev.map(user => savedMap[user.id] || user))
-      setBaseUsers(prev => ({ ...prev, ...savedMap }))
-      if (state?.id && savedMap[state.id]) {
-        dispatch({ type: 'SET_STATE', payload: { historicalEventResetNextMonth: true } })
-      }
-      await refreshPeerSnapshots()
-    }
-
-    if (failed.length) {
-      setError(`Reset scheduling failed for: ${failed.join(', ')}`)
-      return
-    }
-
-    setMessage(`Scheduled reset to normal circumstances next month for ${Object.keys(savedMap).length} users.`)
-  }
+  // ...removed schedule reset historical event logic...
 
   if (!state?.isAdmin) {
     return <div className="glass p-4 rounded-xl">Admin access required.</div>
@@ -1149,12 +828,7 @@ export default function Admin() {
                     <div><span className="font-semibold">Date:</span> M{user.progression?.month || 0} / Y{user.progression?.year || 0} · Tenure {user.progression?.tenureMonths || 0}mo</div>
                     <div><span className="font-semibold">Credit/Happiness:</span> {user.progression?.creditScore || 0} / {user.progression?.happiness || 0}</div>
                     <div><span className="font-semibold">Transit:</span> L{user.progression?.transitLevel || 0} · <span className="font-semibold">Net Worth:</span> ${formatMoney(user.progression?.netWorth || 0)}</div>
-                    {Number(user.progression?.historicalEventMonthsRemaining || 0) > 0 ? (
-                      <div><span className="font-semibold">Scenario:</span> {user.progression?.historicalEventTitle || 'Historical Event'} ({user.progression?.historicalEventMonthsRemaining} mo left)</div>
-                    ) : null}
-                    {user.progression?.historicalEventResetNextMonth ? (
-                      <div className="text-amber-700"><span className="font-semibold">Reset Scheduled:</span> Normal circumstances next month</div>
-                    ) : null}
+                    {/* Removed event scenario display */}
                     {user.progression?.activeEducation ? <div><span className="font-semibold">Active Edu:</span> {user.progression.activeEducation}</div> : null}
                   </div>
                 </td>
