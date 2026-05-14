@@ -107,6 +107,17 @@ export class VehicleService {
     });
   }
 
+  // Chauffeur requires at least one luxury/high-level vehicle in the garage
+  garageHasChauffeurEligibleVehicle(garage: any[]): boolean {
+    if (!Array.isArray(garage) || garage.length === 0) return false;
+    return garage.some((g) => {
+      const vehicle = vehicleDatabase.vehicles.find((v) => v.id === g.vehicleId);
+      if (!vehicle) return false;
+      const cls = String((vehicle as any).class || '').toLowerCase();
+      return cls === 'luxury' || cls === 'unrealistic';
+    });
+  }
+
   // Get preferred transit from garage
   preferredTransitFromGarage(garage: any[], transitStateByName: (name: string) => any): any {
     if (!garage || garage.length === 0) return null;

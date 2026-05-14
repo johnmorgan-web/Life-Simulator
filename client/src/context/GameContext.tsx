@@ -2029,6 +2029,16 @@ function garageHasHelicopter(garage: any[]) {
 	})
 }
 
+function garageHasChauffeurEligibleVehicle(garage: any[]) {
+	if (!Array.isArray(garage) || garage.length === 0) return false
+	return garage.some((g: any) => {
+		const vehicle = vehicleDatabase.vehicles.find(v => v.id === g.vehicleId)
+		if (!vehicle) return false
+		const cls = String((vehicle as any).class || '').toLowerCase()
+		return cls === 'luxury' || cls === 'unrealistic'
+	})
+}
+
 function preferredTransitFromGarage(garage: any[]) {
 	if (!garage || garage.length === 0) return null
 	if (garageHasHelicopter(garage)) {
@@ -2037,7 +2047,11 @@ function preferredTransitFromGarage(garage: any[]) {
 	return transitStateByName('L4 - Owned Vehicle')
 }
 
-function syncTransitWithGarage(currentTransit: any, garage: any[]) {
+function syncTransitWithGarage(currentTransit: any, garage: any[], luxuryServices?: any) {
+	const chauffeurActive = Boolean(luxuryServices?.chauffer)
+	if (chauffeurActive && garageHasChauffeurEligibleVehicle(garage)) {
+		return transitStateByName('L5 - Chauffeur Service')
+	}
 	const vehicleTransit = preferredTransitFromGarage(garage)
 	if (vehicleTransit) return vehicleTransit
 	if ((currentTransit?.level || 1) >= 4) {
@@ -2165,12 +2179,12 @@ function reducer(state: State, action: any) {
 
 			// Calculate vehicle costs before checking calculation
 			let vehicleCosts = 0
-			const chauffeurHired = !!state.luxuryServices?.chauffer
 			let ownsVehicle = state.ownsVehicle
 			let vehicleSaleProceeds = 0
 			let logs = [...state.logs]
 			const garage = state.garage || []
 			let updatedGarage = garage.map((g: any) => ({ ...g }))
+			const chauffeurHired = !!state.luxuryServices?.chauffer && garageHasChauffeurEligibleVehicle(updatedGarage)
 			const sharedRealEstate = syncSharedRealEstateMarket(state, true)
 			let realEstateMarket = sharedRealEstate.market
 			let realEstateMarketMeta = sharedRealEstate.meta
@@ -2309,7 +2323,7 @@ function reducer(state: State, action: any) {
 				transit = { name: state.pendingTransit.n, cost: state.pendingTransit.c, level: state.pendingTransit.l }
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit changed to ${state.pendingTransit.n}` })
 			}
-			const syncedTransit = syncTransitWithGarage(transit, updatedGarage)
+			const syncedTransit = syncTransitWithGarage(transit, updatedGarage, state.luxuryServices)
 			if (syncedTransit.name !== transit.name) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `Transit auto-adjusted to ${syncedTransit.name} based on owned vehicles` })
 			}

@@ -3,17 +3,42 @@ import lifestyleExpenses from '../constants/lifestyleExpenses.constants'
 import { useEffect, useRef, useState } from 'react'
 
 export default function Lifestyle() {
-  const { state, dispatch, buildLedger, getLuxuryServiceMonthlyPay } = useGame()
+  const { state, dispatch, buildLedger, getLuxuryServiceMonthlyPay, transitOptions, vehicleDatabase } = useGame()
   const [showHappinessTooltip, setShowHappinessTooltip] = useState(false)
   const [entTierFlash, setEntTierFlash] = useState(false)
   const [subTierFlash, setSubTierFlash] = useState(false)
+  const [serviceFeedback, setServiceFeedback] = useState('')
   const prevEntTierRef = useRef<string | null>(null)
   const prevSubTierRef = useRef<string | null>(null)
 
+  const garageHasChauffeurEligibleVehicle = () => {
+    const garage = Array.isArray(state.garage) ? state.garage : []
+    return garage.some((g: any) => {
+      const vehicle = Array.isArray(vehicleDatabase?.vehicles)
+        ? vehicleDatabase.vehicles.find((v: any) => v.id === g.vehicleId)
+        : null
+      if (!vehicle) return false
+      const cls = String(vehicle.class || '').toLowerCase()
+      return cls === 'luxury' || cls === 'unrealistic'
+    })
+  }
+
   const handleToggleService = (serviceId: string) => {
-    const updated = { ...state.luxuryServices, [serviceId]: !state.luxuryServices[serviceId] }
-    dispatch({ type: 'SET_STATE', payload: { luxuryServices: updated } })
-    buildLedger(0, 0, { ...state, luxuryServices: updated })
+    const nextEnabled = !state.luxuryServices[serviceId]
+    if (serviceId === 'chauffer' && nextEnabled && !garageHasChauffeurEligibleVehicle()) {
+      setServiceFeedback('Personal Chauffeur requires at least one Luxury or High-Level vehicle in your garage.')
+      return
+    }
+
+    setServiceFeedback('')
+    const updated = { ...state.luxuryServices, [serviceId]: nextEnabled }
+    const chauffeurTransit = transitOptions.find((t: any) => String(t?.n || '').includes('Chauffeur'))
+    const payload: any = { luxuryServices: updated }
+    if (serviceId === 'chauffer' && nextEnabled && chauffeurTransit) {
+      payload.pendingTransit = chauffeurTransit
+    }
+    dispatch({ type: 'SET_STATE', payload })
+    buildLedger(0, 0, { ...state, luxuryServices: updated, pendingTransit: payload.pendingTransit ?? state.pendingTransit })
   }
 
   const handleEntertainmentChange = (newAmount: number) => {
@@ -439,6 +464,7 @@ export default function Lifestyle() {
           {/* Luxury Services Section */}
           <div>
             <h3 className="font-bold text-lg mb-4">✨ Luxury Services</h3>
+            {serviceFeedback ? <p className="text-sm text-rose-700 mb-3">{serviceFeedback}</p> : null}
             <div className="grid grid-cols-2 gap-4">
               {lifestyleExpenses.luxuryServices.map(service => {
                 const isActive = (state.luxuryServices as any)[service.id]
