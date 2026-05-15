@@ -363,6 +363,14 @@ export default function MathLab() {
   const [selected, setSelected] = useState('loan-payment')
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [pendingRewardPersist, setPendingRewardPersist] = useState<null | {
+    check: number
+    credit: number
+    rewardTokens: number
+    mathLabStreak: number
+    mathLabLastSolvedMonth: number
+    mathLabLastSolvedYear: number
+  }>(null)
   const [previousRecommendation, setPreviousRecommendation] = useState<RecommendationSnapshot | null>(() => readRecommendationSnapshot())
 
   const challenges = useMemo(() => buildChallenges(state), [state.month, state.year, state.job?.base, state.city?.p, state.debt, state.credit, state.garage, state.transit?.cost, state.check, state.savings, state.entertainmentSpending, state.subscriptionEntertainmentSpending])
@@ -472,6 +480,28 @@ export default function MathLab() {
     }
   }, [state.month, state.year, recommendation.level, recommendation.typicalAccuracy, recommendation.monthsPlayed, recommendation.netWorth])
 
+  useEffect(() => {
+    if (!pendingRewardPersist) return
+    const isReadyToPersist = Number(state.check || 0) === Number(pendingRewardPersist.check)
+      && Number(state.credit || 0) === Number(pendingRewardPersist.credit)
+      && Number(state.rewardTokens || 0) === Number(pendingRewardPersist.rewardTokens)
+      && Number(state.mathLabStreak || 0) === Number(pendingRewardPersist.mathLabStreak)
+      && Number(state.mathLabLastSolvedMonth || -1) === Number(pendingRewardPersist.mathLabLastSolvedMonth)
+      && Number(state.mathLabLastSolvedYear || -1) === Number(pendingRewardPersist.mathLabLastSolvedYear)
+    if (!isReadyToPersist) return
+    void saveGame()
+    setPendingRewardPersist(null)
+  }, [
+    pendingRewardPersist,
+    saveGame,
+    state.check,
+    state.credit,
+    state.rewardTokens,
+    state.mathLabStreak,
+    state.mathLabLastSolvedMonth,
+    state.mathLabLastSolvedYear,
+  ])
+
   const solvedThisMonth = Number(state.mathLabLastSolvedMonth || -1) === Number(state.month)
     && Number(state.mathLabLastSolvedYear || -1) === Number(state.year)
   const elementarySolveStreak = Math.max(0, Number(state.mathLabElementarySolveStreak || 0))
@@ -532,9 +562,7 @@ export default function MathLab() {
       type: 'SET_STATE',
       payload,
     })
-    window.setTimeout(() => {
-      void saveGame()
-    }, 0)
+    setPendingRewardPersist(payload)
 
     setFeedback(`Correct! ${challenge.expected} ${challenge.unit}. Rewards claimed: +$${cashReward}, +${creditBoost} credit, +${tokenReward} token.${elementaryRewardLimited ? ' Elementary-level reward cap applied due to repeated elementary solves.' : ''}`)
   }
