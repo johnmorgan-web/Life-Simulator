@@ -17,7 +17,11 @@ describe('GameController stocks/advance', () => {
       { buildLedger: jest.fn(), extractStatementEvents: jest.fn() } as any,
       { spinRewardWheelForUser: jest.fn() } as any,
       { evaluateApplications: jest.fn(), applyForJob: jest.fn() } as any,
-      { syncSharedRealEstateMarket: jest.fn(), normalizeRealEstateStateFromShared: jest.fn(), setSharedRealEstateMarket: jest.fn() } as any,
+      {
+        syncSharedRealEstateMarket: jest.fn(),
+        normalizeRealEstateStateFromShared: jest.fn(),
+        setSharedRealEstateMarket: jest.fn(),
+      } as any,
       marketService,
       userRepoMock as any,
     );
@@ -55,7 +59,8 @@ describe('GameController stocks/advance', () => {
     expect(Array.isArray(response.marketPriceHistory)).toBe(true);
     expect(response.marketPriceHistory.length).toBeGreaterThan(0);
 
-    const last = response.marketPriceHistory[response.marketPriceHistory.length - 1];
+    const last =
+      response.marketPriceHistory[response.marketPriceHistory.length - 1];
     expect(last.month).toBe(1);
     expect(last.year).toBe(2027);
 
@@ -109,14 +114,22 @@ describe('GameController stocks/advance', () => {
       historicalEconomicEvent: null,
     };
 
-    userRepoMock.find.mockResolvedValueOnce(new Array(10).fill({ state: {}, id: 'u', username: 'u' }));
+    userRepoMock.find.mockResolvedValueOnce(
+      new Array(10).fill({ state: {}, id: 'u', username: 'u' }),
+    );
     const lowUsers = await controller.advanceStockMarket({ state });
 
-    userRepoMock.find.mockResolvedValueOnce(new Array(100).fill({ state: {}, id: 'u', username: 'u' }));
+    userRepoMock.find.mockResolvedValueOnce(
+      new Array(100).fill({ state: {}, id: 'u', username: 'u' }),
+    );
     const highUsers = await controller.advanceStockMarket({ state });
 
     expect(highUsers.marketPrices).toEqual(lowUsers.marketPrices);
-    expect(Number(highUsers.marketCapsByTicker.AAPL || 0)).toBeGreaterThan(Number(lowUsers.marketCapsByTicker.AAPL || 0));
-    expect(Number(highUsers.floatSharesByTicker.AAPL || 0)).toBeGreaterThan(Number(lowUsers.floatSharesByTicker.AAPL || 0));
+    expect(Number(highUsers.marketCapsByTicker.AAPL || 0)).toBeGreaterThan(
+      Number(lowUsers.marketCapsByTicker.AAPL || 0),
+    );
+    expect(Number(highUsers.floatSharesByTicker.AAPL || 0)).toBeGreaterThan(
+      Number(lowUsers.floatSharesByTicker.AAPL || 0),
+    );
   });
 });

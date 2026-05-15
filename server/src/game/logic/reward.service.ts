@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GameService } from './game.service';
@@ -33,7 +37,9 @@ export class RewardService {
     return this.round2(Number(state?.check || 0) + Number(state?.savings || 0));
   }
 
-  private getRewardTierByLiquidity(state: any): 'starter' | 'growth' | 'established' | 'elite' {
+  private getRewardTierByLiquidity(
+    state: any,
+  ): 'starter' | 'growth' | 'established' | 'elite' {
     const liquidity = this.getAccessibleLiquidity(state);
     if (liquidity < 10_000) return 'starter';
     if (liquidity < 50_000) return 'growth';
@@ -51,10 +57,17 @@ export class RewardService {
     if (tier === 'established') {
       return { maxCash: 3000, maxStockShares: 6, allowVehicle: true };
     }
-    return { maxCash: Number.POSITIVE_INFINITY, maxStockShares: Number.POSITIVE_INFINITY, allowVehicle: true };
+    return {
+      maxCash: Number.POSITIVE_INFINITY,
+      maxStockShares: Number.POSITIVE_INFINITY,
+      allowVehicle: true,
+    };
   }
 
-  private applyTierFilterToPool(state: any, pool: RewardPrize[]): RewardPrize[] {
+  private applyTierFilterToPool(
+    state: any,
+    pool: RewardPrize[],
+  ): RewardPrize[] {
     const tier = this.getRewardTierByLiquidity(state);
     const caps = this.getTierCaps(tier);
 
@@ -82,7 +95,9 @@ export class RewardService {
 
   private requiredCredentialsForVehicle(vehicle: any): string[] {
     if (!Array.isArray(vehicle?.requiredCredentials)) return [];
-    return vehicle.requiredCredentials.map((cred: any) => String(cred)).filter((cred: string) => !!cred);
+    return vehicle.requiredCredentials
+      .map((cred: any) => String(cred))
+      .filter((cred: string) => !!cred);
   }
 
   private canOperateVehicle(state: any, vehicle: any): boolean {
@@ -93,13 +108,18 @@ export class RewardService {
 
   private eligibleRewardVehicleIds(state: any): string[] {
     return rewardWheelVehicleGrantPool.filter((vehicleId) => {
-      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === vehicleId);
+      const vehicle = vehicleDatabase.vehicles.find(
+        (v: any) => v.id === vehicleId,
+      );
       if (!vehicle) return false;
       return this.canOperateVehicle(state, vehicle);
     });
   }
 
-  private applyVehicleLicenseFilterToPool(state: any, pool: RewardPrize[]): RewardPrize[] {
+  private applyVehicleLicenseFilterToPool(
+    state: any,
+    pool: RewardPrize[],
+  ): RewardPrize[] {
     const eligibleVehicleIds = this.eligibleRewardVehicleIds(state);
 
     return pool.filter((prize) => {
@@ -107,7 +127,9 @@ export class RewardService {
 
       const explicitVehicleId = (prize as any).vehicleId;
       if (explicitVehicleId) {
-        const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === explicitVehicleId);
+        const vehicle = vehicleDatabase.vehicles.find(
+          (v: any) => v.id === explicitVehicleId,
+        );
         if (!vehicle) return false;
         return this.canOperateVehicle(state, vehicle);
       }
@@ -123,10 +145,10 @@ export class RewardService {
   ): Partial<GameState> {
     const { name: _legacyName, ...stateWithoutName } = state;
     const resolvedName = String(
-      stateWithoutName.username
-      || stateWithoutName.currentUser
-      || usernameFallback
-      || 'Player',
+      stateWithoutName.username ||
+        stateWithoutName.currentUser ||
+        usernameFallback ||
+        'Player',
     );
     return {
       ...this.gameService.getInitialState(),
@@ -151,8 +173,15 @@ export class RewardService {
     return persistedState;
   }
 
-  private addOrUpdateHolding(portfolio: any[], ticker: string, shares: number, price: number) {
-    const next = Array.isArray(portfolio) ? portfolio.map((h: any) => ({ ...h })) : [];
+  private addOrUpdateHolding(
+    portfolio: any[],
+    ticker: string,
+    shares: number,
+    price: number,
+  ) {
+    const next = Array.isArray(portfolio)
+      ? portfolio.map((h: any) => ({ ...h }))
+      : [];
     const idx = next.findIndex((h: any) => h.ticker === ticker);
     const totalCost = this.round2(shares * price);
 
@@ -163,7 +192,9 @@ export class RewardService {
       const totalShares = existingShares + shares;
       const avgCost =
         totalShares > 0
-          ? this.round2((existingShares * existingAvg + totalCost) / totalShares)
+          ? this.round2(
+              (existingShares * existingAvg + totalCost) / totalShares,
+            )
           : this.round2(price);
       next[idx] = { ...existing, shares: totalShares, avgCost };
     } else {
@@ -174,7 +205,10 @@ export class RewardService {
   }
 
   private chooseWeightedPrize(pool: RewardPrize[]): RewardPrize {
-    const totalWeight = pool.reduce((sum, p) => sum + Number((p as any).weight || 1), 0);
+    const totalWeight = pool.reduce(
+      (sum, p) => sum + Number((p as any).weight || 1),
+      0,
+    );
     let roll = Math.random() * totalWeight;
     let chosen: RewardPrize = pool[pool.length - 1];
 
@@ -190,18 +224,26 @@ export class RewardService {
   }
 
   private spinRewardPrize(state: any): RewardPrize {
-    const queue = Array.isArray(state.rewardCategoryQueue) ? state.rewardCategoryQueue : [];
+    const queue = Array.isArray(state.rewardCategoryQueue)
+      ? state.rewardCategoryQueue
+      : [];
     const category = queue[0] || state.lastAchievementCategory || 'wealth';
-    const pool = rewardWheelPrizePools[category] || rewardWheelPrizePools.default;
-    const tierFilteredPool = this.applyTierFilterToPool(state, pool as RewardPrize[]);
-    const licenseFilteredPool = this.applyVehicleLicenseFilterToPool(state, tierFilteredPool);
-    const fallbackNonVehiclePool = tierFilteredPool.filter((p: any) => p.kind !== 'vehicle');
+    const pool =
+      rewardWheelPrizePools[category] || rewardWheelPrizePools.default;
+    const tierFilteredPool = this.applyTierFilterToPool(state, pool);
+    const licenseFilteredPool = this.applyVehicleLicenseFilterToPool(
+      state,
+      tierFilteredPool,
+    );
+    const fallbackNonVehiclePool = tierFilteredPool.filter(
+      (p: any) => p.kind !== 'vehicle',
+    );
     const effectivePool =
       licenseFilteredPool.length > 0
         ? licenseFilteredPool
         : fallbackNonVehiclePool.length > 0
           ? fallbackNonVehiclePool
-          : (pool as RewardPrize[]);
+          : pool;
     const chosen = this.chooseWeightedPrize(effectivePool);
 
     if ((chosen as any).kind === 'vehicle') {
@@ -212,36 +254,52 @@ export class RewardService {
 
       const eligibleVehicleIds = this.eligibleRewardVehicleIds(state);
       if (eligibleVehicleIds.length === 0) {
-        const nonVehiclePool = effectivePool.filter((p: any) => p.kind !== 'vehicle');
+        const nonVehiclePool = effectivePool.filter(
+          (p: any) => p.kind !== 'vehicle',
+        );
         if (nonVehiclePool.length > 0) {
           return this.chooseWeightedPrize(nonVehiclePool);
         }
-        return { kind: 'cash', value: 250, weight: 1, label: '$250 fallback bonus' } as RewardPrize;
+        return {
+          kind: 'cash',
+          value: 250,
+          weight: 1,
+          label: '$250 fallback bonus',
+        } as RewardPrize;
       }
 
-      const randomVehicleId = eligibleVehicleIds[Math.floor(Math.random() * eligibleVehicleIds.length)];
+      const randomVehicleId =
+        eligibleVehicleIds[
+          Math.floor(Math.random() * eligibleVehicleIds.length)
+        ];
       return { ...(chosen as any), vehicleId: randomVehicleId } as RewardPrize;
     }
 
     return chosen;
   }
 
-  private applyPrizeToState(state: any, prize: RewardPrize): Partial<GameState> {
+  private applyPrizeToState(
+    state: any,
+    prize: RewardPrize,
+  ): Partial<GameState> {
     let check = Number(state.check || 0);
     let portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : [];
-    let garage = Array.isArray(state.garage) ? [...state.garage] : [];
+    const garage = Array.isArray(state.garage) ? [...state.garage] : [];
     let ownsVehicle = state.ownsVehicle;
-    let unlockedThemes = Array.isArray(state.unlockedThemes)
+    const unlockedThemes = Array.isArray(state.unlockedThemes)
       ? [...state.unlockedThemes]
       : ['default'];
     const logs = Array.isArray(state.logs) ? [...state.logs] : [];
-    const rewardHistory = Array.isArray(state.rewardHistory) ? [...state.rewardHistory] : [];
+    const rewardHistory = Array.isArray(state.rewardHistory)
+      ? [...state.rewardHistory]
+      : [];
     const rewardCategoryQueue = Array.isArray(state.rewardCategoryQueue)
       ? [...state.rewardCategoryQueue]
       : [];
-    const consumedCategory = rewardCategoryQueue.length > 0
-      ? String(rewardCategoryQueue.shift() || 'general')
-      : String(state.lastAchievementCategory || 'general');
+    const consumedCategory =
+      rewardCategoryQueue.length > 0
+        ? String(rewardCategoryQueue.shift() || 'general')
+        : String(state.lastAchievementCategory || 'general');
 
     if ((prize as any).kind === 'cash') {
       check = this.round2(check + Number((prize as any).value || 0));
@@ -250,13 +308,16 @@ export class RewardService {
         msg: `🎁 Reward wheel: ${(prize as any).label}`,
       });
     } else if ((prize as any).kind === 'theme') {
-      if (!unlockedThemes.includes((prize as any).value)) unlockedThemes.push((prize as any).value);
+      if (!unlockedThemes.includes((prize as any).value))
+        unlockedThemes.push((prize as any).value);
       logs.push({
         date: `${state.month}/${state.year}`,
         msg: `🎨 Reward wheel: unlocked theme ${(prize as any).value}`,
       });
     } else if ((prize as any).kind === 'stock') {
-      const marketPrice = Number(state.marketPrices?.[(prize as any).ticker] || 0);
+      const marketPrice = Number(
+        state.marketPrices?.[(prize as any).ticker] || 0,
+      );
       if (marketPrice > 0 && Number((prize as any).shares || 0) > 0) {
         portfolio = this.addOrUpdateHolding(
           portfolio,
@@ -270,7 +331,9 @@ export class RewardService {
         });
       }
     } else if ((prize as any).kind === 'vehicle') {
-      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === (prize as any).vehicleId);
+      const vehicle = vehicleDatabase.vehicles.find(
+        (v: any) => v.id === (prize as any).vehicleId,
+      );
       if (vehicle) {
         const rewardCar = {
           id: `reward-${(prize as any).vehicleId}-${Date.now()}`,
@@ -320,11 +383,17 @@ export class RewardService {
     };
   }
 
-  async spinRewardWheelForUser(id: string): Promise<{ user: Partial<GameState> & { id: string }; prize: RewardPrize }> {
+  async spinRewardWheelForUser(id: string): Promise<{
+    user: Partial<GameState> & { id: string };
+    prize: RewardPrize;
+  }> {
     const entity = await this.userStateRepository.findOne({ where: { id } });
     if (!entity) throw new NotFoundException('User not found');
 
-    const hydratedState = this.buildHydratedState(entity.state || {}, entity.username);
+    const hydratedState = this.buildHydratedState(
+      entity.state || {},
+      entity.username,
+    );
     if (Number((hydratedState as any).rewardTokens || 0) <= 0) {
       throw new BadRequestException('No reward tokens available');
     }
@@ -336,7 +405,10 @@ export class RewardService {
     entity.updatedAt = new Date();
     const saved = await this.userStateRepository.save(entity);
 
-    const hydratedSaved = this.buildHydratedState(saved.state || {}, saved.username);
+    const hydratedSaved = this.buildHydratedState(
+      saved.state || {},
+      saved.username,
+    );
     return {
       user: {
         ...hydratedSaved,
