@@ -30,10 +30,31 @@ type AdminUserRow = {
     happiness: number
     netWorth: number
     pandemicHistoryMonths?: number
+    historicalEventId?: string
+    historicalEventEra?: string
     historicalEventTitle?: string
     historicalEventMonthsRemaining?: number
     historicalEventResetNextMonth?: boolean
   }
+}
+
+function computePandemicEraCounts(users: AdminUserRow[]) {
+  const counts: Record<string, number> = {}
+
+  for (const user of users) {
+    const monthsRemaining = Math.max(0, Number(user.progression?.historicalEventMonthsRemaining || 0))
+    if (monthsRemaining <= 0) continue
+
+    const historicalEventId = String(user.progression?.historicalEventId || '').toLowerCase()
+    const historicalEventTitle = String(user.progression?.historicalEventTitle || '').toLowerCase()
+    const looksPandemic = historicalEventId.includes('pandemic') || historicalEventTitle.includes('pandemic')
+    if (!looksPandemic) continue
+
+    const eraLabel = String(user.progression?.historicalEventEra || '').trim() || 'Unknown Era'
+    counts[eraLabel] = (counts[eraLabel] || 0) + 1
+  }
+
+  return counts
 }
 
 function formatMoney(value: number) {
@@ -83,6 +104,7 @@ export default function Admin() {
   const [savingAll, setSavingAll] = useState(false)
   const [applyingHistoricalEvent, setApplyingHistoricalEvent] = useState(false)
   const [resettingHistoricalEvent, setResettingHistoricalEvent] = useState(false)
+  const [hasLoadedUsers, setHasLoadedUsers] = useState(false)
   const [selectedHistoricalScenarioId, setSelectedHistoricalScenarioId] = useState<string>(historicalEconomicEventScenarios[0]?.id || '')
   const [historicalEventApplyMonths, setHistoricalEventApplyMonths] = useState<number>(historicalEconomicEventScenarios[0]?.defaultDurationMonths || 6)
   const [manageDraft, setManageDraft] = useState<ManageDraft | null>(null)
@@ -117,6 +139,13 @@ export default function Admin() {
   const yearOptions = useMemo(() => {
     return Array.from(new Set(users.map(user => Number(user.progression?.year || 0)).filter(y => y > 0))).sort((a, b) => b - a)
   }, [users])
+
+  const pandemicEraCounts = useMemo(() => computePandemicEraCounts(users), [users])
+  const pandemicEraSummary = useMemo(() => {
+    const entries = Object.entries(pandemicEraCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    if (!entries.length) return 'No active pandemic scenarios.'
+    return entries.map(([era, count]) => `${era}: ${count}`).join(' | ')
+  }, [pandemicEraCounts])
 
   const filteredAndSortedUsers = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase()
@@ -284,10 +313,16 @@ export default function Admin() {
     }
 
     setUsers(response)
+    setHasLoadedUsers(true)
     setBaseUsers(Object.fromEntries(response.map((user: AdminUserRow) => [user.id, user])))
     setPendingPasswords({})
     setPendingAssignedJobs({})
-    setMessage(`Loaded ${response.length} users.`)
+    const summary = computePandemicEraCounts(response)
+    const entries = Object.entries(summary).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    const pandemicMessage = entries.length
+      ? ` Pandemic era totals: ${entries.map(([era, count]) => `${era}: ${count}`).join(' | ')}.`
+      : ' Pandemic era totals: none active.'
+    setMessage(`Loaded ${response.length} users.${pandemicMessage}`)
   }
 
   const updateRow = (id: string, key: 'checking' | 'savings' | 'debt', rawValue: string) => {
@@ -715,6 +750,7 @@ export default function Admin() {
         </div>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+        {hasLoadedUsers ? <p className="text-sm text-indigo-700"><span className="font-semibold">Active Pandemic Eras:</span> {pandemicEraSummary}</p> : null}
       </div>
 
       <div className="glass p-4 rounded-xl overflow-x-auto">

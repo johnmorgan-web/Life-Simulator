@@ -347,6 +347,8 @@ export class UserService implements OnModuleInit {
         happiness: Number((state as any).happiness || 0),
         netWorth,
         pandemicHistoryMonths,
+        historicalEventId: String((state as any).historicalEconomicEvent?.id || ''),
+        historicalEventEra: String((state as any).historicalEconomicEvent?.era || ''),
         historicalEventTitle: String((state as any).historicalEconomicEvent?.title || ''),
         historicalEventMonthsRemaining: Math.max(0, Number((state as any).historicalEconomicEvent?.monthsRemaining || 0)),
         historicalEventResetNextMonth: Boolean((state as any).historicalEventResetNextMonth),
