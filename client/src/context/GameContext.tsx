@@ -899,7 +899,8 @@ function estimateRealEstateEquity(state: State) {
 function computeNetWorthForEligibility(state: State) {
 	const checking = Number(state?.check || 0)
 	const savings = Number(state?.savings || 0)
-	const portfolio = estimatePortfolioCostBasis(state)
+	const prices = normalizeMarketPrices(state?.marketPrices)
+	const portfolio = portfolioMarketValue(Array.isArray(state?.portfolio) ? state.portfolio : [], prices)
 	const vehicles = estimateVehicleAssets(state)
 	const realEstateEquity = estimateRealEstateEquity(state)
 	const debt = Math.abs(Number(state?.debt || 0))

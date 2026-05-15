@@ -83,10 +83,11 @@ function estimateNetWorth(state: any) {
   const checking = Number(state?.check || 0)
   const savings = Number(state?.savings || 0)
   const debt = Math.abs(Number(state?.debt || 0))
+  const prices: Record<string, number> = state?.marketPrices && typeof state.marketPrices === 'object' ? state.marketPrices : {}
   const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
     const shares = Number(holding?.shares || 0)
-    const avgCost = Number(holding?.avgCost || 0)
-    return sum + shares * avgCost
+    const price = Number(prices[holding?.ticker] || 0)
+    return sum + shares * price
   }, 0)
   const vehicleAssets = (Array.isArray(state?.garage) ? state.garage : []).reduce((sum: number, vehicle: any) => {
     const currentValue = Number(vehicle?.currentValue || 0)

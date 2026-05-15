@@ -212,7 +212,12 @@ export class JobService {
   private computeNetWorth(state: any): number {
     const checking = Number(state?.check || 0);
     const savings = Number(state?.savings || 0);
-    const portfolio = this.estimatePortfolioCostBasis(state);
+    const prices: Record<string, number> = state?.marketPrices && typeof state.marketPrices === 'object' ? state.marketPrices : {};
+    const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
+      const shares = Number(holding?.shares || 0);
+      const price = Number(prices[String(holding?.ticker || '')] || 0);
+      return sum + (shares * price);
+    }, 0);
     const vehicles = this.estimateVehicleAssets(state);
     const realEstateEquity = this.estimateRealEstateEquity(state);
     const debt = Math.abs(Number(state?.debt || 0));
