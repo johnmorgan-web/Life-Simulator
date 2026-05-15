@@ -368,6 +368,7 @@ export default function MathLab() {
     credit: number
     rewardTokens: number
     mathLabStreak: number
+    mathLabElementarySolveStreak: number
     mathLabLastSolvedMonth: number
     mathLabLastSolvedYear: number
   }>(null)
@@ -482,10 +483,11 @@ export default function MathLab() {
 
   useEffect(() => {
     if (!pendingRewardPersist) return
-    const isReadyToPersist = Number(state.check || 0) === Number(pendingRewardPersist.check)
+    const isReadyToPersist = Math.abs(Number(state.check || 0) - Number(pendingRewardPersist.check)) < 0.01
       && Number(state.credit || 0) === Number(pendingRewardPersist.credit)
       && Number(state.rewardTokens || 0) === Number(pendingRewardPersist.rewardTokens)
       && Number(state.mathLabStreak || 0) === Number(pendingRewardPersist.mathLabStreak)
+      && Number(state.mathLabElementarySolveStreak || 0) === Number(pendingRewardPersist.mathLabElementarySolveStreak)
       && Number(state.mathLabLastSolvedMonth || -1) === Number(pendingRewardPersist.mathLabLastSolvedMonth)
       && Number(state.mathLabLastSolvedYear || -1) === Number(pendingRewardPersist.mathLabLastSolvedYear)
     if (!isReadyToPersist) return
@@ -498,6 +500,7 @@ export default function MathLab() {
     state.credit,
     state.rewardTokens,
     state.mathLabStreak,
+    state.mathLabElementarySolveStreak,
     state.mathLabLastSolvedMonth,
     state.mathLabLastSolvedYear,
   ])
@@ -562,7 +565,15 @@ export default function MathLab() {
       type: 'SET_STATE',
       payload,
     })
-    setPendingRewardPersist(payload)
+    setPendingRewardPersist({
+      check: payload.check,
+      credit: payload.credit,
+      rewardTokens: payload.rewardTokens,
+      mathLabStreak: payload.mathLabStreak,
+      mathLabElementarySolveStreak: payload.mathLabElementarySolveStreak,
+      mathLabLastSolvedMonth: payload.mathLabLastSolvedMonth,
+      mathLabLastSolvedYear: payload.mathLabLastSolvedYear,
+    })
 
     setFeedback(`Correct! ${challenge.expected} ${challenge.unit}. Rewards claimed: +$${cashReward}, +${creditBoost} credit, +${tokenReward} token.${elementaryRewardLimited ? ' Elementary-level reward cap applied due to repeated elementary solves.' : ''}`)
   }
