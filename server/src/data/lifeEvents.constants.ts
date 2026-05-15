@@ -49,7 +49,6 @@ const lifeEvents: LifeEvent[] = [
   { id: 'stress_5', title: 'Burnout Recovery', amt: 500, type: 'out', icon: '🛌', desc: 'Taking time off to recover from burnout.', trigger: 'burnout' },
   { id: 'hazard_5', title: 'Workplace Injury', amt: 500, type: 'out', icon: '🩹', desc: 'Injured at work and needed medical attention.', trigger: 'hazard' },
   { id: 'job_9', title: 'Work Anniversary Bonus', amt: 1200, type: 'in', icon: '🎉', desc: 'Received a bonus for your work anniversary.', trigger: 'job' },
-  { id: 'job_10', title: 'Unpaid Overtime', amt: 300, type: 'out', icon: '⏰', desc: 'Worked extra hours without pay.', trigger: 'job' },
   { id: 'health_9', title: 'Mental Health Day', amt: 0, type: 'out', icon: '🧠', desc: 'Took a day off for mental health.', trigger: 'health' },
   { id: 'health_10', title: 'Physical Health Improvement', amt: 0, type: 'in', icon: '🏃', desc: 'Improved your physical health through exercise.', trigger: 'health' },
   { id: 'family_9', title: 'Family Reunion', amt: 500, type: 'out', icon: '👨‍👩‍👧‍👦', desc: 'Costs for attending a family reunion.', trigger: 'family' },
@@ -65,7 +64,6 @@ const lifeEvents: LifeEvent[] = [
   { id: 'family_12', title: 'Anniversary Celebration', amt: 500, type: 'out', icon: '💑', desc: 'Celebrated a wedding anniversary.', trigger: 'family' },
   { id: 'stress_7', title: 'Burnout Recovery Retreat', amt: 2000, type: 'out', icon: '🏝️', desc: 'Attended a retreat to recover from burnout.', trigger: 'burnout' },
   { id: 'hazard_7', title: 'Natural Disaster', amt: 5000, type: 'out', icon: '🌪️', desc: 'Affected by a natural disaster.', trigger: 'hazard' },
-  { id: 'job_14', title: 'Business Success', amt: 10000, type: 'in', icon: '💼', desc: 'Your business became successful.', trigger: 'job' },
   { id: 'health_13', title: 'Fitness Goal Achieved', amt: 0, type: 'in', icon: '🏆', desc: 'Achieved a major fitness goal.', trigger: 'health' },
   { id: 'health_14', title: 'Surgery Recovery', amt: 1000, type: 'out', icon: '🛌', desc: 'Recovering from a major surgery.', trigger: 'health' },
   { id: 'family_13', title: 'Family Expansion', amt: 0, type: 'out', icon: '👨‍👩‍👧‍👦', desc: 'Had twins or triplets, expanding the family.', trigger: 'family'},
@@ -75,7 +73,6 @@ const lifeEvents: LifeEvent[] = [
   { id: 'acad_14', title: 'Academic Award', amt: 1000, type: 'in', icon: '🏆', desc: 'Received an award for academic excellence.', trigger: 'academy' },
   { id: 'acad_15', title: 'Academic Suspension', amt: 1000, type: 'out', icon: '⛔', desc: 'Suspended from school for disciplinary reasons.', trigger: 'academy' },
   { id: 'stress_8', title: 'Burnout Prevention Workshop', amt: 300, type: 'out', icon: '🧑‍🏫', desc: 'Attended a workshop to learn burnout prevention techniques.', trigger: 'burnout' },
-  { id: 'hazard_8', title: 'Workplace Violence', amt: 1000, type: 'out', icon: '🔪', desc: 'Involved in a violent incident at work.', trigger: 'hazard' },
   { id: 'health_15', title: 'Health Setback', amt: 1000, type: 'out', icon: '⚕️', desc: 'Experienced a setback in your health journey.', trigger: 'health' },
 ]
 

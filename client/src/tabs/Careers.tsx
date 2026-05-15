@@ -578,6 +578,8 @@ export default function Careers() {
                       const certMet = eligibility.certificationMet
                       const trMet = eligibility.transitMet
                       const expMet = eligibility.experienceMet
+                      const wealthMet = eligibility.wealthMet
+                      const wealthRequirement = Number(eligibility.wealthRequirement || 0)
                       const feederRoles = j.expReq?.roles || []
                       const feederRequiredMonths = j.expReq?.minMonths || 0
                       const feederProgress = feederRoles.map(role => ({ role, months: getRoleExperienceMonths(role) }))
@@ -597,6 +599,11 @@ export default function Careers() {
                           <td className="py-2 sm:py-3 px-2 sm:px-3">
                             <div className="font-bold text-slate-900">{j.title}</div>
                             <div className="text-xs text-slate-500">${Math.round(jobPay)}/mo</div>
+                            {wealthRequirement > 0 ? (
+                              <div className={`text-[10px] mt-0.5 font-semibold ${wealthMet ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                Net worth gate: ${Math.round(eligibility.netWorth || 0).toLocaleString()} / ${Math.round(wealthRequirement).toLocaleString()}
+                              </div>
+                            ) : null}
                             <div className="subcat-banner">
                               <span className="category-pill" style={domainBadgeStyle(domain)}>{j.cat || 'General'}</span>
                               <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
@@ -830,6 +837,8 @@ export default function Careers() {
               const certMet = eligibility.certificationMet
               const trMet = eligibility.transitMet
               const expMet = eligibility.experienceMet
+              const wealthMet = eligibility.wealthMet
+              const wealthRequirement = Number(eligibility.wealthRequirement || 0)
               const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
               const isCurrent = state.job?.title === j.title
               const canApply = eligibility.canApply
@@ -851,6 +860,11 @@ export default function Careers() {
                     {j.expReq && (
                       <span className={`req-tag ${expMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                         {j.expReq.minMonths}mo in {j.expReq.roles.join(' or ')}
+                      </span>
+                    )}
+                    {wealthRequirement > 0 && (
+                      <span className={`req-tag ${wealthMet ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        Net Worth ${Math.round(wealthRequirement).toLocaleString()}
                       </span>
                     )}
                     <span className={`req-tag ${eligibility.capacityMet ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700'}`}>Capacity {eligibility.capacityMet ? 'Open' : 'Full'}</span>

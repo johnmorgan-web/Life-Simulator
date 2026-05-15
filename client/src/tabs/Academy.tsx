@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { domainBadgeStyle, resolveDomainKey } from '../constants/domainColors.constants'
 
@@ -8,8 +8,67 @@ function toCurrency(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
+function filterCareerLinkedCourses(courses: any[], jobs: any[]) {
+  const normalizedCourses = Array.isArray(courses) ? courses : []
+  const normalizedJobs = Array.isArray(jobs) ? jobs : []
+  const courseByName = new Map(normalizedCourses.map((course: any) => [String(course?.n || '').trim(), course]))
+  const relevantCourseNames = new Set<string>()
+
+  for (const job of normalizedJobs) {
+    for (const requirement of [job?.req, job?.certReq]) {
+      const name = String(requirement || '').trim()
+      if (name && courseByName.has(name)) relevantCourseNames.add(name)
+    }
+  }
+
+  const stack = Array.from(relevantCourseNames)
+  while (stack.length > 0) {
+    const currentName = stack.pop()!
+    const course = courseByName.get(currentName)
+    const prereq = String(course?.prereq || '').trim()
+    if (!prereq || relevantCourseNames.has(prereq) || !courseByName.has(prereq)) continue
+    relevantCourseNames.add(prereq)
+    stack.push(prereq)
+  }
+
+  return normalizedCourses.filter((course: any) => relevantCourseNames.has(String(course?.n || '').trim()))
+}
+
 export default function Academy() {
   const { state, dispatch, academyCourses, jobBoard } = useGame()
+  const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')
+  const [serverAcademyCourses, setServerAcademyCourses] = useState<any[] | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadAcademyCourses = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/game/academy-courses`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (cancelled || !Array.isArray(data)) return
+        setServerAcademyCourses(data)
+      } catch {
+        // Fall back to context academy courses when server catalog is unavailable.
+      }
+    }
+    void loadAcademyCourses()
+    return () => {
+      cancelled = true
+    }
+  }, [API_BASE_URL])
+
+  const uniqueAcademyCourses = useMemo(() => {
+    const source = Array.isArray(serverAcademyCourses) ? serverAcademyCourses : academyCourses
+    const filteredSource = filterCareerLinkedCourses(source, jobBoard as any[])
+    const seen = new Set<string>()
+    return filteredSource.filter((course: any) => {
+      const name = String(course?.n || '').trim()
+      if (!name || seen.has(name)) return false
+      seen.add(name)
+      return true
+    })
+  }, [academyCourses, jobBoard, serverAcademyCourses])
 
   const jobsByCourse = (courseName: string) => {
     return (jobBoard as any[]).filter((j: any) => j.certReq === courseName || j.req === courseName).slice(0, 3)
@@ -17,7 +76,7 @@ export default function Academy() {
   const [academyView, setAcademyView] = useState<'courses' | 'tree'>('courses')
   const [treeSubcat, setTreeSubcat] = useState<string>('all')
 
-  const groupedCourses = academyCourses.reduce((acc: Record<string, any[]>, course: any) => {
+  const groupedCourses = uniqueAcademyCourses.reduce((acc: Record<string, any[]>, course: any) => {
     const key = `${course.category || 'Programs'} / ${course.subcategory || 'General'}`
     acc[key] = acc[key] || []
     acc[key].push(course)
@@ -131,11 +190,11 @@ export default function Academy() {
 
       {academyView === 'tree' && (() => {
         const nodeMap = new Map<string, CourseNode>();
-        (academyCourses as any[]).forEach((c: any) => {
+        (uniqueAcademyCourses as any[]).forEach((c: any) => {
           if (!nodeMap.has(c.n)) nodeMap.set(c.n, { ...c, children: [] })
         });
         const roots: CourseNode[] = [];
-        (academyCourses as any[]).forEach((c: any) => {
+        (uniqueAcademyCourses as any[]).forEach((c: any) => {
           const node = nodeMap.get(c.n)!
           if (c.prereq && nodeMap.has(c.prereq)) {
             const parent = nodeMap.get(c.prereq)!
@@ -144,7 +203,7 @@ export default function Academy() {
             roots.push(node)
           }
         })
-        const subcats = ['all', ...Array.from(new Set<string>((academyCourses as any[]).map((c: any) => c.subcategory || 'General'))).sort()]
+        const subcats = ['all', ...Array.from(new Set<string>((uniqueAcademyCourses as any[]).map((c: any) => c.subcategory || 'General'))).sort()]
         function hasRelevant(node: CourseNode, sub: string): boolean {
           if (sub === 'all') return true
           if ((node.subcategory || 'General') === sub) return true

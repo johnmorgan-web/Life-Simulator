@@ -121,9 +121,24 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           <p className="text-xs text-amber-800 mt-1">
             {String(activeHistoricalEvent.summary || 'This scenario is currently modifying your financial conditions.')}
           </p>
+          {String(activeHistoricalEvent.realWorldImpact || '').trim() ? (
+            <p className="text-xs text-amber-900 mt-1">
+              {String(activeHistoricalEvent.realWorldImpact || '').trim()}
+            </p>
+          ) : null}
           <p className="text-xs font-semibold text-amber-900 mt-1">
             {Number(activeHistoricalEvent.monthsRemaining || 0)} month(s) remaining out of {Number(activeHistoricalEvent.totalMonths || 0)}.
           </p>
+          {Array.isArray(activeHistoricalEvent.keyStatistics) && activeHistoricalEvent.keyStatistics.length > 0 ? (
+            <div className="mt-2">
+              <p className="text-[11px] font-bold uppercase text-amber-800 tracking-wide">Historical Stats</p>
+              <ul className="mt-1 list-disc ml-5 text-xs text-amber-900 space-y-1">
+                {activeHistoricalEvent.keyStatistics.slice(0, 3).map((stat: string) => (
+                  <li key={stat}>{stat}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </header>

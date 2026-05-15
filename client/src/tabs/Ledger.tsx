@@ -16,6 +16,14 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
   const [giftSending, setGiftSending] = useState(false)
   const [giftFeedback, setGiftFeedback] = useState('')
 
+  const txDetails = (tx: any) => {
+    if (!Array.isArray(tx?.details)) return []
+    return tx.details
+      .map((detail: any) => String(detail || '').trim())
+      .filter(Boolean)
+      .slice(0, 4)
+  }
+
   const giftTemplates = useMemo(() => ([
     { id: 'job', label: 'Congrats: New Job' },
     { id: 'graduation', label: 'Congrats: Graduation' },
@@ -143,6 +151,13 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
         {ledger.map((tx: any) => (
           <div key={`card-${tx.id}`} className={`rounded-xl border border-slate-200 bg-white p-3 ${tx.done ? 'opacity-60' : ''}`}>
             <p className="text-xs font-bold text-slate-700 mb-2">{tx.desc}</p>
+            {txDetails(tx).length > 0 ? (
+              <ul className="list-disc ml-5 mb-2 space-y-0.5 text-[11px] text-slate-500">
+                {txDetails(tx).map((detail: string) => (
+                  <li key={`${tx.id}-${detail}`}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
             <div className="grid grid-cols-2 gap-2 text-xs mb-2">
               <div>
                 <p className="text-[10px] uppercase font-bold text-slate-400">Debit</p>
@@ -188,7 +203,16 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
         <tbody className="divide-y divide-slate-100">
           {ledger.map((tx: any) => (
             <tr key={tx.id} className={`${tx.done ? 'opacity-50' : ''}`}>
-              <td className="py-4 text-xs font-bold text-slate-700">{tx.desc}</td>
+              <td className="py-4 text-xs font-bold text-slate-700">
+                <p>{tx.desc}</p>
+                {txDetails(tx).length > 0 ? (
+                  <ul className="list-disc ml-5 mt-1 space-y-0.5 text-[11px] font-medium text-slate-500">
+                    {txDetails(tx).map((detail: string) => (
+                      <li key={`${tx.id}-${detail}`}>{detail}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </td>
               <td className="text-right text-rose-500 font-bold">{tx.type === 'out' ? '-' + fmt(tx.amt) : ''}</td>
               <td className="text-right text-emerald-600 font-bold">{tx.type === 'inc' ? '+' + fmt(tx.amt) : ''}</td>
               <td className="text-right">

@@ -51,6 +51,8 @@ export class UserController {
         title?: string;
         era?: string;
         summary?: string;
+        realWorldImpact?: string;
+        keyStatistics?: string[];
         totalMonths?: number;
         monthsRemaining?: number;
         startedMonth?: number;

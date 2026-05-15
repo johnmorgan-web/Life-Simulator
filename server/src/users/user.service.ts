@@ -80,6 +80,10 @@ export class UserService implements OnModuleInit {
       title,
       era: String(raw?.era || 'Historical Event'),
       summary: String(raw?.summary || ''),
+      realWorldImpact: String(raw?.realWorldImpact || ''),
+      keyStatistics: Array.isArray(raw?.keyStatistics)
+        ? raw.keyStatistics.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+        : [],
       totalMonths: Math.max(1, Math.min(36, Math.floor(Number(raw?.totalMonths || raw?.monthsRemaining || 1)))),
       monthsRemaining: Math.max(0, Math.min(36, Math.floor(Number(raw?.monthsRemaining || raw?.totalMonths || 1)))),
       startedMonth: Math.max(1, Math.min(12, Number(raw?.startedMonth || 1))),
@@ -503,6 +507,8 @@ export class UserService implements OnModuleInit {
         title?: string;
         era?: string;
         summary?: string;
+        realWorldImpact?: string;
+        keyStatistics?: string[];
         totalMonths?: number;
         monthsRemaining?: number;
         startedMonth?: number;

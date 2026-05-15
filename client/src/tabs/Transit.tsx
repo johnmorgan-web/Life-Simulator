@@ -53,6 +53,20 @@ export default function Transit() {
     return toTransitState('L4 - Owned Vehicle')
   }
 
+  const hasOwnedVehicle = (garageList: any[]) => {
+    return Array.isArray(garageList) && garageList.some((g: any) => !g?.for_sale)
+  }
+
+  const hasOwnedHelicopter = (garageList: any[]) => {
+    if (!Array.isArray(garageList) || garageList.length === 0) return false
+    return garageList.some((g: any) => {
+      if (g?.for_sale) return false
+      const vehicle = vehicleDatabase.vehicles.find((v: any) => v.id === g.vehicleId)
+      if (!vehicle) return false
+      return (vehicle.body || '').toLowerCase().includes('helicopter') || vehicle.icon === '🚁'
+    })
+  }
+
   const syncTransitForGarage = (garageList: any[], currentTransit: any) => {
     const bestVehicleTransit = getHighestVehicleTransit(garageList)
     if (bestVehicleTransit) return bestVehicleTransit
@@ -537,13 +551,22 @@ export default function Transit() {
           )}
           <div className="grid grid-cols-3 gap-4">
             {transitOptions.map((o: TransitOption) => {
+              const optionName = String(o.n || '').toLowerCase()
               const isChauffeurOption = String(o.n).toLowerCase().includes('chauffeur')
-              const requiresVehicle = o.l === 3 && (o.n.includes('Car') || o.n.includes('Chauffeur') || o.n.includes('Helicopter'))
-              const hasVehicle = Array.isArray(state.garage) && state.garage.length > 0
+              const isOwnedVehicleOption = optionName.includes('owned vehicle')
+              const isHelicopterOption = optionName.includes('helicopter')
+              const hasVehicle = hasOwnedVehicle(state.garage || [])
+              const hasHelicopter = hasOwnedHelicopter(state.garage || [])
               const hasChauffeurService = Boolean(state.luxuryServices?.chauffer)
               const hasEligibleChauffeurVehicle = hasChauffeurEligibleVehicle(state.garage || [])
               const canUseChauffeur = hasChauffeurService && hasEligibleChauffeurVehicle
-              const canSelect = isChauffeurOption ? canUseChauffeur : (!requiresVehicle || hasVehicle)
+              const canSelect = isChauffeurOption
+                ? canUseChauffeur
+                : isHelicopterOption
+                  ? hasHelicopter
+                  : isOwnedVehicleOption
+                    ? hasVehicle
+                    : true
               const disabled = !canSelect
               
               return (
@@ -551,8 +574,41 @@ export default function Transit() {
                   <h4 className="font-bold">{o.n}</h4>
                   <p className="text-sm">${o.c}/mo</p>
                   {o.subText && <p className="text-xs text-slate-400">{o.subText}</p>}
-                  {disabled && !isChauffeurOption && <p className="text-xs text-red-600 font-bold mt-2">Requires vehicle ownership</p>}
+                  {disabled && isOwnedVehicleOption && <p className="text-xs text-red-600 font-bold mt-2">Requires owning at least one vehicle from Buy/Lease Vehicle.</p>}
+                  {disabled && isHelicopterOption && <p className="text-xs text-red-600 font-bold mt-2">Requires owning a helicopter from Buy/Lease Vehicle.</p>}
                   {disabled && isChauffeurOption && <p className="text-xs text-red-600 font-bold mt-2">Requires hired chauffeur service and a Luxury/High-Level vehicle</p>}
+                  {isOwnedVehicleOption ? (
+                    <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] space-y-1">
+                      <p className={`font-semibold ${hasVehicle ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {hasVehicle ? 'Requirement met: Vehicle ownership detected.' : 'Requirement missing: Buy or lease at least one vehicle first.'}
+                      </p>
+                      <p className="text-slate-600">Selecting this level changes transit only; vehicle purchase is still required separately.</p>
+                      {!hasVehicle ? (
+                        <button
+                          onClick={() => setTab('vehicles')}
+                          className="mt-1 inline-flex items-center rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-200"
+                        >
+                          Go To Buy/Lease Vehicle
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {isHelicopterOption ? (
+                    <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] space-y-1">
+                      <p className={`font-semibold ${hasHelicopter ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {hasHelicopter ? 'Requirement met: Helicopter ownership detected.' : 'Requirement missing: Purchase a helicopter in Buy/Lease Vehicle.'}
+                      </p>
+                      <p className="text-slate-600">Selecting this level does not buy a helicopter automatically.</p>
+                      {!hasHelicopter ? (
+                        <button
+                          onClick={() => setTab('vehicles')}
+                          className="mt-1 inline-flex items-center rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-200"
+                        >
+                          Go To Buy/Lease Vehicle
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {isChauffeurOption ? (
                     <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] space-y-1">
                       <p className={`font-semibold ${hasChauffeurService ? 'text-emerald-700' : 'text-rose-700'}`}>
@@ -562,7 +618,17 @@ export default function Transit() {
                         {hasEligibleChauffeurVehicle ? 'Requirement 2 met: Luxury/High-Level vehicle detected.' : 'Requirement 2 missing: Own at least one Luxury or High-Level vehicle.'}
                       </p>
                       {!canUseChauffeur ? (
-                        <p className="text-slate-600">Recommendation: complete both requirements to unlock L5 Chauffeur Service next month.</p>
+                        <>
+                          <p className="text-slate-600">Recommendation: complete both requirements to unlock L5 Chauffeur Service next month.</p>
+                          {!hasEligibleChauffeurVehicle ? (
+                            <button
+                              onClick={() => setTab('vehicles')}
+                              className="inline-flex items-center rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-200"
+                            >
+                              Get Eligible Vehicle
+                            </button>
+                          ) : null}
+                        </>
                       ) : (
                         <p className="text-emerald-700">Ready: selecting this sets L5 Chauffeur Service to pending.</p>
                       )}
@@ -1014,13 +1080,83 @@ export default function Transit() {
                 <p className="text-xs text-amber-900">
                   Recommendation: complete both requirements to unlock and keep L5 Chauffeur Service active.
                 </p>
+                {!hasChauffeurEligibleVehicle(state.garage || []) ? (
+                  <button
+                    onClick={() => {
+                      setTransitConfirm(null)
+                      setTab('vehicles')
+                    }}
+                    className="mt-1 inline-flex items-center rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800 hover:bg-amber-200"
+                  >
+                    Get Eligible Vehicle
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            {(String(transitConfirm?.n || '').toLowerCase().includes('owned vehicle') || String(transitConfirm?.n || '').toLowerCase().includes('helicopter')) && (
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-300 space-y-1">
+                <p className="text-xs font-bold text-amber-800">Vehicle Requirement</p>
+                {String(transitConfirm?.n || '').toLowerCase().includes('owned vehicle') ? (
+                  <>
+                    <p className={`text-xs font-semibold ${hasOwnedVehicle(state.garage || []) ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {hasOwnedVehicle(state.garage || [])
+                        ? 'Requirement met: Vehicle ownership detected.'
+                        : 'Requirement missing: Buy or lease at least one vehicle.'}
+                    </p>
+                    <p className="text-xs text-amber-900">This transit level only updates your mode. Vehicle purchase must be done separately in Buy/Lease Vehicle.</p>
+                    {!hasOwnedVehicle(state.garage || []) ? (
+                      <button
+                        onClick={() => {
+                          setTransitConfirm(null)
+                          setTab('vehicles')
+                        }}
+                        className="mt-1 inline-flex items-center rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800 hover:bg-amber-200"
+                      >
+                        Go To Buy/Lease Vehicle
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+                {String(transitConfirm?.n || '').toLowerCase().includes('helicopter') ? (
+                  <>
+                    <p className={`text-xs font-semibold ${hasOwnedHelicopter(state.garage || []) ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {hasOwnedHelicopter(state.garage || [])
+                        ? 'Requirement met: Helicopter ownership detected.'
+                        : 'Requirement missing: Purchase a helicopter first.'}
+                    </p>
+                    <p className="text-xs text-amber-900">This does not purchase a helicopter automatically.</p>
+                    {!hasOwnedHelicopter(state.garage || []) ? (
+                      <button
+                        onClick={() => {
+                          setTransitConfirm(null)
+                          setTab('vehicles')
+                        }}
+                        className="mt-1 inline-flex items-center rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800 hover:bg-amber-200"
+                      >
+                        Go To Buy/Lease Vehicle
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             )}
 
             <div className="space-y-2">
               <button
                 onClick={() => {
+                  const optionName = String(transitConfirm?.n || '').toLowerCase()
+                  const isOwnedVehicleOption = optionName.includes('owned vehicle')
+                  const isHelicopterOption = optionName.includes('helicopter')
                   const isChauffeurOption = String(transitConfirm?.n || '').toLowerCase().includes('chauffeur')
+                  if (isHelicopterOption && !hasOwnedHelicopter(state.garage || [])) {
+                    alert('To use Helicopter transit, purchase and keep at least one helicopter in your garage.')
+                    return
+                  }
+                  if (isOwnedVehicleOption && !hasOwnedVehicle(state.garage || [])) {
+                    alert('To use Owned Vehicle transit, buy or lease at least one vehicle first.')
+                    return
+                  }
                   if (isChauffeurOption) {
                     const canUseChauffeur = Boolean(state.luxuryServices?.chauffer) && hasChauffeurEligibleVehicle(state.garage || [])
                     if (!canUseChauffeur) {
