@@ -14,7 +14,7 @@ export default function Nav({ tab, setTab }: any) {
     ...(state.isAdmin ? [{ id: 'admin', label: '🛡️ Admin' }] : []),
     { id: 'bank', label: '🏦 Bank' },
     { id: 'careers', label: '💼 Careers' },
-    { id: 'ledger', label: '📓 Journal' },
+    { id: 'ledger', label: '📓 Ledger' },
     { id: 'lifestyle', label: '💎 Lifestyle' },
     { id: 'loans', label: '💳 Loans' },
     { id: 'math-lab', label: '🧮 Math Lab' },
