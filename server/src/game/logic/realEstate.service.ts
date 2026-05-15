@@ -5,7 +5,64 @@ import { realEstateTemplates } from '../../data/realEstate.constants';
 
 @Injectable()
 export class RealEstateService {
+  private sharedRealEstateMarket: Record<string, any[]> | null = null;
+  private sharedRealEstateMarketMeta: any | null = null;
+
   constructor(private utilitiesService: UtilitiesService) {}
+
+  private cloneDeep<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  private getRegisteredUserCount(userSnapshots: any[]): number {
+    return Math.max(1, Array.isArray(userSnapshots) ? userSnapshots.length : 1);
+  }
+
+  private getUserCityCounts(userSnapshots: any[], liveSnapshot?: any): Record<string, number> {
+    const userCityMap = new Map<string, string>();
+    const snapshots = Array.isArray(userSnapshots) ? userSnapshots : [];
+
+    for (const snapshot of snapshots) {
+      const username = String(snapshot?.username || snapshot?.currentUser || '').trim();
+      const cityName = snapshot?.city?.name;
+      if (username && cityName) userCityMap.set(username, cityName);
+    }
+
+    if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
+      userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name));
+    }
+
+    const counts: Record<string, number> = {};
+    for (const cityName of userCityMap.values()) {
+      counts[cityName] = (counts[cityName] || 0) + 1;
+    }
+    return counts;
+  }
+
+  private initializeSharedRealEstateMarket(userSnapshots: any[], liveSnapshot?: any): { market: Record<string, any[]>; meta: any } {
+    const market: Record<string, any[]> = {};
+    const counts = this.getUserCityCounts(userSnapshots, liveSnapshot);
+    const meta = this.defaultRealEstateMeta();
+    const users = this.getRegisteredUserCount(userSnapshots);
+
+    for (const city of cityData) {
+      const listings: any[] = [];
+      const cityUserCount = Number(counts[city.name] || 0);
+      const initialCount = this.initialListingsForCity(cityUserCount);
+      const pressure = this.cityPressureMultiplier(users, city);
+
+      for (let i = 0; i < initialCount; i++) {
+        const template = realEstateTemplates[i % realEstateTemplates.length];
+        listings.push(this.buildRealEstateListing(city, template, i, pressure, `re-${city.name}-${template.id}-${i}`));
+      }
+
+      meta.seededUsersByCity[city.name] = cityUserCount;
+      meta.nextSequenceByCity[city.name] = initialCount;
+      market[city.name] = listings.sort((a, b) => a.askingPrice - b.askingPrice);
+    }
+
+    return { market, meta };
+  }
 
   cityRealEstateTier(city: any): string {
     const priceFactor = Number(city?.p || 1);
@@ -148,8 +205,7 @@ export class RealEstateService {
     );
   }
 
-  normalizeRealEstateState(data: any): any {
-    const { market, meta } = this.initializeRealEstateMarket(data);
+  private shapeNormalizedRealEstateState(data: any, market: Record<string, any[]>, meta: any): any {
     const normalizedMarket: Record<string, any[]> = {};
 
     for (const city of cityData) {
@@ -213,5 +269,123 @@ export class RealEstateService {
           }))
         : [],
     };
+  }
+
+  normalizeRealEstateState(data: any): any {
+    const { market, meta } = this.initializeRealEstateMarket(data);
+    return this.shapeNormalizedRealEstateState(data, market, meta);
+  }
+
+  normalizeRealEstateStateFromShared(
+    data: any,
+    userSnapshots: any[],
+    liveSnapshot?: any,
+  ): any {
+    const shared = this.syncSharedRealEstateMarket(userSnapshots, liveSnapshot || data, false);
+    return this.shapeNormalizedRealEstateState(data, shared.market, shared.meta);
+  }
+
+  syncSharedRealEstateMarket(
+    userSnapshots: any[],
+    liveSnapshot?: any,
+    advanceOneMonth = false,
+  ): { market: Record<string, any[]>; meta: any } {
+    if (!this.sharedRealEstateMarket || !this.sharedRealEstateMarketMeta) {
+      const initialized = this.initializeSharedRealEstateMarket(userSnapshots, liveSnapshot);
+      this.sharedRealEstateMarket = initialized.market;
+      this.sharedRealEstateMarketMeta = initialized.meta;
+    }
+
+    const defaultMeta = this.defaultRealEstateMeta();
+    const market = { ...(this.sharedRealEstateMarket || {}) };
+    const meta = {
+      ...defaultMeta,
+      ...(this.sharedRealEstateMarketMeta || {}),
+      seededUsersByCity: {
+        ...defaultMeta.seededUsersByCity,
+        ...((this.sharedRealEstateMarketMeta || {})?.seededUsersByCity || {}),
+      },
+      pendingListingTimersByCity: {
+        ...defaultMeta.pendingListingTimersByCity,
+        ...((this.sharedRealEstateMarketMeta || {})?.pendingListingTimersByCity || {}),
+      },
+      nextSequenceByCity: {
+        ...defaultMeta.nextSequenceByCity,
+        ...((this.sharedRealEstateMarketMeta || {})?.nextSequenceByCity || {}),
+      },
+    };
+
+    const cityUserCounts = this.getUserCityCounts(userSnapshots, liveSnapshot);
+    const users = this.getRegisteredUserCount(userSnapshots);
+
+    for (const city of cityData) {
+      const cityName = city.name;
+      const currentUsers = Number(cityUserCounts[cityName] || 0);
+      const seededUsers = Number(meta.seededUsersByCity?.[cityName] || 0);
+      const pressure = this.cityPressureMultiplier(users, city);
+      const existing = Array.isArray(market[cityName]) ? [...market[cityName]] : [];
+
+      let additions = 0;
+      if (seededUsers === 0 && currentUsers > 0 && existing.length === 0) {
+        additions = this.initialListingsForCity(currentUsers);
+      } else if (currentUsers > seededUsers) {
+        additions = (currentUsers - seededUsers) * 2;
+      }
+
+      let nextSequence = Number(meta.nextSequenceByCity?.[cityName] || existing.length);
+      for (let i = 0; i < additions; i++) {
+        const template = realEstateTemplates[nextSequence % realEstateTemplates.length];
+        existing.push(
+          this.buildRealEstateListing(
+            city,
+            template,
+            nextSequence,
+            pressure,
+            `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-${i}`,
+          ),
+        );
+        nextSequence += 1;
+      }
+
+      if (advanceOneMonth) {
+        const timers = Array.isArray(meta.pendingListingTimersByCity?.[cityName])
+          ? [...meta.pendingListingTimersByCity[cityName]]
+          : [];
+        const maturedCount = timers.filter((months: number) => Number(months || 0) <= 1).length;
+        meta.pendingListingTimersByCity[cityName] = timers
+          .map((months: number) => Math.max(0, Number(months || 0) - 1))
+          .filter((months: number) => months > 0);
+
+        for (let i = 0; i < maturedCount; i++) {
+          const template = realEstateTemplates[nextSequence % realEstateTemplates.length];
+          existing.push(
+            this.buildRealEstateListing(
+              city,
+              template,
+              nextSequence,
+              pressure,
+              `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-restock-${i}`,
+            ),
+          );
+          nextSequence += 1;
+        }
+      }
+
+      meta.seededUsersByCity[cityName] = Math.max(seededUsers, currentUsers);
+      meta.nextSequenceByCity[cityName] = nextSequence;
+      market[cityName] = existing.sort((a: any, b: any) => Number(a.askingPrice || 0) - Number(b.askingPrice || 0));
+    }
+
+    this.sharedRealEstateMarket = market;
+    this.sharedRealEstateMarketMeta = meta;
+    return {
+      market: this.cloneDeep(market),
+      meta: this.cloneDeep(meta),
+    };
+  }
+
+  setSharedRealEstateMarket(market: Record<string, any[]>, meta: any) {
+    this.sharedRealEstateMarket = this.cloneDeep(market || {});
+    this.sharedRealEstateMarketMeta = this.cloneDeep(meta || this.defaultRealEstateMeta());
   }
 }

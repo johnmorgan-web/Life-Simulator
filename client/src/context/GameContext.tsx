@@ -241,6 +241,71 @@ async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
 	}
 }
 
+async function fetchSharedRealEstateMarketFromServer(stateSnapshot: any, advanceOneMonth = false) {
+	const response = await fetch(`${API_BASE_URL}/game/real-estate/market`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {}, advanceOneMonth }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	if (!data.market || typeof data.market !== 'object') return null
+	if (!data.meta || typeof data.meta !== 'object') return null
+	return {
+		market: data.market,
+		meta: data.meta,
+	}
+}
+
+async function fetchNormalizedRealEstateStateFromServer(stateSnapshot: any) {
+	const response = await fetch(`${API_BASE_URL}/game/real-estate/normalize-state`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {} }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	return {
+		realEstateMarket: data.realEstateMarket && typeof data.realEstateMarket === 'object' ? data.realEstateMarket : {},
+		realEstateMarketMeta: data.realEstateMarketMeta && typeof data.realEstateMarketMeta === 'object' ? data.realEstateMarketMeta : defaultRealEstateMeta(),
+		investmentProperties: Array.isArray(data.investmentProperties) ? data.investmentProperties : [],
+		pendingRealEstateDeals: Array.isArray(data.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
+		realEstateLastMonthIncome: Number(data.realEstateLastMonthIncome || 0),
+		realEstateLastMonthExpenses: Number(data.realEstateLastMonthExpenses || 0),
+		realEstateLastMonthPropertyBreakdown: Array.isArray(data.realEstateLastMonthPropertyBreakdown) ? data.realEstateLastMonthPropertyBreakdown : [],
+	}
+}
+
+async function submitRealEstateOfferToServer(
+	stateSnapshot: any,
+	listing: any,
+	options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 },
+) {
+	const response = await fetch(`${API_BASE_URL}/game/real-estate/submit-offer`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {}, listing, options: options || {} }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	return data
+}
+
+async function sellInvestmentPropertyOnServer(stateSnapshot: any, propertyId: string) {
+	const response = await fetch(`${API_BASE_URL}/game/real-estate/sell-property`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {}, propertyId }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	return data
+}
+
 async function fetchAdminUsers(authToken: string) {
 	const response = await fetch(`${API_BASE_URL}/users/admin/list`, {
 		method: 'POST',
@@ -934,82 +999,6 @@ function cityPressureMultiplier(registeredUsers: number, city: any) {
 	return round2(Math.max(0.75, Math.min(1.9, demandBase * cityAmplifier)))
 }
 
-const SHARED_REAL_ESTATE_MARKET_KEY = 'life-sim:shared-real-estate-market:v1'
-const SHARED_REAL_ESTATE_MARKET_META_KEY = 'life-sim:shared-real-estate-market-meta:v1'
-
-function initialListingsForCity(userCount: number) {
-	const users = Math.max(0, Number(userCount || 0))
-	if (users <= 0) return 0
-	return 10 + Math.max(0, users - 1) * 2
-}
-
-function buildRealEstateListing(city: any, template: any, sequence: number, pressure: number, customId?: string) {
-	const seed = hashString(`${city.name}-${template.id}-${sequence}`)
-	const rnd = mulberry32(seed)
-	const quality = 0.86 + rnd() * 0.32
-	const dom = Math.max(0, Math.floor(rnd() * 7))
-	const amenities = [...template.amenityOptions].sort(() => rnd() - 0.5).slice(0, Math.max(1, Math.min(3, Math.floor(rnd() * 4))))
-	const askingPrice = round2(template.basePrice * Number(city.p || 1) * quality * (0.93 + (pressure - 1) * 0.35))
-	const askingRentPerUnit = round2(template.baseRentPerUnit * Number(city.r || 1) * quality * (0.95 + (pressure - 1) * 0.25))
-	return {
-		id: customId || `re-${city.name}-${template.id}-${sequence}-${Date.now()}`,
-		cityName: city.name,
-		templateId: template.id,
-		templateName: template.name,
-		assetClass: template.assetClass,
-		incomeLabel: template.incomeLabel,
-		units: template.units,
-		askingPrice,
-		askingRentPerUnit,
-		amenities,
-		dom,
-		condition: Math.round(65 + rnd() * 30),
-		ownershipCount: 0,
-		foreclosure: false,
-		listedByUser: null
-	}
-}
-
-function readSharedRealEstateMeta() {
-	try {
-		const raw = localStorage.getItem(SHARED_REAL_ESTATE_MARKET_META_KEY)
-		if (!raw) return null
-		const parsed = JSON.parse(raw)
-		return parsed && typeof parsed === 'object' ? parsed : null
-	} catch {
-		return null
-	}
-}
-
-function readSharedRealEstateMarket() {
-	try {
-		const raw = localStorage.getItem(SHARED_REAL_ESTATE_MARKET_KEY)
-		if (!raw) return null
-		const parsed = JSON.parse(raw)
-		return parsed && typeof parsed === 'object' ? parsed : null
-	} catch {
-		return null
-	}
-}
-
-function writeSharedRealEstateMeta(meta: any) {
-	try {
-		localStorage.setItem(SHARED_REAL_ESTATE_MARKET_META_KEY, JSON.stringify(meta))
-		return true
-	} catch {
-		return false
-	}
-}
-
-function writeSharedRealEstateMarket(market: Record<string, any[]>) {
-	try {
-		localStorage.setItem(SHARED_REAL_ESTATE_MARKET_KEY, JSON.stringify(market))
-		return true
-	} catch {
-		return false
-	}
-}
-
 function getUserCityCounts(liveSnapshot?: any) {
 	const userCityMap = new Map<string, string>()
 	for (const snapshot of cachedUserSnapshots) {
@@ -1037,96 +1026,6 @@ function defaultRealEstateMeta() {
 		nextSequenceByCity[city.name] = 0
 	}
 	return { seededUsersByCity, pendingListingTimersByCity, nextSequenceByCity }
-}
-
-function initializeRealEstateMarket(liveSnapshot?: any) {
-	const market: Record<string, any[]> = {}
-	const counts = getUserCityCounts(liveSnapshot)
-	const meta = defaultRealEstateMeta()
-	const users = getRegisteredUserCount()
-	for (const city of cityData) {
-		const listings: any[] = []
-		const cityUserCount = Number(counts[city.name] || 0)
-		const initialCount = initialListingsForCity(cityUserCount)
-		const pressure = cityPressureMultiplier(users, city)
-		for (let i = 0; i < initialCount; i++) {
-			const template = realEstateTemplates[i % realEstateTemplates.length]
-			listings.push(buildRealEstateListing(city, template, i, pressure, `re-${city.name}-${template.id}-${i}`))
-		}
-		meta.seededUsersByCity[city.name] = cityUserCount
-		meta.nextSequenceByCity[city.name] = initialCount
-		market[city.name] = listings.sort((a, b) => a.askingPrice - b.askingPrice)
-	}
-	return { market, meta }
-}
-
-function syncSharedRealEstateMarket(liveSnapshot?: any, advanceOneMonth = false) {
-	let market = readSharedRealEstateMarket()
-	let meta = readSharedRealEstateMeta()
-	if (!market || !meta) {
-		const initialized = initializeRealEstateMarket(liveSnapshot)
-		market = initialized.market
-		meta = initialized.meta
-	}
-
-	market = { ...(market || {}) }
-	meta = {
-		...defaultRealEstateMeta(),
-		...(meta || {}),
-		seededUsersByCity: { ...defaultRealEstateMeta().seededUsersByCity, ...(meta?.seededUsersByCity || {}) },
-		pendingListingTimersByCity: { ...defaultRealEstateMeta().pendingListingTimersByCity, ...(meta?.pendingListingTimersByCity || {}) },
-		nextSequenceByCity: { ...defaultRealEstateMeta().nextSequenceByCity, ...(meta?.nextSequenceByCity || {}) }
-	}
-
-	const cityUserCounts = getUserCityCounts(liveSnapshot)
-	const users = getRegisteredUserCount()
-	for (const city of cityData) {
-		const cityName = city.name
-		const currentUsers = Number(cityUserCounts[cityName] || 0)
-		const seededUsers = Number(meta.seededUsersByCity?.[cityName] || 0)
-		const pressure = cityPressureMultiplier(users, city)
-		const existing = Array.isArray(market[cityName]) ? [...market[cityName]] : []
-
-		let additions = 0
-		if (seededUsers === 0 && currentUsers > 0 && existing.length === 0) {
-			additions = initialListingsForCity(currentUsers)
-		} else if (currentUsers > seededUsers) {
-			additions = (currentUsers - seededUsers) * 2
-		}
-
-		let nextSequence = Number(meta.nextSequenceByCity?.[cityName] || existing.length)
-		for (let i = 0; i < additions; i++) {
-			const template = realEstateTemplates[nextSequence % realEstateTemplates.length]
-			existing.push(buildRealEstateListing(city, template, nextSequence, pressure, `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-${i}`))
-			nextSequence += 1
-		}
-
-		if (advanceOneMonth) {
-			const timers = Array.isArray(meta.pendingListingTimersByCity?.[cityName]) ? [...meta.pendingListingTimersByCity[cityName]] : []
-			const maturedCount = timers.filter((months: number) => Number(months || 0) <= 1).length
-			meta.pendingListingTimersByCity[cityName] = timers
-				.map((months: number) => Math.max(0, Number(months || 0) - 1))
-				.filter((months: number) => months > 0)
-
-			for (let i = 0; i < maturedCount; i++) {
-				const template = realEstateTemplates[nextSequence % realEstateTemplates.length]
-				existing.push(buildRealEstateListing(city, template, nextSequence, pressure, `re-${cityName}-${template.id}-${nextSequence}-${Date.now()}-restock-${i}`))
-				nextSequence += 1
-			}
-		}
-
-		meta.seededUsersByCity[cityName] = Math.max(seededUsers, currentUsers)
-		meta.nextSequenceByCity[cityName] = nextSequence
-		market[cityName] = existing.sort((a: any, b: any) => Number(a.askingPrice || 0) - Number(b.askingPrice || 0))
-	}
-
-	writeSharedRealEstateMarket(market)
-	writeSharedRealEstateMeta(meta)
-	return { market, meta }
-}
-
-function getSharedRealEstateMarket(liveSnapshot?: any) {
-	return syncSharedRealEstateMarket(liveSnapshot, false).market
 }
 
 function realEstateAmenityScore(amenities: string[]) {
@@ -1157,63 +1056,6 @@ function realEstateEquityValue(snapshot: any) {
 		const loan = Number(p?.loanBalance || 0)
 		return sum + Math.max(0, value - loan)
 	}, 0))
-}
-
-function normalizeRealEstateState(data: any) {
-	const shared = syncSharedRealEstateMarket(data, false)
-	const market = shared.market
-	const fallbackMarket = market
-	const normalizedMarket: Record<string, any[]> = {}
-	for (const city of cityData) {
-		const key = city.name
-		const listings = Array.isArray(market[key]) ? market[key] : fallbackMarket[key]
-		normalizedMarket[key] = listings.map((l: any, idx: number) => ({
-			id: l?.id || `re-${key}-${idx}`,
-			cityName: l?.cityName || key,
-			templateId: l?.templateId || realEstateTemplates[0].id,
-			templateName: l?.templateName || realEstateTemplates[0].name,
-			assetClass: l?.assetClass || (realEstateTemplates.find((t) => t.id === l?.templateId)?.assetClass || 'Residential'),
-			incomeLabel: l?.incomeLabel || (realEstateTemplates.find((t) => t.id === l?.templateId)?.incomeLabel || 'Monthly Rent'),
-			units: Math.max(1, Number(l?.units || 1)),
-			askingPrice: Math.max(50000, Number(l?.askingPrice || 250000)),
-			askingRentPerUnit: Math.max(400, Number(l?.askingRentPerUnit || 1500)),
-			amenities: Array.isArray(l?.amenities) ? l.amenities : [],
-			dom: Math.max(0, Math.floor(Number(l?.dom || 0))),
-			condition: Math.max(20, Math.min(100, Math.round(Number(l?.condition || 75)))),
-			ownershipCount: Math.max(0, Math.floor(Number(l?.ownershipCount || 0))),
-			foreclosure: !!l?.foreclosure,
-			listedByUser: l?.listedByUser || null
-		}))
-	}
-	writeSharedRealEstateMarket(normalizedMarket)
-	writeSharedRealEstateMeta(shared.meta)
-
-	return {
-		realEstateMarket: normalizedMarket,
-		realEstateMarketMeta: shared.meta,
-		investmentProperties: Array.isArray(data?.investmentProperties) ? data.investmentProperties.map((p: any) => ({
-			...p,
-			assetClass: p?.assetClass || (realEstateTemplates.find((t) => t.id === p?.templateId)?.assetClass || 'Residential'),
-			incomeLabel: p?.incomeLabel || (realEstateTemplates.find((t) => t.id === p?.templateId)?.incomeLabel || 'Monthly Rent'),
-			ownershipCount: Math.max(0, Math.floor(Number(p?.ownershipCount || 0))),
-			mortgageTermMonths: Number(p?.mortgageTermMonths || 0),
-			purchaseMode: p?.purchaseMode || (Number(p?.loanBalance || 0) > 0 ? 'mortgage' : 'cash')
-		})) : [],
-		pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
-		realEstateLastMonthIncome: Number(data?.realEstateLastMonthIncome || 0),
-		realEstateLastMonthExpenses: Number(data?.realEstateLastMonthExpenses || 0),
-		realEstateLastMonthPropertyBreakdown: Array.isArray(data?.realEstateLastMonthPropertyBreakdown)
-			? data.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
-				propertyId: String(entry?.propertyId || ''),
-				propertyName: String(entry?.propertyName || 'Property'),
-				cityName: String(entry?.cityName || ''),
-				grossIncome: Number(entry?.grossIncome || 0),
-				operatingCosts: Number(entry?.operatingCosts || 0),
-				debtService: Number(entry?.debtService || 0),
-				netCashflow: Number(entry?.netCashflow || 0)
-			}))
-			: []
-	}
 }
 
 function advanceMarketPrices(currentPrices: any, year: number, month: number, overrides?: any) {
@@ -1700,8 +1542,8 @@ function createInitialState(): State {
 	ownsVehicle: null as any, // primary vehicle (for UI/backcompat)
 	garage: [] as any[], // array of vehicles owned/leased
 	vehicleHistory: [] as any[], // Array of previously owned vehicles
-	realEstateMarket: getSharedRealEstateMarket(),
-	realEstateMarketMeta: readSharedRealEstateMeta() || defaultRealEstateMeta(),
+	realEstateMarket: {},
+	realEstateMarketMeta: defaultRealEstateMeta(),
 	investmentProperties: [] as any[],
 	pendingRealEstateDeals: [] as any[],
 	realEstateLastMonthIncome: 0,
@@ -1963,7 +1805,7 @@ function bestJobMatchForMigration(currentJob: any, credentials: string[], transi
 	   return ranked[0] || null
 	}
 
-function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
+async function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
 	const normalizedCredentials = Array.isArray(data?.credentials)
 		? data.credentials
 		: (Array.isArray(fallbackState?.credentials) ? fallbackState.credentials : [])
@@ -2010,7 +1852,15 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 	const currentMonth = Number(data?.month ?? fallbackState?.month ?? 1)
 	const currentYear = Number(data?.year ?? fallbackState?.year ?? 2026)
 	const marketPriceHistory = normalizeMarketPriceHistory(data.marketPriceHistory, marketPrices, currentMonth, currentYear)
-	const realEstateState = normalizeRealEstateState(data)
+	const realEstateState = await fetchNormalizedRealEstateStateFromServer(data) || {
+		realEstateMarket: data?.realEstateMarket && typeof data.realEstateMarket === 'object' ? data.realEstateMarket : {},
+		realEstateMarketMeta: data?.realEstateMarketMeta && typeof data.realEstateMarketMeta === 'object' ? data.realEstateMarketMeta : defaultRealEstateMeta(),
+		investmentProperties: Array.isArray(data?.investmentProperties) ? data.investmentProperties : [],
+		pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
+		realEstateLastMonthIncome: Number(data?.realEstateLastMonthIncome || 0),
+		realEstateLastMonthExpenses: Number(data?.realEstateLastMonthExpenses || 0),
+		realEstateLastMonthPropertyBreakdown: Array.isArray(data?.realEstateLastMonthPropertyBreakdown) ? data.realEstateLastMonthPropertyBreakdown : [],
+	}
 	const normalizedName = String(
 		data.username
 		?? currentUser
@@ -2287,9 +2137,8 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			const garage = state.garage || []
 			let updatedGarage = garage.map((g: any) => ({ ...g }))
 			const chauffeurHired = !!state.luxuryServices?.chauffer && garageHasChauffeurEligibleVehicle(updatedGarage)
-			const sharedRealEstate = syncSharedRealEstateMarket(state, true)
-			let realEstateMarket = sharedRealEstate.market
-			let realEstateMarketMeta = sharedRealEstate.meta
+			let realEstateMarket = { ...((state.realEstateMarket || {}) as Record<string, any[]>) }
+			let realEstateMarketMeta = { ...((state.realEstateMarketMeta || defaultRealEstateMeta()) as any) }
 			let investmentProperties = Array.isArray(state.investmentProperties) ? state.investmentProperties.map((p: any) => ({ ...p })) : []
 			let pendingRealEstateDeals = Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals.map((d: any) => ({ ...d })) : []
 
@@ -3133,9 +2982,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				}
 			}
 
-			writeSharedRealEstateMarket(realEstateMarket)
-			writeSharedRealEstateMeta(realEstateMarketMeta)
-
 			if (state.luxuryServices?.therapist) {
 				const rainbowSeed = hashString(`${nextYear}-${nextMonth}-${updatedJob.title}-${city.name}-rainbow`)
 				if (mulberry32(rainbowSeed)() < 0.35) {
@@ -3830,7 +3676,34 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		const safePayDebt = Math.min(Math.max(0, Number(state.debt || 0)), Math.max(0, Number(payDebt || 0)))
 		const priorMonth = state.month
 		const priorYear = state.year
-		dispatch({ type: 'PROCESS_MONTH', payload: { paySave: safePaySave, payDebt: safePayDebt, skippedPayment } })
+
+		const runMonth = async () => {
+			const snapshot = stateRef.current || state
+			const serverMarket = await fetchSharedRealEstateMarketFromServer(snapshot, true)
+			if (!serverMarket) {
+				console.error('Failed to advance real-estate market on server. Month processing aborted.')
+				return
+			}
+
+			dispatch({
+				type: 'SET_STATE',
+				payload: {
+					realEstateMarket: serverMarket.market,
+					realEstateMarketMeta: serverMarket.meta,
+				},
+			})
+
+			dispatch({
+				type: 'PROCESS_MONTH',
+				payload: {
+					paySave: safePaySave,
+					payDebt: safePayDebt,
+					skippedPayment,
+				},
+			})
+		}
+
+		void runMonth()
 
 		// Rebuild ledger and persist only after reducer has advanced month/year,
 		// so Previous Balance includes all post-month event effects.
@@ -3948,7 +3821,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		const result = await spinRewardWheelForUser(state.id)
 		if (!result?.user) return null
 
-		const normalized = normalizeLoadedUserState(
+		const normalized = await normalizeLoadedUserState(
 			result.user,
 			state,
 			result.user.username || state.currentUser || state.username || 'player',
@@ -3965,7 +3838,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (!state.id || !state.currentUser) return false
 		const data = await fetchUserById(state.id)
 		if (!data) return false
-		const normalized = normalizeLoadedUserState(data, state, state.currentUser)
+		const normalized = await normalizeLoadedUserState(data, state, state.currentUser)
 		resetDirtyTracking(normalized)
 		dispatch({
 			type: 'SET_STATE',
@@ -3975,7 +3848,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		return true
 	}
 
-	function newGame() {
+	async function newGame() {
 		const defaultBudgets = comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3])
 		const startingMarketPrices = initializeMarketPrices()
 		const freshState = {
@@ -4098,15 +3971,22 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			mathLabStreak: 0,
 			isAdmin: Boolean(state.isAdmin)
 		}
-		const seededSharedMarket = syncSharedRealEstateMarket(freshState, false)
-		freshState.realEstateMarket = seededSharedMarket.market
-		freshState.realEstateMarketMeta = seededSharedMarket.meta
+		const seededSharedMarket = await fetchNormalizedRealEstateStateFromServer(freshState)
+		if (seededSharedMarket) {
+			freshState.realEstateMarket = seededSharedMarket.realEstateMarket
+			freshState.realEstateMarketMeta = seededSharedMarket.realEstateMarketMeta
+			freshState.investmentProperties = seededSharedMarket.investmentProperties
+			freshState.pendingRealEstateDeals = seededSharedMarket.pendingRealEstateDeals
+			freshState.realEstateLastMonthIncome = seededSharedMarket.realEstateLastMonthIncome
+			freshState.realEstateLastMonthExpenses = seededSharedMarket.realEstateLastMonthExpenses
+			freshState.realEstateLastMonthPropertyBreakdown = seededSharedMarket.realEstateLastMonthPropertyBreakdown
+		}
 		resetDirtyTracking(freshState)
 		dispatch({ type: 'SET_STATE', payload: freshState })
 		
 		// Build the initial month's ledger from the server
 		buildLedger(0, 0, freshState)
-		saveGame(freshState)
+		void saveGame(freshState)
 		
 		return true
 	}
@@ -4129,15 +4009,13 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (!result.ok) return result
 
 		const data = result.data
+		const normalized = await normalizeLoadedUserState(data, state, data.username || normalizedUsername)
 
 		dispatch({
 			type: 'SET_STATE',
-			payload: (() => {
-				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
-				resetDirtyTracking(normalized)
-				return normalized
-			})()
+			payload: normalized
 		})
+		resetDirtyTracking(normalized)
 
 		buildLedger(0, 0, data)
 		refreshPeerSnapshots()
@@ -4163,15 +4041,13 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (!result.ok) return result
 
 		const data = result.data
+		const normalized = await normalizeLoadedUserState(data, state, data.username || normalizedUsername)
 
 		dispatch({
 			type: 'SET_STATE',
-			payload: (() => {
-				const normalized = normalizeLoadedUserState(data, state, data.username || normalizedUsername)
-				resetDirtyTracking(normalized)
-				return normalized
-			})()
+			payload: normalized
 		})
+		resetDirtyTracking(normalized)
 
 		buildLedger(0, 0, data)
 		refreshPeerSnapshots()
@@ -4244,7 +4120,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		const updatedSelf = await fetchUserById(state.id)
 		if (updatedSelf) {
-			const normalized = normalizeLoadedUserState(updatedSelf, stateRef.current, state.currentUser || state.username || 'Player')
+			const normalized = await normalizeLoadedUserState(updatedSelf, stateRef.current, state.currentUser || state.username || 'Player')
 			resetDirtyTracking(normalized)
 			dispatch({ type: 'SET_STATE', payload: normalized })
 		}
@@ -4332,125 +4208,82 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		}
 	}
 
-	function refreshRealEstateMarket() {
-		const latest = syncSharedRealEstateMarket(state, false)
-		dispatch({ type: 'SET_STATE', payload: { realEstateMarket: latest.market, realEstateMarketMeta: latest.meta } })
-		return latest.market
+	async function refreshRealEstateMarket() {
+		const snapshot = stateRef.current || state
+		const serverMarket = await fetchSharedRealEstateMarketFromServer(snapshot, false)
+		if (!serverMarket) return null
+		dispatch({ type: 'SET_STATE', payload: { realEstateMarket: serverMarket.market, realEstateMarketMeta: serverMarket.meta } })
+		return serverMarket.market
 	}
 
-	function submitRealEstateOffer(listing: any, options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 }) {
+	async function submitRealEstateOffer(listing: any, options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 }) {
 		if (!listing?.id || !listing?.cityName) return { ok: false, reason: 'invalid-listing' }
-		const shared = syncSharedRealEstateMarket(state, false)
-		const market = shared.market
-		const meta = shared.meta
-		const cityListings = Array.isArray(market[listing.cityName]) ? market[listing.cityName] : []
-		const stillAvailable = cityListings.some((l: any) => l.id === listing.id)
-		if (!stillAvailable) {
-			dispatch({ type: 'SET_STATE', payload: { realEstateMarket: market, realEstateMarketMeta: meta } })
+
+		const snapshot = stateRef.current || state
+		const serverResult = await submitRealEstateOfferToServer(snapshot, listing, options)
+		if (!serverResult) return { ok: false, reason: 'network-error' }
+
+		if (serverResult.ok) {
+			const nextMarket = serverResult.market || {}
+			const nextMeta = serverResult.meta || defaultRealEstateMeta()
+			const nextDeals = Array.isArray(serverResult.pendingRealEstateDeals) ? serverResult.pendingRealEstateDeals : []
+			const nextLogs = [
+				...(Array.isArray(snapshot.logs) ? snapshot.logs : []),
+				...(serverResult.logEntry ? [serverResult.logEntry] : []),
+			]
+
+			dispatch({
+				type: 'SET_STATE',
+				payload: {
+					realEstateMarket: nextMarket,
+					realEstateMarketMeta: nextMeta,
+					pendingRealEstateDeals: nextDeals,
+					logs: nextLogs,
+				}
+			})
+
+			return { ok: true }
+		}
+
+		if (serverResult.reason === 'listing-unavailable') {
+			if (serverResult.market && serverResult.meta) {
+				dispatch({
+					type: 'SET_STATE',
+					payload: {
+						realEstateMarket: serverResult.market,
+						realEstateMarketMeta: serverResult.meta,
+					}
+				})
+			}
 			return { ok: false, reason: 'listing-unavailable' }
 		}
 
-		const nextCityListings = cityListings.filter((l: any) => l.id !== listing.id)
-		const nextMarket = { ...market, [listing.cityName]: nextCityListings }
-		const nextMeta = meta
-		writeSharedRealEstateMarket(nextMarket)
-		writeSharedRealEstateMeta(nextMeta)
+		return { ok: false, reason: String(serverResult.reason || 'unknown-error') }
+	}
 
-		const credit = Number(state.credit || 600)
-		const approvalMonthsRequired = Math.max(1, Math.round(4 - Math.min(1.5, (credit - 580) / 220)))
-		const downPaymentPct = Math.max(0.1, Math.min(0.5, Number(options?.downPaymentPct || 0.25)))
-		const purchaseMode = options?.purchaseMode === 'cash' ? 'cash' : 'mortgage'
-		const mortgageTermYears = options?.mortgageTermYears === 15 ? 15 : 30
+	async function sellInvestmentProperty(propertyId: string) {
+		const snapshot = stateRef.current || state
+		const serverResult = await sellInvestmentPropertyOnServer(snapshot, propertyId)
+		if (!serverResult || !serverResult.ok) {
+			return { ok: false, reason: String(serverResult?.reason || 'not-found') }
+		}
 
-		const nextDeals = [
-			...(Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals : []),
-			{
-				id: `offer-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-				createdMonth: state.month,
-				createdYear: state.year,
-				monthsInPipeline: 0,
-				approvalMonthsRequired,
-				downPaymentPct,
-				purchaseMode,
-				mortgageTermYears,
-				listing
-			}
+		const nextMarket = serverResult.market || {}
+		const nextMeta = serverResult.meta || defaultRealEstateMeta()
+		const nextLogs = [
+			...(Array.isArray(snapshot.logs) ? snapshot.logs : []),
+			...(serverResult.logEntry ? [serverResult.logEntry] : []),
 		]
 
 		dispatch({
 			type: 'SET_STATE',
 			payload: {
+				check: Number(serverResult.check || snapshot.check || 0),
+				debt: Number(serverResult.debt || snapshot.debt || 0),
+				investmentProperties: Array.isArray(serverResult.investmentProperties) ? serverResult.investmentProperties : (Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties : []),
 				realEstateMarket: nextMarket,
 				realEstateMarketMeta: nextMeta,
-				pendingRealEstateDeals: nextDeals,
-				logs: [
-					...(Array.isArray(state.logs) ? state.logs : []),
-					{
-						date: `${state.month}/${state.year}`,
-						msg: `📝 Offer submitted: ${listing.templateName} in ${listing.cityName} (${purchaseMode === 'cash' ? 'cash offer' : `${Math.round(downPaymentPct * 100)}% down, ${mortgageTermYears}y`})`
-					}
-				]
-			}
-		})
-
-		return { ok: true }
-	}
-
-	function sellInvestmentProperty(propertyId: string) {
-		const properties = Array.isArray(state.investmentProperties) ? state.investmentProperties : []
-		const property = properties.find((p: any) => p.id === propertyId)
-		if (!property) return { ok: false, reason: 'not-found' }
-
-		const salePrice = round2(Math.max(50000, Number(property.propertyValue || 0) * 0.98))
-		const transactionCosts = round2(salePrice * 0.04)
-		const loanBalance = Math.max(0, Number(property.loanBalance || 0))
-		const netAfterLoan = round2(salePrice - transactionCosts - loanBalance)
-
-		let check = Number(state.check || 0)
-		let debt = Number(state.debt || 0)
-		if (netAfterLoan >= 0) check = round2(check + netAfterLoan)
-		else debt = round2(debt + Math.abs(netAfterLoan))
-
-		const listing = {
-			id: `re-resale-${property.id}-${Date.now()}`,
-			cityName: property.cityName,
-			templateId: property.templateId,
-			templateName: property.templateName,
-			assetClass: property.assetClass || 'Residential',
-			incomeLabel: property.incomeLabel || 'Monthly Rent',
-			units: Math.max(1, Number(property.units || 1)),
-			askingPrice: salePrice,
-			askingRentPerUnit: round2(Math.max(300, Number(property.rentPerUnit || property.marketRentPerUnit || 1200))),
-			amenities: Array.isArray(property.amenities) ? property.amenities : [],
-			dom: 0,
-			condition: Math.max(25, Math.min(100, Math.round(Number(property.condition || 70)))),
-			ownershipCount: Math.max(0, Math.floor(Number(property.ownershipCount || 0))),
-			foreclosure: false,
-			listedByUser: state.currentUser || null
-		}
-
-		const shared = syncSharedRealEstateMarket(state, false)
-		const market = shared.market
-		const meta = shared.meta
-		market[property.cityName] = [...(Array.isArray(market[property.cityName]) ? market[property.cityName] : []), listing]
-		writeSharedRealEstateMarket(market)
-		writeSharedRealEstateMeta(meta)
-
-		dispatch({
-			type: 'SET_STATE',
-			payload: {
-				check,
-				debt,
-				investmentProperties: properties.filter((p: any) => p.id !== propertyId),
-				realEstateMarket: market,
-				realEstateMarketMeta: meta,
-				logs: [
-					...(Array.isArray(state.logs) ? state.logs : []),
-					{
-						date: `${state.month}/${state.year}`,
-						msg: `🏷️ Sold ${property.templateName} for $${salePrice.toLocaleString()} and relisted to market.${netAfterLoan >= 0 ? ` Net proceeds +$${netAfterLoan.toLocaleString()}.` : ` Shortfall added to debt: $${Math.abs(netAfterLoan).toLocaleString()}.`}`
-					}
-				]
+				logs: nextLogs,
 			}
 		})
 

@@ -457,10 +457,10 @@ export default function RealEstate() {
     })
   }
 
-  const submitOffer = (listing: any) => {
-    const result = submitRealEstateOffer(listing, { downPaymentPct, purchaseMode, mortgageTermYears })
+  const submitOffer = async (listing: any) => {
+    const result = await submitRealEstateOffer(listing, { downPaymentPct, purchaseMode, mortgageTermYears })
     if (!result?.ok && result?.reason === 'listing-unavailable') {
-      refreshRealEstateMarket()
+      await refreshRealEstateMarket()
       alert('This listing was just taken by another user. Market has been refreshed.')
     }
   }
@@ -592,7 +592,7 @@ export default function RealEstate() {
             />
             {vocabulary.plainLanguageLabel}
           </label>
-          <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => refreshRealEstateMarket()}>{vocabulary.refreshMarketLabel}</button>
+          <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => { void refreshRealEstateMarket() }}>{vocabulary.refreshMarketLabel}</button>
           <select
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value)}
@@ -681,7 +681,7 @@ export default function RealEstate() {
                 </div>
                 <button
                   className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm font-bold"
-                  onClick={() => submitOffer(listing)}
+                  onClick={() => { void submitOffer(listing) }}
                 >
                   Make Offer
                 </button>
@@ -941,7 +941,7 @@ export default function RealEstate() {
                       </button>
                       <span className="tooltip-bubble">{maintenanceEducation.signatureTooltip}<span className="tooltip-caret" /></span>
                     </span>
-                    <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => sellInvestmentProperty(property.id)}>Sell & Relist</button>
+                    <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => { void sellInvestmentProperty(property.id) }}>Sell & Relist</button>
                   </div>
                   <details className="mt-3">
                     <summary className="text-[11px] text-slate-500 cursor-pointer select-none hover:text-slate-700">▸ {maintenanceEducation.optionsTitle}</summary>
