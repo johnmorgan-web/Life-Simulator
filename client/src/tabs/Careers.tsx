@@ -86,7 +86,8 @@ function estimateNetWorth(state: any) {
   const prices: Record<string, number> = state?.marketPrices && typeof state.marketPrices === 'object' ? state.marketPrices : {}
   const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
     const shares = Number(holding?.shares || 0)
-    const price = Number(prices[holding?.ticker] || 0) || Number(holding?.avgCost || 0)
+    const ticker = holding?.ticker
+    const price = ticker != null && prices[ticker] != null ? Number(prices[ticker]) : Number(holding?.avgCost || 0)
     return sum + shares * price
   }, 0)
   const vehicleAssets = (Array.isArray(state?.garage) ? state.garage : []).reduce((sum: number, vehicle: any) => {
