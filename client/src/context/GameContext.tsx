@@ -530,6 +530,9 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		year: Number(snapshot.year || 0),
 		credit: Number(snapshot.credit || 0),
 		tenure: Number(snapshot.tenure || 0),
+		check: Number(snapshot.check || 0),
+		savings: Number(snapshot.savings || 0),
+		debt: Number(snapshot.debt || 0),
 		city: {
 			name: currentCityName,
 		},
@@ -547,6 +550,24 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 			? snapshot.careerHistory.map((entry: any) => ({
 				title: entry?.title,
 				months: Number(entry?.months || 0),
+			}))
+			: [],
+		portfolio: Array.isArray(snapshot.portfolio)
+			? snapshot.portfolio.map((holding: any) => ({
+				shares: Number(holding?.shares || 0),
+				avgCost: Number(holding?.avgCost || 0),
+			}))
+			: [],
+		garage: Array.isArray(snapshot.garage)
+			? snapshot.garage.map((vehicle: any) => ({
+				currentValue: Number(vehicle?.currentValue || 0),
+				purchasePrice: Number(vehicle?.purchasePrice || 0),
+			}))
+			: [],
+		investmentProperties: Array.isArray(snapshot.investmentProperties)
+			? snapshot.investmentProperties.map((property: any) => ({
+				propertyValue: Number(property?.propertyValue || 0),
+				loanBalance: Number(property?.loanBalance || 0),
 			}))
 			: [],
 		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
