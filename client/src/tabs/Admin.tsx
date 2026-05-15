@@ -30,6 +30,7 @@ type AdminUserRow = {
     happiness: number
     netWorth: number
     pandemicHistoryMonths?: number
+    isPandemicHistoricalEvent?: boolean
     historicalEventId?: string
     historicalEventEra?: string
     historicalEventTitle?: string
@@ -45,10 +46,7 @@ function computePandemicEraCounts(users: AdminUserRow[]) {
     const monthsRemaining = Math.max(0, Number(user.progression?.historicalEventMonthsRemaining || 0))
     if (monthsRemaining <= 0) continue
 
-    const historicalEventId = String(user.progression?.historicalEventId || '').toLowerCase()
-    const historicalEventTitle = String(user.progression?.historicalEventTitle || '').toLowerCase()
-    const looksPandemic = historicalEventId.includes('pandemic') || historicalEventTitle.includes('pandemic')
-    if (!looksPandemic) continue
+    if (!Boolean(user.progression?.isPandemicHistoricalEvent)) continue
 
     const eraLabel = String(user.progression?.historicalEventEra || '').trim() || 'Unknown Era'
     counts[eraLabel] = (counts[eraLabel] || 0) + 1
@@ -143,7 +141,7 @@ export default function Admin() {
   const pandemicEraCounts = useMemo(() => computePandemicEraCounts(users), [users])
   const pandemicEraSummary = useMemo(() => {
     const entries = Object.entries(pandemicEraCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    if (!entries.length) return 'No active pandemic scenarios.'
+    if (!entries.length) return 'No active reenactment/pandemic scenarios.'
     return entries.map(([era, count]) => `${era}: ${count}`).join(' | ')
   }, [pandemicEraCounts])
 
@@ -320,8 +318,8 @@ export default function Admin() {
     const summary = computePandemicEraCounts(response)
     const entries = Object.entries(summary).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     const pandemicMessage = entries.length
-      ? ` Pandemic era totals: ${entries.map(([era, count]) => `${era}: ${count}`).join(' | ')}.`
-      : ' Pandemic era totals: none active.'
+      ? ` Reenactment/Pandemic era totals: ${entries.map(([era, count]) => `${era}: ${count}`).join(' | ')}.`
+      : ' Reenactment/Pandemic era totals: none active.'
     setMessage(`Loaded ${response.length} users.${pandemicMessage}`)
   }
 
@@ -750,7 +748,7 @@ export default function Admin() {
         </div>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
-        {hasLoadedUsers ? <p className="text-sm text-indigo-700"><span className="font-semibold">Active Pandemic Eras:</span> {pandemicEraSummary}</p> : null}
+        {hasLoadedUsers ? <p className="text-sm text-indigo-700"><span className="font-semibold">Active Reenactment/Pandemic Eras:</span> {pandemicEraSummary}</p> : null}
       </div>
 
       <div className="glass p-4 rounded-xl overflow-x-auto">
@@ -919,14 +917,23 @@ export default function Admin() {
                 </td>
                 <td className="py-2 pr-3">
                   <div className="text-xs space-y-1 min-w-[240px]">
+                    {(() => {
+                      const isPandemic = Boolean(user.progression?.isPandemicHistoricalEvent)
+                      const activeMonths = Math.max(0, Number(user.progression?.historicalEventMonthsRemaining || 0))
+                      const activeTitle = String(user.progression?.historicalEventTitle || '').trim()
+                      const activePandemicLabel = isPandemic && activeMonths > 0
+                        ? `${activeTitle || 'Pandemic Scenario'} (${activeMonths} month${activeMonths === 1 ? '' : 's'} left)`
+                        : 'None'
+
+                      return <div><span className="font-semibold">Active Reenactment/Pandemic:</span> {activePandemicLabel}</div>
+                    })()}
                     <div><span className="font-semibold">Job:</span> {user.progression?.jobTitle || 'Unknown'}</div>
                     {pendingAssignedJobs[user.id] ? <div className="text-indigo-700"><span className="font-semibold">Queued Job:</span> {pendingAssignedJobs[user.id]}</div> : null}
                     <div><span className="font-semibold">Edu:</span> {user.progression?.educationLevel || 'Unknown'} ({user.progression?.credentialsCount || 0} creds)</div>
                     <div><span className="font-semibold">Date:</span> M{user.progression?.month || 0} / Y{user.progression?.year || 0} · Tenure {user.progression?.tenureMonths || 0}mo</div>
-                    <div><span className="font-semibold">City:</span> {user.progression?.cityName || 'Unknown'} · <span className="font-semibold">Pandemic History:</span> {Number(user.progression?.pandemicHistoryMonths || 0)} month(s)</div>
+                    <div><span className="font-semibold">City:</span> {user.progression?.cityName || 'Unknown'} · <span className="font-semibold">Reenactment/Pandemic History:</span> {Number(user.progression?.pandemicHistoryMonths || 0)} month(s)</div>
                     <div><span className="font-semibold">Credit/Happiness:</span> {user.progression?.creditScore || 0} / {user.progression?.happiness || 0}</div>
                     <div><span className="font-semibold">Transit:</span> L{user.progression?.transitLevel || 0} · <span className="font-semibold">Net Worth:</span> ${formatMoney(user.progression?.netWorth || 0)}</div>
-                    {/* Removed event scenario display */}
                     {user.progression?.activeEducation ? <div><span className="font-semibold">Active Edu:</span> {user.progression.activeEducation}</div> : null}
                   </div>
                 </td>

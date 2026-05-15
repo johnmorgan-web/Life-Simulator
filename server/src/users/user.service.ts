@@ -46,6 +46,28 @@ const ADMIN_GIFT_TEMPLATES: Record<string, string> = {
 @Injectable()
 export class UserService implements OnModuleInit {
   private readonly authSessions = new Map<string, { userId: string; expiresAt: number }>();
+  private readonly pandemicKeywords = ['pandemic', 'epidemic', 'outbreak', 'covid', 'sars', 'h1n1', 'influenza', 'flu', 'virus'];
+
+  private hasPandemicKeyword(value: unknown): boolean {
+    const text = String(value || '').toLowerCase();
+    if (!text) return false;
+    return this.pandemicKeywords.some((keyword) => text.includes(keyword));
+  }
+
+  private isPandemicHistoricalEvent(event: any): boolean {
+    if (!event || typeof event !== 'object') return false;
+    if (this.hasPandemicKeyword(event.id)) return true;
+    if (this.hasPandemicKeyword(event.title)) return true;
+    if (this.hasPandemicKeyword(event.era)) return true;
+    if (this.hasPandemicKeyword(event.summary)) return true;
+    if (this.hasPandemicKeyword(event.realWorldImpact)) return true;
+
+    if (Array.isArray(event.keyStatistics)) {
+      return event.keyStatistics.some((entry: unknown) => this.hasPandemicKeyword(entry));
+    }
+
+    return false;
+  }
 
   private normalizeEconomyOverrides(raw: any) {
     if (!raw || typeof raw !== 'object') {
@@ -289,36 +311,37 @@ export class UserService implements OnModuleInit {
       const monthKeys = new Set<string>();
       const logs = Array.isArray((state as any).logs) ? (state as any).logs : [];
       for (const entry of logs) {
-      const msg = String(entry?.msg || '').toLowerCase();
-      if (!msg.includes('pandemic')) continue;
-      const date = String(entry?.date || '').trim();
-      if (date) monthKeys.add(date);
+        if (!this.hasPandemicKeyword(entry?.msg)) continue;
+        const date = String(entry?.date || '').trim();
+        if (date) monthKeys.add(date);
       }
 
       const eventHistory = Array.isArray((state as any).eventHistory)
-      ? (state as any).eventHistory
-      : [];
+        ? (state as any).eventHistory
+        : [];
       for (const event of eventHistory) {
-      const title = String(event?.title || '').toLowerCase();
-      const desc = String(event?.desc || '').toLowerCase();
-      if (!title.includes('pandemic') && !desc.includes('pandemic')) continue;
-      const month = Number(event?.month || 0);
-      const year = Number(event?.year || 0);
-      if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
+        const looksPandemic = this.hasPandemicKeyword(event?.title)
+          || this.hasPandemicKeyword(event?.desc)
+          || this.hasPandemicKeyword(event?.message);
+        if (!looksPandemic) continue;
+        const month = Number(event?.month || 0);
+        const year = Number(event?.year || 0);
+        if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
       }
 
       const activeHistoricalEvent = (state as any).historicalEconomicEvent;
-      const activeTitle = String(activeHistoricalEvent?.title || '').toLowerCase();
-      const activeId = String(activeHistoricalEvent?.id || '').toLowerCase();
       const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
-      if ((activeTitle.includes('pandemic') || activeId.includes('pandemic')) && activeMonthsRemaining > 0) {
-      const month = Number((state as any).month || 0);
-      const year = Number((state as any).year || 0);
-      if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
+      if (activeMonthsRemaining > 0) {
+        const month = Number((state as any).month || 0);
+        const year = Number((state as any).year || 0);
+        if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
       }
 
       return monthKeys.size;
     })();
+    const activeHistoricalEvent = (state as any).historicalEconomicEvent;
+    const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
+    const isPandemicHistoricalEvent = activeMonthsRemaining > 0 || this.isPandemicHistoricalEvent(activeHistoricalEvent);
 
     return {
       id: entity.id,
@@ -347,6 +370,7 @@ export class UserService implements OnModuleInit {
         happiness: Number((state as any).happiness || 0),
         netWorth,
         pandemicHistoryMonths,
+        isPandemicHistoricalEvent,
         historicalEventId: String((state as any).historicalEconomicEvent?.id || ''),
         historicalEventEra: String((state as any).historicalEconomicEvent?.era || ''),
         historicalEventTitle: String((state as any).historicalEconomicEvent?.title || ''),

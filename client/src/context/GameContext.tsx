@@ -1852,6 +1852,10 @@ function bestJobMatchForMigration(currentJob: any, credentials: string[], transi
 	}
 
 async function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
+	const resolvedIsAdmin = data?.isAdmin === undefined || data?.isAdmin === null
+		? Boolean(fallbackState?.isAdmin)
+		: Boolean(data.isAdmin)
+	const resolvedAuthToken = data?.authToken ?? fallbackState?.authToken ?? null
 	const normalizedCredentials = Array.isArray(data?.credentials)
 		? data.credentials
 		: (Array.isArray(fallbackState?.credentials) ? fallbackState.credentials : [])
@@ -1932,7 +1936,8 @@ async function normalizeLoadedUserState(data: any, fallbackState: any, currentUs
 		jobMigrationBanner: migrationMessage,
 		currentUser,
 		name: normalizedName,
-		isAdmin: Boolean(data.isAdmin),
+		isAdmin: resolvedIsAdmin,
+		authToken: resolvedAuthToken,
 		entertainmentSpending: data.entertainmentSpending ?? fallbackBudgets.entertainmentSpending,
 		subscriptionEntertainmentSpending: data.subscriptionEntertainmentSpending ?? fallbackBudgets.subscriptionEntertainmentSpending,
 		subscriptionStreakMonths: data.subscriptionStreakMonths ?? 0,
