@@ -8,7 +8,7 @@ import { findHistoricalScenarioById } from '../constants/historicalEconomicEvent
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
-import type { AcademyCourse, City, Job, LifeEvent } from '@server/types/models.types'
+import type { AcademyCourse, City, Job, LifeEvent, RewardPrizePools } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
@@ -84,6 +84,7 @@ let cachedUserSnapshots: any[] = []
 let cityData: City[] = []
 let academyCourses: (AcademyCourse & { category?: string; subcategory?: string })[] = []
 let jobBoard: Job[] = []
+let rewardPrizePools: RewardPrizePools = {}
 
 const DEFAULT_CITY: City = {
 	name: 'Chicago, US',
@@ -106,6 +107,7 @@ type GameCatalogPayload = {
 	cities: City[]
 	academyCourses: AcademyCourse[]
 	jobs: Job[]
+	rewardPrizePools?: RewardPrizePools
 }
 
 type AuthResult = { ok: true; data: any } | { ok: false; error: string }
@@ -233,6 +235,9 @@ async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
 		cities: Array.isArray(data.cities) ? data.cities : [],
 		academyCourses: Array.isArray(data.academyCourses) ? data.academyCourses : [],
 		jobs: Array.isArray(data.jobs) ? data.jobs : [],
+		rewardPrizePools: data.rewardPrizePools && typeof data.rewardPrizePools === 'object'
+			? data.rewardPrizePools
+			: {},
 	}
 }
 
@@ -688,6 +693,9 @@ function setCatalogData(payload: GameCatalogPayload) {
 		Array.isArray(payload?.academyCourses) ? payload.academyCourses : [],
 		Array.isArray(payload?.jobs) ? payload.jobs : [],
 	)
+	rewardPrizePools = payload?.rewardPrizePools && typeof payload.rewardPrizePools === 'object'
+		? payload.rewardPrizePools
+		: {}
 }
 
 function defaultCityForGame() {
@@ -2175,7 +2183,7 @@ function scaleLifeEventAmount(event: LifeEvent, netMonthlyIncome: number) {
 
 // The reducer must be inside GameProvider to close over lifeEvents
 
-function LoadedGameProvider({ children, initialGameState }: { children: React.ReactNode; initialGameState: State }) {
+function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { children: React.ReactNode; initialGameState: State; reloadCatalogs: () => Promise<boolean> }) {
 	// --- Life Events State (moved inside provider) ---
 	const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([])
 
@@ -4456,7 +4464,7 @@ function LoadedGameProvider({ children, initialGameState }: { children: React.Re
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, rewardPrizePools, reloadCatalogs, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
 			{children}
 		</GameContext.Provider>
 	)
@@ -4466,30 +4474,37 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [catalogsReady, setCatalogsReady] = useState(false)
 	const [catalogError, setCatalogError] = useState<string | null>(null)
 
+	const reloadCatalogs = useCallback(async () => {
+		try {
+			setCatalogError(null)
+			const payload = await fetchGameCatalog()
+			if (!payload || payload.cities.length === 0 || payload.jobs.length === 0) {
+				setCatalogError('Unable to load game data from server.')
+				return false
+			}
+			setCatalogData(payload)
+			setCatalogsReady(true)
+			return true
+		} catch (error) {
+			console.error('Failed to load game catalogs', error)
+			setCatalogError('Unable to load game data from server.')
+			return false
+		}
+	}, [])
+
 	useEffect(() => {
 		let cancelled = false
 		const loadCatalogs = async () => {
-			try {
-				const payload = await fetchGameCatalog()
-				if (cancelled) return
-				if (!payload || payload.cities.length === 0 || payload.jobs.length === 0) {
-					setCatalogError('Unable to load game data from server.')
-					return
-				}
-				setCatalogData(payload)
-				setCatalogsReady(true)
-			} catch (error) {
-				if (!cancelled) {
-					console.error('Failed to load game catalogs', error)
-					setCatalogError('Unable to load game data from server.')
-				}
+			const loaded = await reloadCatalogs()
+			if (!cancelled && !loaded) {
+				setCatalogError('Unable to load game data from server.')
 			}
 		}
 		void loadCatalogs()
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [reloadCatalogs])
 
 	if (catalogError) {
 		return <div className="p-6 text-sm text-rose-600">{catalogError}</div>
@@ -4499,7 +4514,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		return <div className="p-6 text-sm text-slate-500">Loading game data...</div>
 	}
 
-	return <LoadedGameProvider initialGameState={createInitialState()}>{children}</LoadedGameProvider>
+	return <LoadedGameProvider initialGameState={createInitialState()} reloadCatalogs={reloadCatalogs}>{children}</LoadedGameProvider>
 }
 
 export function useGame() {

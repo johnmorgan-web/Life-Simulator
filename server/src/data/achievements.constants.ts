@@ -157,6 +157,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
     { kind: 'cash', value: 750, weight: 3, label: '$750 cash bonus' },
     { kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' },
     { kind: 'theme', value: 'ocean', weight: 2, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'vehicle', weight: 5, label: 'Gifted luxury car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'vehicle', weight: 4, label: 'Gifted commuter car', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'vehicle', weight: 3, label: 'Luxury car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
@@ -166,6 +167,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   education: [
     { kind: 'vehicle', weight: 2, label: 'Scholar ride reward' },
     { kind: 'theme', value: 'ocean', weight: 4, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 3, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'VTI', shares: 2, weight: 4, label: '2 VTI shares' },
     { kind: 'cash', value: 1000, weight: 3, label: '$1,000 cash bonus' },
     { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
@@ -174,6 +176,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
     { kind: 'stock', ticker: 'VTI', shares: 2, weight: 5, label: '2 VTI shares' },
     { kind: 'cash', value: 1200, weight: 3, label: '$1,200 cash bonus' },
     { kind: 'theme', value: 'emerald', weight: 2, label: 'Emerald theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'VTI', shares: 5, weight: 4, label: '5 VTI shares' },
     { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 4, label: '1 AAPL share' },
     { kind: 'stock', ticker: 'TSLA', shares: 1, weight: 4, label: '1 TSLA share' },
@@ -186,6 +189,8 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   wealth: [
     { kind: 'cash', value: 2000, weight: 5, label: '$2,000 cash bonus' },
     { kind: 'theme', value: 'sunset', weight: 3, label: 'Sunset theme' },
+    { kind: 'theme', value: 'royal', weight: 3, label: 'Royal Gold theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'AAPL', shares: 1, weight: 2, label: '1 AAPL share' },
     { kind: 'stock', ticker: 'TSLA', shares: 1, weight: 2, label: '1 TSLA share' },
     { kind: 'stock', ticker: 'AMZN', shares: 1, weight: 2, label: '1 AMZN share' },
@@ -199,6 +204,7 @@ export const rewardWheelPrizePools: Record<string, RewardPrize[]> = {
   default: [
     { kind: 'cash', value: 500, weight: 4, label: '$500 cash bonus' },
     { kind: 'theme', value: 'ocean', weight: 3, label: 'Ocean theme' },
+    { kind: 'theme', value: 'aurora', weight: 2, label: 'Aurora Mint theme' },
     { kind: 'stock', ticker: 'VTI', shares: 1, weight: 3, label: '1 VTI share' },
     { kind: 'vehicle', weight: 2, label: 'Commuter car reward', vehicleId: rewardWheelVehicleGrantPool[Math.floor(Math.random() * rewardWheelVehicleGrantPool.length)] },
     { kind: 'theme', value: 'graphite', weight: 2, label: 'Graphite theme' },

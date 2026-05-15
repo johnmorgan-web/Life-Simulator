@@ -7,6 +7,7 @@ import { cityData } from '../data/cityData.constants';
 import { academyCourses } from '../data/academyCourses.constants';
 import jobBoard from '../data/jobBoard.constants';
 import lifeEvents from '../data/lifeEvents.constants';
+import { rewardWheelPrizePools } from '../data/achievements.constants';
 
 function getCareerLinkedAcademyCourses() {
   const courseByName = new Map(
@@ -67,6 +68,7 @@ export class GameController {
       cities: cityData,
       jobs: jobBoard,
       academyCourses: this.getAcademyCourses(),
+      rewardPrizePools: rewardWheelPrizePools,
     };
   }
 
