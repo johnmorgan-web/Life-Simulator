@@ -241,11 +241,54 @@ async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
 	}
 }
 
+function toRealEstateSyncSnapshot(stateSnapshot: any) {
+	const snapshot = stateSnapshot || {}
+	return {
+		currentUser: snapshot.currentUser || snapshot.username || null,
+		username: snapshot.username || snapshot.currentUser || null,
+		city: snapshot.city || null,
+	}
+}
+
+function toRealEstateNormalizeSnapshot(stateSnapshot: any) {
+	const snapshot = stateSnapshot || {}
+	return {
+		currentUser: snapshot.currentUser || snapshot.username || null,
+		username: snapshot.username || snapshot.currentUser || null,
+		city: snapshot.city || null,
+		investmentProperties: Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties : [],
+		pendingRealEstateDeals: Array.isArray(snapshot.pendingRealEstateDeals) ? snapshot.pendingRealEstateDeals : [],
+		realEstateLastMonthIncome: Number(snapshot.realEstateLastMonthIncome || 0),
+		realEstateLastMonthExpenses: Number(snapshot.realEstateLastMonthExpenses || 0),
+		realEstateLastMonthPropertyBreakdown: Array.isArray(snapshot.realEstateLastMonthPropertyBreakdown)
+			? snapshot.realEstateLastMonthPropertyBreakdown
+			: [],
+	}
+}
+
+function toStockAdvanceSnapshot(stateSnapshot: any) {
+	const snapshot = stateSnapshot || {}
+	return {
+		month: Number(snapshot.month || 1),
+		year: Number(snapshot.year || 2026),
+		marketPrices: snapshot.marketPrices && typeof snapshot.marketPrices === 'object' ? snapshot.marketPrices : {},
+		marketPriceHistory: Array.isArray(snapshot.marketPriceHistory) ? snapshot.marketPriceHistory : [],
+		economyOverrides: snapshot.economyOverrides && typeof snapshot.economyOverrides === 'object'
+			? snapshot.economyOverrides
+			: undefined,
+		historicalEconomicEvent: snapshot.historicalEconomicEvent && typeof snapshot.historicalEconomicEvent === 'object'
+			? snapshot.historicalEconomicEvent
+			: null,
+		historicalEventResetNextMonth: Boolean(snapshot.historicalEventResetNextMonth),
+	}
+}
+
 async function fetchSharedRealEstateMarketFromServer(stateSnapshot: any, advanceOneMonth = false) {
+	const compactState = toRealEstateSyncSnapshot(stateSnapshot)
 	const response = await fetch(`${API_BASE_URL}/game/real-estate/market`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {}, advanceOneMonth }),
+		body: JSON.stringify({ state: compactState, advanceOneMonth }),
 	})
 	if (!response.ok) return null
 	const data = await response.json()
@@ -259,10 +302,11 @@ async function fetchSharedRealEstateMarketFromServer(stateSnapshot: any, advance
 }
 
 async function fetchNormalizedRealEstateStateFromServer(stateSnapshot: any) {
+	const compactState = toRealEstateNormalizeSnapshot(stateSnapshot)
 	const response = await fetch(`${API_BASE_URL}/game/real-estate/normalize-state`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {} }),
+		body: JSON.stringify({ state: compactState }),
 	})
 	if (!response.ok) return null
 	const data = await response.json()
@@ -279,10 +323,11 @@ async function fetchNormalizedRealEstateStateFromServer(stateSnapshot: any) {
 }
 
 async function fetchAdvancedStockStateFromServer(stateSnapshot: any) {
+	const compactState = toStockAdvanceSnapshot(stateSnapshot)
 	const response = await fetch(`${API_BASE_URL}/game/stocks/advance`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {} }),
+		body: JSON.stringify({ state: compactState }),
 	})
 	if (!response.ok) return null
 	const data = await response.json()
@@ -4142,16 +4187,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		await refreshPeerSnapshots()
 		return { ok: true }
 	}
-
-	useEffect(() => {
-		if (!state.currentUser || !state.id) return
-		const timer = setTimeout(() => {
-			if (dirtyStateKeysRef.current.size === 0) return
-			void saveGame(stateRef.current)
-		}, 700)
-		return () => clearTimeout(timer)
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [state])
 
 	useEffect(() => {
 		if (saveStatus !== 'saved') return
