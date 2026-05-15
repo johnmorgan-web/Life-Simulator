@@ -55,7 +55,7 @@ export default function Login() {
     if (isCreateMode) return
     const timer = window.setInterval(() => {
       setPhraseIndex((prev) => (prev + 1) % signInPhrases.length)
-    }, 3200)
+    }, 7000)
     return () => window.clearInterval(timer)
   }, [isCreateMode, signInPhrases.length])
 
@@ -109,16 +109,9 @@ export default function Login() {
     <div className="min-h-screen bg-white/50 flex items-start sm:items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="glass relative p-8 rounded-xl w-full max-w-sm">
         <img src="/LedgerLegends.png" alt="Ledger Legends" className="w-full mb-4 rounded-xl" />
-        <h2 className="text-2xl font-small mb-4 ">
-          {isCreateMode ? 'Create your account' : 'Your neighbors missed you. (The nice ones, anyway.)'}
+        <h2 className="text-2xl font-small mb-4 text-center">
+          {isCreateMode ? 'Create your account' : signInPhrases[phraseIndex]}
         </h2>
-        {!isCreateMode ? (
-          <div className="mb-4 rounded-lg bg-slate-100 p-3 border border-slate-200">
-            <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Before You Sign In</p>
-            <p className="text-sm text-slate-700 mt-1">{signInPhrases[phraseIndex]}</p>
-            <p className="text-xs text-slate-500 mt-1">Use your existing username and password to continue your current life simulation.</p>
-          </div>
-        ) : null}
         <div className="mb-4">
           <label className="block text-sm font-bold text-slate-600 mb-1">Username</label>
           <input value={username} onChange={e => handleUsernameChange(e.target.value)} className="w-full p-3 border rounded" placeholder="Enter your username" />
