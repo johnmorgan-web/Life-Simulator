@@ -40,7 +40,7 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
       return { label: 'Saved', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
     }
     if (lastSavedAt) {
-      return { label: 'Autosave Ready', className: 'bg-slate-100 text-slate-600 border-slate-200' }
+      return { label: 'Save Ready', className: 'bg-slate-100 text-slate-600 border-slate-200' }
     }
     return { label: 'Ready', className: 'bg-slate-100 text-slate-600 border-slate-200' }
   })()
