@@ -1,16 +1,14 @@
-// During migration we re-export the existing JS implementation to avoid duplication.
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import cityData from '../constants/cityData.constants'
-import rawJobBoard from '../constants/jobBoard.constants'
-import lifeEvents from '../constants/lifeEvents.constants'
+
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, useCallback } from 'react'
+// import lifeEvents from '../constants/lifeEvents.constants'
 import transitOptions from '../constants/transitOptions.constants'
-import rawAcademyCourses from '../constants/academyCourses.constants'
 import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
+import { findHistoricalScenarioById } from '../constants/historicalEconomicEvents.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
-import type { Job, LifeEvent } from '@server/types/models.types'
+import type { AcademyCourse, City, Job, LifeEvent } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
@@ -54,6 +52,8 @@ type HistoricalEconomicEventState = {
 	title: string
 	era: string
 	summary: string
+	realWorldImpact: string
+	keyStatistics: string[]
 	totalMonths: number
 	monthsRemaining: number
 	startedMonth: number
@@ -81,6 +81,32 @@ const DEFAULT_HISTORICAL_EVENT_EFFECTS: HistoricalEconomicEventEffects = {
 }
 
 let cachedUserSnapshots: any[] = []
+let cityData: City[] = []
+let academyCourses: (AcademyCourse & { category?: string; subcategory?: string })[] = []
+let jobBoard: Job[] = []
+
+const DEFAULT_CITY: City = {
+	name: 'Chicago, US',
+	p: 1.1,
+	r: 1.2,
+	icon: '🏙️',
+	lat: 41.8781,
+	lon: -87.6298,
+	country: 'US',
+}
+
+const DEFAULT_JOB: Job = {
+	title: 'Odd Jobs',
+	base: 600,
+	tReq: 1,
+	odds: 1,
+}
+
+type GameCatalogPayload = {
+	cities: City[]
+	academyCourses: AcademyCourse[]
+	jobs: Job[]
+}
 
 type AuthResult = { ok: true; data: any } | { ok: false; error: string }
 
@@ -165,13 +191,49 @@ async function fetchUserById(id: string) {
 	const response = await fetch(`${API_BASE_URL}/users/${id}`)
 	if (!response.ok) return null
 	return response.json()
+
+}
+
+const LOG_RETENTION_YEARS = 5
+
+function extractYearFromLogDate(value: any) {
+	const raw = String(value || '').trim()
+	if (!raw) return null
+	const match = raw.match(/(\d{1,2})\s*\/\s*(\d{1,6})/)
+	if (!match) return null
+	const year = Number(match[2])
+	if (!Number.isFinite(year) || year <= 0) return null
+	return Math.floor(year)
+}
+
+function pruneLogsToRecentYears(logs: any, currentYear: any, retentionYears = LOG_RETENTION_YEARS) {
+	if (!Array.isArray(logs)) return []
+	const normalizedYear = Math.max(1, Math.floor(Number(currentYear || 2026)))
+	const minYear = normalizedYear - Math.max(0, Math.floor(Number(retentionYears || LOG_RETENTION_YEARS)) - 1)
+	return logs.filter((entry: any) => {
+		const year = extractYearFromLogDate(entry?.date)
+		if (year == null) return true
+		return year >= minYear && year <= normalizedYear + 1
+	})
 }
 
 async function fetchAllUsers() {
 	const response = await fetch(`${API_BASE_URL}/users`)
 	if (!response.ok) return []
-	const users = await response.json()
-	return Array.isArray(users) ? users : []
+	const data = await response.json()
+	return Array.isArray(data) ? data : []
+}
+
+async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
+	const response = await fetch(`${API_BASE_URL}/game/catalog`)
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	return {
+		cities: Array.isArray(data.cities) ? data.cities : [],
+		academyCourses: Array.isArray(data.academyCourses) ? data.academyCourses : [],
+		jobs: Array.isArray(data.jobs) ? data.jobs : [],
+	}
 }
 
 async function fetchAdminUsers(authToken: string) {
@@ -183,8 +245,8 @@ async function fetchAdminUsers(authToken: string) {
 		},
 	})
 	if (!response.ok) return null
-	const users = await response.json()
-	return Array.isArray(users) ? users : []
+	const data = await response.json()
+	return Array.isArray(data) ? data : []
 }
 
 async function adminUpdateUserById(
@@ -194,29 +256,14 @@ async function adminUpdateUserById(
 		checking: number
 		savings: number
 		debt: number
-		isAdmin: boolean
+		isAdmin?: boolean
 		username?: string
 		password?: string
+		name?: string
 		jobTitle?: string
-		economyOverrides?: {
-			recessionSeverity: number
-			inflationPressure: number
-			jobAvailability: number
-			marketVolatility: number
-			nextMonthStockShock: number
-		}
+		economyOverrides?: EconomyOverrides
 		economyApplyMonths?: number
-		historicalEconomicEvent?: {
-			id: string
-			title: string
-			era: string
-			summary: string
-			totalMonths: number
-			monthsRemaining: number
-			startedMonth: number
-			startedYear: number
-			effects: HistoricalEconomicEventEffects
-		} | null
+		historicalEconomicEvent?: HistoricalEconomicEventState | null
 		historicalEventResetNextMonth?: boolean
 	},
 ) {
@@ -240,11 +287,8 @@ async function adminDeleteUserById(targetUserId: string, authToken: string) {
 			Authorization: `Bearer ${authToken}`,
 		},
 	})
-	if (!response.ok) return false
-	const result = await response.json()
-	return Boolean(result)
+	return response.ok
 }
-
 async function adminGiftUserById(
 	targetUserId: string,
 	authToken: string,
@@ -398,6 +442,7 @@ function normalizeHistoricalEconomicEvent(raw: any): HistoricalEconomicEventStat
 	const id = String(raw.id || '').trim()
 	const title = String(raw.title || '').trim()
 	if (!id || !title) return null
+	const scenario = findHistoricalScenarioById(id)
 
 	const effectsRaw = raw.effects && typeof raw.effects === 'object' ? raw.effects : {}
 	const effects: HistoricalEconomicEventEffects = {
@@ -417,7 +462,13 @@ function normalizeHistoricalEconomicEvent(raw: any): HistoricalEconomicEventStat
 		id,
 		title,
 		era: String(raw.era || 'Historical Event'),
-		summary: String(raw.summary || ''),
+		summary: String(raw.summary || scenario?.summary || ''),
+		realWorldImpact: String(raw.realWorldImpact || scenario?.realWorldImpact || ''),
+		keyStatistics: Array.isArray(raw.keyStatistics)
+			? raw.keyStatistics.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+			: Array.isArray(scenario?.keyStatistics)
+				? scenario.keyStatistics.map((entry: any) => String(entry || '').trim()).filter(Boolean)
+				: [],
 		totalMonths,
 		monthsRemaining,
 		startedMonth: Math.max(1, Math.min(12, Number(raw.startedMonth || 1))),
@@ -534,8 +585,8 @@ function titleSeed(title: string) {
 	return h
 }
 
-function buildAcademyCatalog() {
-	return rawAcademyCourses.map(course => {
+function buildAcademyCatalog(sourceCourses: AcademyCourse[]) {
+	return sourceCourses.map(course => {
 		const type = course.type || 'degree'
 		return {
 			...course,
@@ -545,11 +596,11 @@ function buildAcademyCatalog() {
 	})
 }
 
-function buildProgressiveJobBoard() {
-	const academyCredentialSet = new Set(rawAcademyCourses.map(c => c.n))
-	const jobTitleSet = new Set(rawJobBoard.map(j => j.title))
+function buildProgressiveJobBoard(sourceCourses: AcademyCourse[], sourceJobs: Job[]) {
+	const academyCredentialSet = new Set(sourceCourses.map(c => c.n))
+	const jobTitleSet = new Set(sourceJobs.map(j => j.title))
 
-	const enriched = rawJobBoard.map(job => ({
+	const enriched = sourceJobs.map(job => ({
 		...job,
 		subcat: job.subcat || (job.cat === 'Entry' ? 'General Labor' : 'General Professional'),
 		expReq: null,
@@ -628,6 +679,23 @@ function buildProgressiveJobBoard() {
 	})
 
 	return enriched
+}
+
+function setCatalogData(payload: GameCatalogPayload) {
+	cityData = Array.isArray(payload?.cities) ? payload.cities : []
+	academyCourses = buildAcademyCatalog(Array.isArray(payload?.academyCourses) ? payload.academyCourses : [])
+	jobBoard = buildProgressiveJobBoard(
+		Array.isArray(payload?.academyCourses) ? payload.academyCourses : [],
+		Array.isArray(payload?.jobs) ? payload.jobs : [],
+	)
+}
+
+function defaultCityForGame() {
+	return cityData[3] || cityData[0] || DEFAULT_CITY
+}
+
+function defaultJobForGame() {
+	return jobBoard.find((job: Job) => job.title === 'Odd Jobs') || jobBoard[0] || DEFAULT_JOB
 }
 
 function initializeJobMarket(jobs: Job[]): JobMarketState {
@@ -780,9 +848,6 @@ function getJobEligibility(state: State, job: Job) {
 		openings
 	}
 }
-
-const academyCourses = buildAcademyCatalog()
-const jobBoard = buildProgressiveJobBoard()
 
 function round2(value: number) {
 	return Math.round(value * 100) / 100
@@ -1543,15 +1608,21 @@ const initializeEduProgress = () => {
 	return progress
 }
 
-const initialState: State = {
+function createInitialState(): State {
+	const defaultCity = defaultCityForGame()
+	const defaultJob = defaultJobForGame()
+	const defaultBudgets = comfortableEntertainmentDefaults(defaultJob, defaultCity)
+	const startingMarketPrices = initializeMarketPrices()
+
+	return {
 	check: 1200.0,
 	savings: 0,
 	debt: 0,
 	credit: 600,
 	month: 2,
 	year: 2026,
-	city: cityData[3],
-	job: { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 },
+	city: defaultCity,
+	job: defaultJob,
 	transit: { name: 'L1 - Walk/Bike', cost: 15, level: 1 },
 	activeEdu: null,
 	eduProgress: initializeEduProgress(),
@@ -1582,8 +1653,8 @@ const initialState: State = {
 		concierge: false,
 		accountant: false
 	},
-	entertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).entertainmentSpending,
-	subscriptionEntertainmentSpending: comfortableEntertainmentDefaults({ title: 'Odd Jobs', base: 600 }, cityData[3]).subscriptionEntertainmentSpending,
+	entertainmentSpending: defaultBudgets.entertainmentSpending,
+	subscriptionEntertainmentSpending: defaultBudgets.subscriptionEntertainmentSpending,
 	subscriptionStreakMonths: 0,
 	subscriptionBadges: [] as any[],
 	entertainmentTicketStubs: [] as any[],
@@ -1629,9 +1700,9 @@ const initialState: State = {
 	realEstateLastMonthExpenses: 0,
 	realEstateLastMonthPropertyBreakdown: [] as any[],
 	// Stock market
-	marketPrices: initializeMarketPrices(),
-	marketPricesPrevious: initializeMarketPrices(),
-	marketPriceHistory: appendMarketPriceHistory([], initializeMarketPrices(), 2, 2026),
+	marketPrices: startingMarketPrices,
+	marketPricesPrevious: startingMarketPrices,
+	marketPriceHistory: appendMarketPriceHistory([], startingMarketPrices, 2, 2026),
 	portfolio: [] as any[],
 	learningLevel: 'adult',
 	usePlainLanguage: false,
@@ -1668,6 +1739,7 @@ const initialState: State = {
 	mathLabLastSolvedMonth: null as number | null,
 	mathLabLastSolvedYear: null as number | null,
 	mathLabStreak: 0,
+}
 }
 
 const GameContext = createContext<any>(null)
@@ -1838,11 +1910,11 @@ function normalizeTitleTokens(value: string) {
 }
 
 function isJobCredentialCompatible(job: Job | null | undefined, credentials: string[]) {
-	if (!job) return false
-	const credentialSet = new Set(Array.isArray(credentials) ? credentials : [])
-	const educationMet = !job.req || credentialSet.has(job.req)
-	const certificateMet = !job.certReq || credentialSet.has(job.certReq)
-	return educationMet && certificateMet
+	   if (!job) return false
+	   const credentialSet = new Set(credentials)
+	   const educationMet = !job.req || credentialSet.has(job.req)
+	   const certificateMet = !job.certReq || credentialSet.has(job.certReq)
+	   return educationMet && certificateMet
 }
 
 function isJobTransitCompatible(job: Job | null | undefined, transitLevel: number) {
@@ -1855,35 +1927,33 @@ function bestJobMatchForMigration(currentJob: any, credentials: string[], transi
 	const currentBase = Number(currentJob?.base || 0)
 	const currentTokens = new Set(normalizeTitleTokens(title))
 
-	const scoreCandidate = (candidate: Job) => {
-		const candidateTokens = normalizeTitleTokens(candidate.title)
-		let overlap = 0
-		for (const token of candidateTokens) {
-			if (currentTokens.has(token)) overlap += 1
-		}
+	   const scoreCandidate = (candidate: Job) => {
+		   const candidateTokens = normalizeTitleTokens(candidate.title)
+		   let overlap = 0
+		   for (const token of candidateTokens) {
+			   if (currentTokens.has(token)) overlap += 1
+		   }
+		   const titleScore = Math.min(18, overlap * 6)
+		   const payDelta = Math.abs(Number(candidate.base || 0) - currentBase)
+		   const payDistance = Math.max(1000, currentBase || 1000)
+		   const payScore = Math.round((1 - Math.min(1, payDelta / payDistance)) * 22)
+		   const categoryScore = (currentJob?.cat && candidate.cat === currentJob.cat ? 20 : 0)
+			   + (currentJob?.subcat && candidate.subcat === currentJob.subcat ? 14 : 0)
+		   const transitScore = isJobTransitCompatible(candidate, transitLevel) ? 8 : -10
+		   const certEaseScore = candidate.certReq ? 0 : 6
+		   return titleScore + payScore + categoryScore + transitScore + certEaseScore
+	   }
+	   // Filter jobs by credential compatibility
+	   const credentialMatches = jobBoard.filter(job => isJobCredentialCompatible(job, credentials))
+	   const strictMatches = credentialMatches.filter(job => isJobTransitCompatible(job, transitLevel))
+	   const candidatePool = strictMatches.length > 0 ? strictMatches : credentialMatches
 
-		const titleScore = Math.min(24, overlap * 8)
-		const payDelta = Math.abs(Number(candidate.base || 0) - currentBase)
-		const payDistance = Math.max(1000, currentBase || 1000)
-		const payScore = Math.round((1 - Math.min(1, payDelta / payDistance)) * 22)
-		const categoryScore = (currentJob?.cat && candidate.cat === currentJob.cat ? 20 : 0)
-			+ (currentJob?.subcat && candidate.subcat === currentJob.subcat ? 14 : 0)
-		const transitScore = isJobTransitCompatible(candidate, transitLevel) ? 8 : -10
-		const certEaseScore = candidate.certReq ? 0 : 4
-		return titleScore + payScore + categoryScore + transitScore + certEaseScore
+	   if (candidatePool.length === 0) {
+		   return jobBoard.find(job => job.title === 'Odd Jobs') || jobBoard[0] || null
+	   }
+	   const ranked = [...candidatePool].sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
+	   return ranked[0] || null
 	}
-
-	const credentialMatches = jobBoard.filter(job => isJobCredentialCompatible(job, credentials))
-	const strictMatches = credentialMatches.filter(job => isJobTransitCompatible(job, transitLevel))
-	const candidatePool = strictMatches.length > 0 ? strictMatches : credentialMatches
-
-	if (candidatePool.length === 0) {
-		return jobBoard.find(job => job.title === 'Odd Jobs') || jobBoard[0] || null
-	}
-
-	const ranked = [...candidatePool].sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
-	return ranked[0] || null
-}
 
 function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: string) {
 	const normalizedCredentials = Array.isArray(data?.credentials)
@@ -1925,6 +1995,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 	const migrationLogs = migrationMessage
 		? [...baseLogs, { date: `${Number(data?.month || fallbackState?.month || 1)}/${Number(data?.year || fallbackState?.year || 2026)}`, msg: migrationMessage }]
 		: baseLogs
+	const normalizedYearForLogs = Number(data?.year ?? fallbackState?.year ?? 2026)
 
 	const fallbackBudgets = comfortableEntertainmentDefaults(data.job || fallbackState.job, data.city || fallbackState.city)
 	const marketPrices = normalizeMarketPrices(data.marketPrices)
@@ -1953,7 +2024,7 @@ function normalizeLoadedUserState(data: any, fallbackState: any, currentUser: st
 		jobStartYear: Math.max(1, Number(data?.jobStartYear ?? fallbackState?.jobStartYear ?? 2026)),
 		job: normalizedJob,
 		pendingJob: normalizedPendingJob,
-		logs: migrationLogs,
+		logs: pruneLogsToRecentYears(migrationLogs, normalizedYearForLogs),
 		jobMigrationBanner: migrationMessage,
 		currentUser,
 		name: normalizedName,
@@ -2060,7 +2131,7 @@ function syncTransitWithGarage(currentTransit: any, garage: any[], luxuryService
 	return currentTransit
 }
 
-function pickInterMonthEvent(state: State): LifeEvent | null {
+function pickInterMonthEvent(state: State, lifeEvents: LifeEvent[]): LifeEvent | null {
 	// Roughly half of months have an event that lands between statements.
 	if (Math.random() > 0.5) return null
 
@@ -2072,7 +2143,7 @@ function pickInterMonthEvent(state: State): LifeEvent | null {
 	if (Math.random() < 0.35) triggers.add('health')
 	if (Math.random() < 0.25) triggers.add('family')
 
-	const pool = lifeEvents.filter(e => triggers.has(e.trigger))
+	const pool = (Array.isArray(lifeEvents) ? lifeEvents : []).filter((e: any) => triggers.has(e.trigger))
 	if (!pool.length) return null
 	return pool[Math.floor(Math.random() * pool.length)]
 }
@@ -2102,8 +2173,31 @@ function scaleLifeEventAmount(event: LifeEvent, netMonthlyIncome: number) {
 	return round2(Math.max(minAmount, Math.min(maxAmount, blended)))
 }
 
-function reducer(state: State, action: any) {
-	switch (action.type) {
+// The reducer must be inside GameProvider to close over lifeEvents
+
+function LoadedGameProvider({ children, initialGameState }: { children: React.ReactNode; initialGameState: State }) {
+	// --- Life Events State (moved inside provider) ---
+	const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([])
+
+	// Fetch life events from server
+	const fetchLifeEvents = useCallback(async () => {
+		try {
+			const response = await fetch(`${API_BASE_URL}/game/life-events`)
+			if (!response.ok) throw new Error('Failed to fetch life events')
+			const data = await response.json()
+			setLifeEvents(Array.isArray(data) ? data : [])
+		} catch (e) {
+			setLifeEvents([])
+		}
+	}, [])
+
+	useEffect(() => {
+		fetchLifeEvents()
+	}, [fetchLifeEvents])
+
+	// Move reducer inside provider to close over lifeEvents
+	const reducer = (state: State, action: any) => {
+		switch (action.type) {
 		case 'INIT_LEDGER': {
 			if (!action.preserveProgress) {
 				return { ...state, ledger: action.payload }
@@ -2569,7 +2663,7 @@ function reducer(state: State, action: any) {
 			}
 
 			// Between-month random event: applies after settlement and before the next statement.
-			const interMonthEvent = pickInterMonthEvent({ ...state, job: updatedJob, activeEdu, garage: updatedGarage, credit, paymentStreak })
+			const interMonthEvent = pickInterMonthEvent({ ...state, job: updatedJob, activeEdu, garage: updatedGarage, credit, paymentStreak }, lifeEvents)
 			if (interMonthEvent) {
 				const scaledEventAmount = scaleLifeEventAmount(interMonthEvent, Math.max(0, updatedJob.base * city.p * 0.8))
 				const delta = interMonthEvent.type === 'in' ? scaledEventAmount : -scaledEventAmount
@@ -2589,7 +2683,6 @@ function reducer(state: State, action: any) {
 					month: nextMonth,
 					year: nextYear
 				})
-
 				if (resultingCheck < 0) {
 					const eventShortfall = fix(Math.abs(resultingCheck))
 					newDebt = fix(newDebt + eventShortfall)
@@ -3050,7 +3143,7 @@ function reducer(state: State, action: any) {
 				previousMarketPrices,
 				normalizeMarketPrices(state.marketPricesPrevious || previousMarketPrices),
 				state.autoInvest,
-				logs,
+				   pruneLogsToRecentYears(logs, nextYear),
 				nextMonth,
 				nextYear
 			)
@@ -3253,6 +3346,12 @@ function reducer(state: State, action: any) {
 					msg: '📉 Admin economy campaign expired. Sliders reset to neutral baseline.',
 				})
 			}
+			if (effectiveHistoricalEvent && effectiveHistoricalEvent.monthsRemaining > 0 && !historicalEventExpired) {
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `📚 ${effectiveHistoricalEvent.title} remains active. ${nextHistoricalMonthsRemaining} month${nextHistoricalMonthsRemaining === 1 ? '' : 's'} remaining.`,
+				})
+			}
 			if (historicalEventExpired && effectiveHistoricalEvent) {
 				logs.push({
 					date: `${nextMonth}/${nextYear}`,
@@ -3356,7 +3455,8 @@ function reducer(state: State, action: any) {
 			return { ...state, showSettlement: !state.showSettlement }
 		case 'APPLY_JOB': {
 			const app = action.payload
-			return { ...state, applications: [...state.applications, app], logs: [...state.logs, { date: `${state.month}/${state.year}`, msg: `Applied for ${app.job.title}` }] }
+			const nextLogs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `Applied for ${app.job.title}` }]
+			return { ...state, applications: [...state.applications, app], logs: pruneLogsToRecentYears(nextLogs, state.year) }
 		}
 		case 'TRIGGER_CELEBRATION':
 			return { ...state, celebration: action.payload }
@@ -3379,7 +3479,7 @@ function reducer(state: State, action: any) {
 				payRaiseBoostMonths: Math.max(2, Number(state.payRaiseBoostMonths || 0)),
 				lastNegotiationMonth: state.month,
 				lastNegotiationYear: state.year,
-				logs,
+				logs: pruneLogsToRecentYears(logs, state.year),
 				celebration: 'pay-bump'
 			}
 		}
@@ -3400,7 +3500,7 @@ function reducer(state: State, action: any) {
 				payRaiseBoostMonths: Math.max(2, Number(state.payRaiseBoostMonths || 0)),
 				lastAutoBumpMonth: state.month,
 				lastAutoBumpYear: state.year,
-				logs,
+				logs: pruneLogsToRecentYears(logs, state.year),
 				celebration: 'pay-bump'
 			}
 		}
@@ -3417,7 +3517,7 @@ function reducer(state: State, action: any) {
 			const totalCost = round2(price * quantity)
 			if (state.check < totalCost) {
 				const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `Stock buy blocked for ${ticker}: insufficient checking balance.` }]
-				return { ...state, logs }
+				return { ...state, logs: pruneLogsToRecentYears(logs, state.year) }
 			}
 
 			const portfolio = Array.isArray(state.portfolio) ? [...state.portfolio] : []
@@ -3440,7 +3540,7 @@ function reducer(state: State, action: any) {
 				check: round2(state.check - totalCost),
 				stockInvestedThisMonth: round2(Number(state.stockInvestedThisMonth || 0) + totalCost),
 				portfolio,
-				logs
+				logs: pruneLogsToRecentYears(logs, state.year)
 			}
 		}
 		case 'SELL_STOCK': {
@@ -3455,7 +3555,7 @@ function reducer(state: State, action: any) {
 			const idx = portfolio.findIndex((h: any) => h.ticker === ticker)
 			if (idx < 0) {
 				const logs = [...state.logs, { date: `${state.month}/${state.year}`, msg: `Stock sale blocked for ${ticker}: no shares owned.` }]
-				return { ...state, logs }
+				return { ...state, logs: pruneLogsToRecentYears(logs, state.year) }
 			}
 
 			const holding = portfolio[idx]
@@ -3479,18 +3579,21 @@ function reducer(state: State, action: any) {
 				...state,
 				check: round2(state.check + proceeds),
 				portfolio,
-				logs
+				logs: pruneLogsToRecentYears(logs, state.year)
 			}
 		}
 		case 'SET_STATE':
-			return { ...state, ...action.payload }
+			{
+				const nextState = { ...state, ...action.payload }
+				const nextYear = Number(action?.payload?.year || nextState.year || state.year || 2026)
+				return { ...nextState, logs: pruneLogsToRecentYears(nextState.logs, nextYear) }
+			}
 		default:
 			return state
 	}
-}
+	}
 
-export function GameProvider({ children }: { children: React.ReactNode }) {
-	const [state, dispatch] = useReducer(reducer, initialState)
+	const [state, dispatch] = useReducer(reducer, initialGameState)
 	const stateRef = useRef(state)
 	const saveInFlightRef = useRef<Promise<boolean> | null>(null)
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -3499,8 +3602,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
 	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
 	const dirtyStateKeysRef = useRef<Set<string>>(new Set())
-	const trackedStateRef = useRef<any>(initialState)
-	const savedStateRef = useRef<any>(initialState)
+	const trackedStateRef = useRef<any>(initialGameState)
+	const savedStateRef = useRef<any>(initialGameState)
+
+
 
 	useEffect(() => {
 		stateRef.current = state
@@ -4162,7 +4267,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 		// Auto-clear after animation
 		setTimeout(() => {
 			dispatch({ type: 'CLEAR_CELEBRATION' })
-		}, 3500)
+		}, 10000)
 	}
 
 	async function applyForJob(job: Job) {
@@ -4355,6 +4460,46 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 			{children}
 		</GameContext.Provider>
 	)
+}
+
+export function GameProvider({ children }: { children: React.ReactNode }) {
+	const [catalogsReady, setCatalogsReady] = useState(false)
+	const [catalogError, setCatalogError] = useState<string | null>(null)
+
+	useEffect(() => {
+		let cancelled = false
+		const loadCatalogs = async () => {
+			try {
+				const payload = await fetchGameCatalog()
+				if (cancelled) return
+				if (!payload || payload.cities.length === 0 || payload.jobs.length === 0) {
+					setCatalogError('Unable to load game data from server.')
+					return
+				}
+				setCatalogData(payload)
+				setCatalogsReady(true)
+			} catch (error) {
+				if (!cancelled) {
+					console.error('Failed to load game catalogs', error)
+					setCatalogError('Unable to load game data from server.')
+				}
+			}
+		}
+		void loadCatalogs()
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	if (catalogError) {
+		return <div className="p-6 text-sm text-rose-600">{catalogError}</div>
+	}
+
+	if (!catalogsReady) {
+		return <div className="p-6 text-sm text-slate-500">Loading game data...</div>
+	}
+
+	return <LoadedGameProvider initialGameState={createInitialState()}>{children}</LoadedGameProvider>
 }
 
 export function useGame() {

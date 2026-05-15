@@ -5,6 +5,93 @@ import { EntertainmentService } from './entertainment.service';
 import { academyCourses } from '../../data/academyCourses.constants';
 import gameValues from '../../data/gameValues.constants';
 
+const LEDGER_DETAIL_POOLS: Record<string, string[]> = {
+  housing: [
+    'Monthly rent or mortgage payment',
+    'Renter/home insurance premium',
+    'Building maintenance and common fees',
+    'Property taxes or local housing assessments',
+    'Safety and security services',
+    'Home essentials replenishment',
+    'Lease administration and filing fees',
+    'Routine home upkeep reserves',
+    'Appliance wear-and-tear reserve',
+    'General household operating baseline',
+  ],
+  transit: [
+    'Public transit fare passes',
+    'Rideshare and trip minimum charges',
+    'Parking and station access fees',
+    'Tolls and route surcharges',
+    'Commute convenience upgrades',
+    'Intercity transit tickets',
+    'Transit card reloads',
+    'Last-mile scooter or bike rides',
+    'Airport or event transfer rides',
+    'Occasional peak-hour price surges',
+  ],
+  gasMaint: [
+    'Fuel top-ups and pump price changes',
+    'Oil and fluid replacement',
+    'Brake and tire wear costs',
+    'Car wash and detailing basics',
+    'Battery and filter servicing',
+    'Registration and inspection prep',
+    'Unexpected minor repairs',
+    'Wiper, bulb, and small parts replacement',
+    'Seasonal maintenance checks',
+    'Roadside assistance contribution',
+  ],
+  utilities: [
+    'Electricity and energy charges',
+    'Water and sewer services',
+    'Heating or cooling usage',
+    'Trash and recycling pickup',
+    'Phone line and mobile service',
+    'Home internet plan',
+    'Utility base fees and riders',
+    'Peak usage time-of-day charges',
+    'Network equipment rental',
+    'Monthly communication taxes and fees',
+  ],
+  food: [
+    'Grocery staples and pantry restock',
+    'Fresh produce and proteins',
+    'Household kitchen supplies',
+    'Lunches and workday meals',
+    'Coffee and quick snacks',
+    'Bulk discount store runs',
+    'Weekend meal prep ingredients',
+    'Beverages and hydration items',
+    'Personal care essentials from grocery trips',
+    'Food delivery and convenience pickups',
+  ],
+  entertainment: [
+    'Dining out and social outings',
+    'Movie, concert, or local event tickets',
+    'Gaming, hobbies, and recreation',
+    'Weekend activities and experiences',
+    'Sports, fitness classes, or day passes',
+    'Creative supplies and passion projects',
+    'Date nights and celebrations',
+    'Short local trips and attractions',
+    'Family-friendly entertainment activities',
+    'Books, audio, or leisure content',
+  ],
+  subscriptions: [
+    'Streaming video subscriptions',
+    'Music and podcast memberships',
+    'Gaming or creator platform passes',
+    'Cloud storage and app subscriptions',
+    'Premium productivity tools',
+    'News or education subscriptions',
+    'Fitness and wellness app plans',
+    'Digital magazine bundles',
+    'Online community memberships',
+    'Auto-renewing lifestyle services',
+  ],
+};
+
 @Injectable()
 export class LedgerService {
   constructor(
@@ -22,15 +109,32 @@ export class LedgerService {
 
     const job = state.pendingJob || state.job;
 
-    const applyLedgerDecimalVariance = (amount: number, key: string): number => {
-      if (amount <= 0) return 0;
+    const deterministicHash = (key: string) => {
       const seedText = `${state.year}-${state.month}-${state.city?.name}-${job?.title}-${key}`;
       let hash = 0;
       for (let i = 0; i < seedText.length; i++) {
         hash = (hash * 31 + seedText.charCodeAt(i)) >>> 0;
       }
+      return hash;
+    };
+
+    const applyLedgerDecimalVariance = (amount: number, key: string): number => {
+      if (amount <= 0) return 0;
+      const hash = deterministicHash(key);
       const offset = ((hash % 91) - 45) / 100;
       return fix(Math.max(0.01, amount + offset));
+    };
+
+    const rotatingDetails = (poolKey: keyof typeof LEDGER_DETAIL_POOLS, key: string, count = 3) => {
+      const pool = LEDGER_DETAIL_POOLS[poolKey] || [];
+      if (!pool.length || count <= 0) return [];
+
+      const start = deterministicHash(`details-${key}`) % pool.length;
+      const picked: string[] = [];
+      for (let i = 0; i < Math.min(count, pool.length); i++) {
+        picked.push(pool[(start + i) % pool.length]);
+      }
+      return picked;
     };
 
     // Previous balance
@@ -136,6 +240,7 @@ export class LedgerService {
       type: 'out',
       bal,
       done: false,
+      details: rotatingDetails('housing', 'housing-rent'),
     });
 
     const mortgagePayment = Math.max(
@@ -158,6 +263,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
+        details: rotatingDetails('transit', `transit-${state.transit?.name || 'default'}`),
       });
 
       // Only charge gas and maintenance if the player owns a vehicle
@@ -187,6 +293,7 @@ export class LedgerService {
           type: 'out',
           bal,
           done: false,
+          details: rotatingDetails('gasMaint', 'gas-maint-combined'),
         });
       }
     }
@@ -214,6 +321,7 @@ export class LedgerService {
       type: 'out',
       bal,
       done: false,
+      details: rotatingDetails('utilities', 'utilities-phone'),
     });
 
     // Food
@@ -237,6 +345,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
+        details: rotatingDetails('food', 'food-groceries'),
       });
     }
 
@@ -272,6 +381,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
+        details: rotatingDetails('entertainment', 'entertainment-general'),
       });
     }
 
@@ -295,6 +405,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
+        details: rotatingDetails('subscriptions', 'entertainment-subscriptions'),
       });
     }
 

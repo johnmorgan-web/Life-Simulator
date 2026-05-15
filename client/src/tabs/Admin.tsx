@@ -515,6 +515,8 @@ export default function Admin() {
           title: selectedHistoricalScenario.title,
           era: selectedHistoricalScenario.era,
           summary: selectedHistoricalScenario.summary,
+          realWorldImpact: selectedHistoricalScenario.realWorldImpact || '',
+          keyStatistics: Array.isArray(selectedHistoricalScenario.keyStatistics) ? selectedHistoricalScenario.keyStatistics : [],
           totalMonths: normalizedMonths,
           monthsRemaining: normalizedMonths,
           startedMonth: startMonth,
@@ -637,6 +639,9 @@ export default function Admin() {
           <div className="rounded-lg border border-indigo-100 bg-white/80 p-3 space-y-2">
             <p className="text-sm font-semibold text-indigo-900">{selectedHistoricalScenario.title}</p>
             <p className="text-xs text-indigo-800">{selectedHistoricalScenario.summary}</p>
+            {selectedHistoricalScenario.realWorldImpact ? (
+              <p className="text-xs text-indigo-900">{selectedHistoricalScenario.realWorldImpact}</p>
+            ) : null}
             <div className="text-xs text-indigo-900 space-y-1">
               <p><span className="font-semibold">Default Duration:</span> {selectedHistoricalScenario.defaultDurationMonths} month(s)</p>
               <p><span className="font-semibold">Learning Focus:</span> maintain cash reserves, avoid over-concentration, and prepare for volatility.</p>
@@ -649,6 +654,16 @@ export default function Admin() {
                 ))}
               </ul>
             </div>
+            {Array.isArray(selectedHistoricalScenario.keyStatistics) && selectedHistoricalScenario.keyStatistics.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-indigo-700">Historical Stats</p>
+                <ul className="list-disc ml-5 mt-1 text-xs text-indigo-900 space-y-1">
+                  {selectedHistoricalScenario.keyStatistics.map((value) => (
+                    <li key={value}>{value}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

@@ -20,7 +20,6 @@ export const cityData: City[] = [
   { name: 'Atlanta, US', p: 1.0, r: 0.95, icon: '🍑', lat: 33.7490, lon: -84.3880, country: 'US' },
   { name: 'Boston, US', p: 1.25, r: 1.1, icon: '🎓', lat: 42.3601, lon: -71.0589, country: 'US' },
   { name: 'Austin, US', p: 1.1, r: 0.9, icon: '🎸', lat: 30.2672, lon: -97.7431, country: 'US' },
-  { name: 'Boston, US', p: 1.25, r: 1.1, icon: '🎓', lat: 42.3601, lon: -71.0589, country: 'US' },
   { name: 'Lisbon, Portugal', p: 0.85, r: 0.75, icon: '🌊', lat: 38.7223, lon: -9.1393, country: 'PT' },
   { name: 'Toronto, Canada', p: 1.0, r: 0.9, icon: '🍁', lat: 43.651070, lon: -79.347015, country: 'CA' },
   { name: 'Panama City, Panama', p: 0.75, r: 0.65, icon: '🏝️', lat: 8.9824, lon: -79.5199, country: 'PA' },

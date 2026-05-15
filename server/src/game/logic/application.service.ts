@@ -91,7 +91,13 @@ export class ApplicationService {
       if (!eligibility.certificationMet) blocks.push(`certification (${eligibility.resolvedCertReq ?? job.certReq})`);
       if (!eligibility.transitMet) blocks.push(`transit level ${job.tReq}`);
       if (!eligibility.experienceMet) blocks.push(`experience (${eligibility.experienceDetail})`);
+      if (!eligibility.wealthMet) {
+        const required = Number(eligibility.wealthRequirement || 0);
+        const current = Number(eligibility.netWorth || 0);
+        blocks.push(`net worth ($${Math.round(current).toLocaleString()} / $${Math.round(required).toLocaleString()})`);
+      }
       if (!eligibility.capacityMet) blocks.push('no openings');
+      if (blocks.length === 0) blocks.push('requirements not met');
       const entry = {
         date: `${state?.month || 0}/${state?.year || 0}`,
         msg: `Application blocked for ${job.title}: ${blocks.join(', ')}`,

@@ -13,6 +13,8 @@ export type HistoricalEconomicEventScenario = {
   title: string
   era: string
   summary: string
+  realWorldImpact?: string
+  keyStatistics?: string[]
   defaultDurationMonths: number
   economyOverrides: {
     recessionSeverity: number
@@ -31,6 +33,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Great Depression (1929)',
     era: '1929-1939',
     summary: 'Severe, prolonged unemployment and contraction with deep financial stress.',
+    realWorldImpact: 'Households faced mass unemployment, wage collapse, and widespread loss of savings during prolonged economic contraction.',
+    keyStatistics: [
+      'Labor: US unemployment peaked near 25% in 1933',
+      'Output: US real GDP fell by about 30% from 1929 to 1933',
+      'Finance: More than 9,000 US banks failed during the early 1930s',
+    ],
     defaultDurationMonths: 12,
     economyOverrides: {
       recessionSeverity: 92,
@@ -62,6 +70,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Oil Shock and Stagflation (1973)',
     era: '1973-1975',
     summary: 'Energy shock and inflation pressure reduced real purchasing power.',
+    realWorldImpact: 'Families paid more for fuel and essentials while wages lagged, combining weak growth with persistent inflation pressure.',
+    keyStatistics: [
+      'Prices: Global oil prices rose roughly 4x between late 1973 and 1974',
+      'Inflation: US CPI inflation reached about 12.3% in 1974',
+      'Labor: US unemployment rose to about 9.0% by 1975',
+    ],
     defaultDurationMonths: 8,
     economyOverrides: {
       recessionSeverity: 60,
@@ -91,6 +105,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Dot-Com Bust (2000)',
     era: '2000-2002',
     summary: 'Tech-heavy valuation collapse with elevated equity volatility.',
+    realWorldImpact: 'Workers in technology and adjacent sectors faced layoffs and hiring pullbacks as speculative valuations reset sharply.',
+    keyStatistics: [
+      'Markets: NASDAQ Composite fell about 78% from peak to trough (2000-2002)',
+      'Investment: US business investment in equipment and software declined in 2001-2002',
+      'Labor: US unemployment rose from around 4.0% in 2000 to about 6.3% in 2003',
+    ],
     defaultDurationMonths: 6,
     economyOverrides: {
       recessionSeverity: 48,
@@ -120,6 +140,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Great Recession (2008)',
     era: '2008-2010',
     summary: 'Housing and credit crisis with broad labor-market weakness.',
+    realWorldImpact: 'Foreclosures, tighter credit, and layoffs disrupted household finances and forced many workers into lower-paying roles.',
+    keyStatistics: [
+      'Labor: US unemployment peaked at 10.0% in October 2009',
+      'Markets: S&P 500 fell about 57% from 2007 peak to 2009 trough',
+      'Housing: US home prices fell roughly 20-30% nationally from peak levels',
+    ],
     defaultDurationMonths: 10,
     economyOverrides: {
       recessionSeverity: 82,
@@ -149,6 +175,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Pandemic Shock (2020)',
     era: '2020-2021',
     summary: 'Rapid demand shock, service disruption, and extreme market swings.',
+    realWorldImpact: 'Service workers and small businesses were hit hardest, with sudden job loss, income volatility, and disrupted spending patterns.',
+    keyStatistics: [
+      'Labor: US unemployment spiked to 14.7% in April 2020',
+      'Output: Global GDP contracted about 3.1% in 2020',
+      'Markets: S&P 500 dropped about 34% in early 2020 before recovering later',
+    ],
     defaultDurationMonths: 7,
     economyOverrides: {
       recessionSeverity: 76,
@@ -178,6 +210,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Post-War Expansion (1950s)',
     era: '1948-1966',
     summary: 'Reconstruction, industrial expansion, and broad wage growth supported steady prosperity.',
+    realWorldImpact: 'Many households experienced rising wages, suburban home ownership growth, and more stable long-term employment.',
+    keyStatistics: [
+      'Output: US real GDP grew around 4% per year on average in the 1950s',
+      'Labor: US unemployment was often near or below 5% during much of the decade',
+      'Households: US homeownership rose from about 55% in 1950 to around 62% by 1960',
+    ],
     defaultDurationMonths: 9,
     economyOverrides: {
       recessionSeverity: 14,
@@ -207,6 +245,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Bretton Woods Stability',
     era: '1950s-1960s',
     summary: 'Policy coordination and fixed-rate discipline produced a relatively calm macro environment.',
+    realWorldImpact: 'Currency stability and coordinated policy reduced uncertainty for trade, jobs, and long-horizon household planning.',
+    keyStatistics: [
+      'Policy: Bretton Woods fixed exchange-rate framework operated broadly from 1944 to 1971',
+      'Trade: World merchandise trade expanded strongly in the 1950s and 1960s',
+      'Volatility: Advanced economies generally saw lower macro volatility than in interwar periods',
+    ],
     defaultDurationMonths: 8,
     economyOverrides: {
       recessionSeverity: 18,
@@ -236,6 +280,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Great Moderation',
     era: '1985-2007',
     summary: 'Lower inflation volatility and longer expansions created a perception of macro stability.',
+    realWorldImpact: 'Families and firms benefited from steadier inflation and output, making budgeting and credit management feel more predictable.',
+    keyStatistics: [
+      'Inflation: US inflation was generally lower and less volatile than in the 1970s',
+      'Cycles: US recessions were less frequent/severe before the 2008 crisis compared with prior decades',
+      'Growth: Long expansions in the 1990s and mid-2000s reinforced perceived economic stability',
+    ],
     defaultDurationMonths: 10,
     economyOverrides: {
       recessionSeverity: 22,
@@ -265,6 +315,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: '1990s Productivity Boom',
     era: '1991-2000',
     summary: 'Technology adoption and productivity gains supported strong growth and rising confidence.',
+    realWorldImpact: 'Productivity gains helped raise living standards, supported job creation, and boosted retirement/investment balances.',
+    keyStatistics: [
+      'Productivity: US labor productivity growth accelerated in the late 1990s versus early 1990s',
+      'Labor: US unemployment fell to about 4.0% by 2000',
+      'Markets: S&P 500 delivered strong cumulative gains across most of the decade',
+    ],
     defaultDurationMonths: 7,
     economyOverrides: {
       recessionSeverity: 16,
@@ -294,6 +350,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Post-Crisis Recovery (Early 2010s)',
     era: '2010-2016',
     summary: 'Gradual recovery with improving jobs, moderate growth, and mostly supportive policy backdrop.',
+    realWorldImpact: 'Households gradually rebuilt employment and balance sheets, though wage gains were uneven across sectors and regions.',
+    keyStatistics: [
+      'Labor: US unemployment fell from about 9.6% (2010) to about 4.9% (2016)',
+      'Output: US real GDP growth was moderate, roughly around 2% annually in much of the period',
+      'Balance Sheets: US household net worth recovered and surpassed pre-crisis highs during the expansion',
+    ],
     defaultDurationMonths: 8,
     economyOverrides: {
       recessionSeverity: 26,
@@ -323,6 +385,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Roaring Twenties Expansion',
     era: '1922-1928',
     summary: 'Rapid growth and risk appetite drove strong markets, alongside rising speculative behavior.',
+    realWorldImpact: 'Rising consumer credit and fast industrial growth improved near-term living standards but increased vulnerability to a sharp reversal.',
+    keyStatistics: [
+      'Output: US real GDP grew strongly through most of the 1920s',
+      'Industry: US industrial production rose substantially across the decade',
+      'Markets: Stock valuations and margin speculation climbed sharply before 1929',
+    ],
     defaultDurationMonths: 6,
     economyOverrides: {
       recessionSeverity: 20,
@@ -352,6 +420,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Commodity Supercycle Calm Phase',
     era: '2003-2007 (select regions)',
     summary: 'Strong global demand supported employment and asset growth before later instability emerged.',
+    realWorldImpact: 'Resource exporters and related industries saw income gains, while households in many regions benefited from robust growth and credit access.',
+    keyStatistics: [
+      'Output: Global GDP growth averaged roughly 4-5% across 2003-2007',
+      'Commodities: Many commodity benchmarks rose strongly before the 2008 downturn',
+      'Trade: Global trade volumes expanded rapidly in the pre-crisis years',
+    ],
     defaultDurationMonths: 6,
     economyOverrides: {
       recessionSeverity: 24,
@@ -381,6 +455,12 @@ export const historicalEconomicEventScenarios: HistoricalEconomicEventScenario[]
     title: 'Digital Infrastructure Expansion',
     era: 'Late 2010s',
     summary: 'Cloud, software, and platform scaling created broad productivity tailwinds across sectors.',
+    realWorldImpact: 'Businesses improved efficiency through cloud adoption, and workers in digital-adjacent roles saw stronger demand and mobility.',
+    keyStatistics: [
+      'Technology Spend: Global cloud infrastructure spending grew rapidly throughout the late 2010s',
+      'Investment Mix: Software and IT services shares of business investment increased in many advanced economies',
+      'Adoption: Digital-platform adoption expanded across retail, media, logistics, and finance',
+    ],
     defaultDurationMonths: 7,
     economyOverrides: {
       recessionSeverity: 21,

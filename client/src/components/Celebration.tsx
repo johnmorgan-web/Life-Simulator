@@ -32,15 +32,22 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
   useEffect(() => {
     if (!event) return
 
+    // Keep celebration copy visible longer than the confetti burst.
+    const messageDuration = 10000
+
     // Trigger confetti
     const isTherapistCelebration = event === 'rainbow'
-    const duration = isTherapistCelebration ? 500 : 1000
-    const end = Date.now() + duration
+    const confettiDuration = isTherapistCelebration ? 500 : 1000
+    const end = Date.now() + confettiDuration
     let frameCount = 0
+    let animationFrameId = 0
+
+    const completionTimer = window.setTimeout(() => {
+      onComplete()
+    }, messageDuration)
 
     const frame = () => {
       if (Date.now() > end) {
-        onComplete()
         return
       }
 
@@ -59,10 +66,15 @@ export default function Celebration({ event, onComplete }: { event: CelebrationE
       }
       frameCount += 1
 
-      requestAnimationFrame(frame)
+      animationFrameId = requestAnimationFrame(frame)
     }
 
     frame()
+
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId)
+      window.clearTimeout(completionTimer)
+    }
   }, [event, onComplete])
 
   if (!event) return null
