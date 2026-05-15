@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
-import { achievementRules, cosmeticThemes, rewardWheelPrizePools, type AchievementRule, type RewardPrize } from '../constants/achievements.constants'
+import { achievementRules, cosmeticThemes, type AchievementRule } from '../constants/achievements.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
+import type { RewardPrize } from '@server/types/models.types'
 
 type GenericState = Record<string, unknown>
 
@@ -170,9 +171,10 @@ function tierLabel(metric: AchievementRule['metric'], ticker?: string) {
 }
 
 export default function Rewards() {
-  const { state, dispatch, spinRewardWheel } = useGame()
+  const { state, dispatch, spinRewardWheel, rewardPrizePools, reloadCatalogs } = useGame()
   const [wheelRotation, setWheelRotation] = useState(0)
   const [isSpinning, setIsSpinning] = useState(false)
+  const [isReloadingCatalogs, setIsReloadingCatalogs] = useState(false)
   const typedState = state as GenericState
   const unlockedSet = new Set<string>(Array.isArray(typedState.achievementsUnlocked) ? typedState.achievementsUnlocked as string[] : [])
   const unlockedThemes = Array.isArray(state.unlockedThemes) ? state.unlockedThemes : ['default']
@@ -180,12 +182,15 @@ export default function Rewards() {
   const rewardCategoryQueue = Array.isArray((state as any).rewardCategoryQueue) ? (state as any).rewardCategoryQueue as string[] : []
   const queuedCategory = rewardCategoryQueue[0] || null
   const wheelCategory = String(queuedCategory || state.lastAchievementCategory || 'default')
-  const basePool = (rewardWheelPrizePools[wheelCategory] || rewardWheelPrizePools.default) as RewardPrize[]
+  const pools = (rewardPrizePools && typeof rewardPrizePools === 'object') ? rewardPrizePools as Record<string, RewardPrize[]> : {}
+  const hasServerPoolData = Object.keys(pools).length > 0
+  const basePool = (pools[wheelCategory] || pools.default || []) as RewardPrize[]
   const liquidityTier = getLiquidityTier(Number(state.check || 0), Number(state.savings || 0))
   const credentials = Array.isArray((state as any).credentials) ? ((state as any).credentials as string[]) : []
   const tierPool = filterPrizePoolByTier(basePool, liquidityTier)
   const prizePool = filterPrizePoolByVehicleLicense(tierPool, credentials)
   const activePrizePool = prizePool.length > 0 ? prizePool : basePool
+  const canAnimateSpin = activePrizePool.length > 0
   const segmentAngle = activePrizePool.length > 0 ? 360 / activePrizePool.length : 360
 
   const findPrizeIndex = (prize: any) => {
@@ -205,16 +210,27 @@ export default function Rewards() {
     if (isSpinning || Number(state.rewardTokens || 0) <= 0 || activePrizePool.length === 0) return
     setIsSpinning(true)
 
-    const result = await spinRewardWheel()
+    // Fire the server call immediately, in parallel with the visual spin,
+    // so the wheel starts moving the instant the user clicks rather than
+    // sitting still while awaiting the network response.
+    const resultPromise = spinRewardWheel()
+
+    // Start a placeholder rotation so the wheel appears to move right away.
+    // The easing curve starts very slowly, so the brief overlap before the
+    // server responds is nearly imperceptible.
+    const preSpinBase = wheelRotation + (360 * 5)
+    setWheelRotation(preSpinBase)
+
+    const result = await resultPromise
     const selectedPrize = result?.prize
     let winningIndex = findPrizeIndex(selectedPrize)
     if (winningIndex < 0) winningIndex = weightedChoiceIndex(activePrizePool)
 
     const centerAngle = (winningIndex * segmentAngle) + (segmentAngle / 2)
-    const normalizedCurrent = ((wheelRotation % 360) + 360) % 360
+    const normalizedPreSpin = ((preSpinBase % 360) + 360) % 360
     const desiredFinal = (360 - centerAngle) % 360
-    const delta = (desiredFinal - normalizedCurrent + 360) % 360
-    const nextRotation = wheelRotation + (360 * 6) + delta
+    const delta = (desiredFinal - normalizedPreSpin + 360) % 360
+    const nextRotation = preSpinBase + delta
 
     setWheelRotation(nextRotation)
 
@@ -311,8 +327,8 @@ export default function Rewards() {
 
             <button
               onClick={handleAnimatedSpin}
-              disabled={Number(state.rewardTokens || 0) <= 0 || isSpinning}
-              className={`px-4 py-2 rounded text-sm font-bold ${Number(state.rewardTokens || 0) > 0 && !isSpinning ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+              disabled={Number(state.rewardTokens || 0) <= 0 || isSpinning || !canAnimateSpin}
+              className={`px-4 py-2 rounded text-sm font-bold ${Number(state.rewardTokens || 0) > 0 && !isSpinning && canAnimateSpin ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
             >
               {isSpinning ? 'Spinning...' : 'Spin Reward Wheel'}
             </button>
@@ -332,6 +348,31 @@ export default function Rewards() {
                   ? `Next spin category from queue: ${queuedCategory}`
                   : 'No category queue pending; using latest achievement category fallback.'}
               </p>
+              {!hasServerPoolData && (
+                <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                  <p className="text-xs">Reward pool data is unavailable from the server right now. Quick Spin still works.</p>
+                  <button
+                    className={`mt-2 px-2 py-1 rounded text-[11px] font-bold ${isReloadingCatalogs ? 'bg-amber-200 text-amber-700 cursor-not-allowed' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+                    onClick={async () => {
+                      if (isReloadingCatalogs) return
+                      setIsReloadingCatalogs(true)
+                      try {
+                        await reloadCatalogs()
+                      } finally {
+                        setIsReloadingCatalogs(false)
+                      }
+                    }}
+                    disabled={isReloadingCatalogs}
+                  >
+                    {isReloadingCatalogs ? 'Reloading...' : 'Retry Catalog Load'}
+                  </button>
+                </div>
+              )}
+              {hasServerPoolData && !canAnimateSpin && (
+                <p className="mt-1 text-amber-700">
+                  No visual wheel pool is available for this category yet.
+                </p>
+              )}
             </div>
             <div className="space-y-2 mb-3">
               {activePrizePool.map((prize, idx) => (
@@ -349,6 +390,9 @@ export default function Rewards() {
                   </span>
                 </div>
               ))}
+              {activePrizePool.length === 0 && (
+                <p className="text-xs text-slate-500">No wheel segments to display.</p>
+              )}
             </div>
             <span className="text-xs text-slate-500">The wheel uses weighted segments, and the awarded prize is exactly what your wheel lands on.</span>
           </div>

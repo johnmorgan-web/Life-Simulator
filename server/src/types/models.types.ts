@@ -28,3 +28,11 @@ export type AcademyCourse = {
 	subcategory?: string
 }
 export type Application = { id: string; job: Job; appliedMonth: number; appliedYear: number; decisionMonth: number; decisionYear: number; score: number; status: string; chosen?: boolean }
+
+export type RewardPrize =
+	| { kind: 'cash'; value: number; weight: number; label: string }
+	| { kind: 'theme'; value: string; weight: number; label: string }
+	| { kind: 'stock'; ticker: string; shares: number; weight: number; label: string }
+	| { kind: 'vehicle'; weight: number; label: string; vehicleId?: string }
+
+export type RewardPrizePools = Record<string, RewardPrize[]>
