@@ -359,7 +359,7 @@ function buildChallenges(state: any): Challenge[] {
 }
 
 export default function MathLab() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch, saveGame } = useGame()
   const [selected, setSelected] = useState('loan-payment')
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -512,25 +512,27 @@ export default function MathLab() {
     const creditBoost = elementaryRewardLimited ? 1 : 3
     const nextStreak = Math.max(0, Number(state.mathLabStreak || 0)) + 1
 
+    const payload = {
+      check: round2(Number(state.check || 0) + cashReward),
+      credit: Math.max(300, Math.min(850, Number(state.credit || 0) + creditBoost)),
+      rewardTokens: Math.max(0, Number(state.rewardTokens || 0)) + tokenReward,
+      mathLabLastSolvedMonth: state.month,
+      mathLabLastSolvedYear: state.year,
+      mathLabStreak: nextStreak,
+      mathLabElementarySolveStreak: nextElementaryStreak,
+      logs: [
+        ...(Array.isArray(state.logs) ? state.logs : []),
+        {
+          date: `${state.month}/${state.year}`,
+          msg: `🧮 Math Lab solved: ${challenge.title} [${challenge.gradeBand}] (+$${cashReward}, +${creditBoost} credit, +${tokenReward} token${elementaryRewardLimited ? ', elementary reward cap active' : ''})`
+        }
+      ]
+    }
     dispatch({
       type: 'SET_STATE',
-      payload: {
-        check: round2(Number(state.check || 0) + cashReward),
-        credit: Math.max(300, Math.min(850, Number(state.credit || 0) + creditBoost)),
-        rewardTokens: Math.max(0, Number(state.rewardTokens || 0)) + tokenReward,
-        mathLabLastSolvedMonth: state.month,
-        mathLabLastSolvedYear: state.year,
-        mathLabStreak: nextStreak,
-        mathLabElementarySolveStreak: nextElementaryStreak,
-        logs: [
-          ...(Array.isArray(state.logs) ? state.logs : []),
-          {
-            date: `${state.month}/${state.year}`,
-            msg: `🧮 Math Lab solved: ${challenge.title} [${challenge.gradeBand}] (+$${cashReward}, +${creditBoost} credit, +${tokenReward} token${elementaryRewardLimited ? ', elementary reward cap active' : ''})`
-          }
-        ]
-      }
+      payload,
     })
+    void saveGame({ ...state, ...payload })
 
     setFeedback(`Correct! ${challenge.expected} ${challenge.unit}. Rewards claimed: +$${cashReward}, +${creditBoost} credit, +${tokenReward} token.${elementaryRewardLimited ? ' Elementary-level reward cap applied due to repeated elementary solves.' : ''}`)
   }
