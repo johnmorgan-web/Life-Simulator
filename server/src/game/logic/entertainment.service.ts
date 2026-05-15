@@ -52,39 +52,27 @@ export class EntertainmentService {
     const adjustedSubscription = this.utilitiesService.round2(
       Math.max(0, (subscription || 0) * subFactor),
     );
-    return this.normalizeEntertainmentBudgets(
-      adjustedEntertainment,
-      adjustedSubscription,
-      cap,
-    );
+    return this.normalizeEntertainmentBudgets(adjustedEntertainment, adjustedSubscription, cap);
   }
 
   comfortableEntertainmentDefaults(
     job: any,
     city: any,
-  ): {
-    entertainmentSpending: number;
-    subscriptionEntertainmentSpending: number;
-  } {
+  ): { entertainmentSpending: number; subscriptionEntertainmentSpending: number } {
     const netSalary = Math.max(0, (job?.base || 0) * (city?.p || 1) * 0.8);
     const targetTotal = this.utilitiesService.round2(netSalary * 0.09);
     return {
       entertainmentSpending: this.utilitiesService.round2(targetTotal * 0.65),
-      subscriptionEntertainmentSpending: this.utilitiesService.round2(
-        targetTotal * 0.35,
-      ),
+      subscriptionEntertainmentSpending: this.utilitiesService.round2(targetTotal * 0.35),
     };
   }
 
   totalMonthlyIncomeForLuxuryPricing(snapshot: any): number {
     const salaryIncome = Math.max(
       0,
-      Number(snapshot?.job?.base || 0) * Number(snapshot?.city?.p || 1) * 0.8,
+      (Number(snapshot?.job?.base || 0) * Number(snapshot?.city?.p || 1)) * 0.8,
     );
-    const rentalIncome = Math.max(
-      0,
-      Number(snapshot?.realEstateLastMonthIncome || 0),
-    );
+    const rentalIncome = Math.max(0, Number(snapshot?.realEstateLastMonthIncome || 0));
     return this.utilitiesService.round2(salaryIncome + rentalIncome);
   }
 
@@ -94,10 +82,7 @@ export class EntertainmentService {
     options?: { propertyCount?: number },
   ): number {
     const income = Math.max(0, Number(netMonthlyIncome || 0));
-    const propertyCount = Math.max(
-      0,
-      Math.floor(Number(options?.propertyCount || 0)),
-    );
+    const propertyCount = Math.max(0, Math.floor(Number(options?.propertyCount || 0)));
     const rules: Record<
       string,
       { base: number; pct: number; min: number; max: number }
@@ -118,8 +103,7 @@ export class EntertainmentService {
     const baseline = this.utilitiesService.round2(
       Math.min(rule.max, Math.max(rule.min, raw)),
     );
-    const propertySurcharge =
-      serviceId === 'housekeeper' ? propertyCount * 450 : 0;
+    const propertySurcharge = serviceId === 'housekeeper' ? propertyCount * 450 : 0;
     let adjusted = this.utilitiesService.round2(baseline + propertySurcharge);
     if (income <= 0) return adjusted;
 
@@ -141,10 +125,7 @@ export class EntertainmentService {
       Object.entries(services).reduce((sum, [serviceId, active]) => {
         if (!active) return sum;
         return (
-          sum +
-          this.calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome, {
-            propertyCount,
-          })
+          sum + this.calculateLuxuryServiceMonthlyPay(serviceId, netMonthlyIncome, { propertyCount })
         );
       }, 0),
     );

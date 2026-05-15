@@ -11,20 +11,12 @@ export class ApplicationService {
     const eligibility = this.jobService.getJobEligibility(state, job);
 
     if (eligibility.resolvedReq) {
-      if (
-        Array.isArray(state.credentials) &&
-        state.credentials.includes(eligibility.resolvedReq)
-      )
-        score += 20;
+      if (Array.isArray(state.credentials) && state.credentials.includes(eligibility.resolvedReq)) score += 20;
       else score -= 15;
     } else score += 10;
 
     if (eligibility.resolvedCertReq) {
-      if (
-        Array.isArray(state.credentials) &&
-        state.credentials.includes(eligibility.resolvedCertReq)
-      )
-        score += 15;
+      if (Array.isArray(state.credentials) && state.credentials.includes(eligibility.resolvedCertReq)) score += 15;
       else score -= 10;
     } else score += 5;
 
@@ -45,24 +37,18 @@ export class ApplicationService {
     else if (eligibility.openings <= 3) score += 2;
     else score += 6;
 
-    const history = Array.isArray(state.careerHistory)
-      ? state.careerHistory
-      : [];
+    const history = Array.isArray(state.careerHistory) ? state.careerHistory : [];
     if (history.length > 3) score += 10;
     else if (history.length > 0) score += 5;
 
-    if (Array.isArray(state.credentials) && state.credentials.length > 0)
-      score += 10;
+    if (Array.isArray(state.credentials) && state.credentials.length > 0) score += 10;
 
     score = Math.max(0, Math.min(100, score));
     score += Math.random() * 20 - 10;
     return Math.round(score);
   }
 
-  applyForJob(
-    state: any,
-    jobTitle: string,
-  ): {
+  applyForJob(state: any, jobTitle: string): {
     applications: any[];
     logs: any[];
     logEntries: any[];
@@ -77,69 +63,38 @@ export class ApplicationService {
     const logEntries: any[] = [];
 
     if (!title) {
-      return {
-        applications,
-        logs,
-        logEntries,
-        applied: false,
-        reason: 'invalid-job',
-      };
+      return { applications, logs, logEntries, applied: false, reason: 'invalid-job' };
     }
 
     const job = jobBoard.find((j: any) => String(j?.title || '') === title);
     if (!job) {
-      const entry = {
-        date: `${state?.month || 0}/${state?.year || 0}`,
-        msg: `Application blocked for ${title}: job not found`,
-      };
+      const entry = { date: `${state?.month || 0}/${state?.year || 0}`, msg: `Application blocked for ${title}: job not found` };
       logs.push(entry);
       logEntries.push(entry);
-      return {
-        applications,
-        logs,
-        logEntries,
-        applied: false,
-        reason: 'job-not-found',
-      };
+      return { applications, logs, logEntries, applied: false, reason: 'job-not-found' };
     }
 
     const existingPending = applications.some(
       (app: any) => app?.job?.title === job.title && app?.status === 'pending',
     );
     if (existingPending) {
-      const entry = {
-        date: `${state?.month || 0}/${state?.year || 0}`,
-        msg: `Already applied: ${job.title}`,
-      };
+      const entry = { date: `${state?.month || 0}/${state?.year || 0}`, msg: `Already applied: ${job.title}` };
       logs.push(entry);
       logEntries.push(entry);
-      return {
-        applications,
-        logs,
-        logEntries,
-        applied: false,
-        reason: 'already-applied',
-      };
+      return { applications, logs, logEntries, applied: false, reason: 'already-applied' };
     }
 
     const eligibility = this.jobService.getJobEligibility(state, job);
     if (!eligibility.canApply) {
       const blocks: string[] = [];
-      if (!eligibility.educationMet)
-        blocks.push(`education (${eligibility.resolvedReq ?? job.req})`);
-      if (!eligibility.certificationMet)
-        blocks.push(
-          `certification (${eligibility.resolvedCertReq ?? job.certReq})`,
-        );
+      if (!eligibility.educationMet) blocks.push(`education (${eligibility.resolvedReq ?? job.req})`);
+      if (!eligibility.certificationMet) blocks.push(`certification (${eligibility.resolvedCertReq ?? job.certReq})`);
       if (!eligibility.transitMet) blocks.push(`transit level ${job.tReq}`);
-      if (!eligibility.experienceMet)
-        blocks.push(`experience (${eligibility.experienceDetail})`);
+      if (!eligibility.experienceMet) blocks.push(`experience (${eligibility.experienceDetail})`);
       if (!eligibility.wealthMet) {
         const required = Number(eligibility.wealthRequirement || 0);
         const current = Number(eligibility.netWorth || 0);
-        blocks.push(
-          `net worth ($${Math.round(current).toLocaleString()} / $${Math.round(required).toLocaleString()})`,
-        );
+        blocks.push(`net worth ($${Math.round(current).toLocaleString()} / $${Math.round(required).toLocaleString()})`);
       }
       if (!eligibility.capacityMet) blocks.push('no openings');
       if (blocks.length === 0) blocks.push('requirements not met');
@@ -149,13 +104,7 @@ export class ApplicationService {
       };
       logs.push(entry);
       logEntries.push(entry);
-      return {
-        applications,
-        logs,
-        logEntries,
-        applied: false,
-        reason: 'ineligible',
-      };
+      return { applications, logs, logEntries, applied: false, reason: 'ineligible' };
     }
 
     const score = this.scoreApplication(state, job);
@@ -170,8 +119,7 @@ export class ApplicationService {
     }
 
     const variability = Number(job.base || 0) * 0.05;
-    const adjustedBase =
-      Number(job.base || 0) + (Math.random() * variability * 2 - variability);
+    const adjustedBase = Number(job.base || 0) + (Math.random() * variability * 2 - variability);
     const offeredJob = { ...job, base: adjustedBase };
 
     applications.push({
@@ -185,10 +133,7 @@ export class ApplicationService {
       status: 'pending',
     });
 
-    const appliedEntry = {
-      date: `${appliedMonth}/${appliedYear}`,
-      msg: `Applied for ${job.title}`,
-    };
+    const appliedEntry = { date: `${appliedMonth}/${appliedYear}`, msg: `Applied for ${job.title}` };
     logs.push(appliedEntry);
     logEntries.push(appliedEntry);
     return { applications, logs, logEntries, applied: true };
@@ -214,18 +159,12 @@ export class ApplicationService {
       const isPending = String(app?.status || '') === 'pending';
       const decisionMonth = Number(app?.decisionMonth || 0);
       const decisionYear = Number(app?.decisionYear || 0);
-      if (!isPending || decisionMonth !== month || decisionYear !== year)
-        continue;
+      if (!isPending || decisionMonth !== month || decisionYear !== year) continue;
 
       const eligibility = this.jobService.getJobEligibility(state, app.job);
       if (!eligibility?.canApply) {
         app.status = 'rejected';
-        results.push({
-          id: app.id,
-          status: 'rejected',
-          title: app?.job?.title,
-          job: app.job,
-        });
+        results.push({ id: app.id, status: 'rejected', title: app?.job?.title, job: app.job });
         const entry = {
           date: `${month}/${year}`,
           msg: `Application rejected for ${app?.job?.title} (requirements changed or no openings)`,
@@ -244,30 +183,14 @@ export class ApplicationService {
 
       if (accepted) {
         app.status = 'accepted';
-        results.push({
-          id: app.id,
-          status: 'accepted',
-          title: app?.job?.title,
-          job: app.job,
-        });
-        const entry = {
-          date: `${month}/${year}`,
-          msg: `Hired for ${app?.job?.title}`,
-        };
+        results.push({ id: app.id, status: 'accepted', title: app?.job?.title, job: app.job });
+        const entry = { date: `${month}/${year}`, msg: `Hired for ${app?.job?.title}` };
         logs.push(entry);
         logEntries.push(entry);
       } else {
         app.status = 'rejected';
-        results.push({
-          id: app.id,
-          status: 'rejected',
-          title: app?.job?.title,
-          job: app.job,
-        });
-        const entry = {
-          date: `${month}/${year}`,
-          msg: `Application rejected for ${app?.job?.title}`,
-        };
+        results.push({ id: app.id, status: 'rejected', title: app?.job?.title, job: app.job });
+        const entry = { date: `${month}/${year}`, msg: `Application rejected for ${app?.job?.title}` };
         logs.push(entry);
         logEntries.push(entry);
       }
@@ -278,11 +201,7 @@ export class ApplicationService {
         const decisionMonth = Number(app?.decisionMonth || 0);
         const decisionYear = Number(app?.decisionYear || 0);
         const status = String(app?.status || '');
-        return (
-          decisionMonth === month &&
-          decisionYear === year &&
-          status !== 'pending'
-        );
+        return decisionMonth === month && decisionYear === year && status !== 'pending';
       })
       .map((app: any) => ({
         id: app.id,
@@ -293,9 +212,7 @@ export class ApplicationService {
 
     return {
       applications,
-      applicationResults: currentMonthResults.length
-        ? currentMonthResults
-        : results,
+      applicationResults: currentMonthResults.length ? currentMonthResults : results,
       logs,
       logEntries,
     };

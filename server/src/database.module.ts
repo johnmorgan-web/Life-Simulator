@@ -10,11 +10,7 @@ import * as path from 'node:path';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const configuredPath = configService.get<string>('SQLITE_DB_PATH');
-        const fallbackPath = path.join(
-          process.cwd(),
-          'data',
-          'life-simulator.sqlite',
-        );
+        const fallbackPath = path.join(process.cwd(), 'data', 'life-simulator.sqlite');
         const dbPath = configuredPath || fallbackPath;
         fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 

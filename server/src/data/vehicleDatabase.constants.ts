@@ -7,11 +7,10 @@ export const vehicleDatabase = {
       name: 'Economy',
       baseMaintenanceFactor: 0.8,
       gasMileage: 28,
-      depreciation: {
-        // yearly depreciation rates
+      depreciation: { // yearly depreciation rates
         new: 0.15, // 15% first year
-        used: 0.08, // 8% per year after
-      },
+        used: 0.08  // 8% per year after
+      }
     },
     midrange: {
       name: 'Mid-Range',
@@ -19,27 +18,27 @@ export const vehicleDatabase = {
       gasMileage: 24,
       depreciation: {
         new: 0.18,
-        used: 0.1,
-      },
+        used: 0.10
+      }
     },
     luxury: {
       name: 'Luxury',
       baseMaintenanceFactor: 1.5,
       gasMileage: 20,
       depreciation: {
-        new: 0.2,
-        used: 0.12,
-      },
-    },
+        new: 0.20,
+        used: 0.12
+      }
+     },
     unrealistic: {
       name: 'Unrealistic',
       baseMaintenanceFactor: 2.0,
       gasMileage: 10,
       depreciation: {
         new: 0.25,
-        used: 0.15,
-      },
-    },
+        used: 0.15
+      }
+    }
   },
   vehicles: [
     // ECONOMY CLASS
@@ -54,7 +53,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚗',
       baseValue: 28000,
-      costPerKm: 0.25,
+      costPerKm: 0.25
     },
     {
       id: 'toyota-corolla-2024',
@@ -67,7 +66,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚗',
       baseValue: 27500,
-      costPerKm: 0.24,
+      costPerKm: 0.24
     },
     {
       id: 'hyundai-elantra-2024',
@@ -80,7 +79,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚗',
       baseValue: 25000,
-      costPerKm: 0.22,
+      costPerKm: 0.22
     },
     {
       id: 'ford-focus-2024',
@@ -93,7 +92,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚗',
       baseValue: 26500,
-      costPerKm: 0.23,
+      costPerKm: 0.23
     },
 
     // MID-RANGE CLASS
@@ -108,7 +107,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 38000,
-      costPerKm: 0.32,
+      costPerKm: 0.32
     },
     {
       id: 'toyota-camry-2024',
@@ -121,7 +120,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 37500,
-      costPerKm: 0.31,
+      costPerKm: 0.31
     },
     {
       id: 'mazda-6-2024',
@@ -134,7 +133,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 36000,
-      costPerKm: 0.3,
+      costPerKm: 0.30
     },
     {
       id: 'chevy-malibu-2024',
@@ -147,7 +146,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 35000,
-      costPerKm: 0.29,
+      costPerKm: 0.29
     },
     {
       id: 'ford-edge-2024',
@@ -160,7 +159,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 42000,
-      costPerKm: 0.35,
+      costPerKm: 0.35
     },
     {
       id: 'honda-crv-2024',
@@ -173,7 +172,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🚙',
       baseValue: 40500,
-      costPerKm: 0.33,
+      costPerKm: 0.33
     },
 
     // LUXURY CLASS
@@ -188,7 +187,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 65000,
-      costPerKm: 0.45,
+      costPerKm: 0.45
     },
     {
       id: 'mercedes-c-class-2024',
@@ -201,7 +200,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 68000,
-      costPerKm: 0.48,
+      costPerKm: 0.48
     },
     {
       id: 'audi-a4-2024',
@@ -214,7 +213,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 62000,
-      costPerKm: 0.43,
+      costPerKm: 0.43
     },
     {
       id: 'lexus-es-2024',
@@ -227,7 +226,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 64000,
-      costPerKm: 0.44,
+      costPerKm: 0.44
     },
     {
       id: 'bmw-x5-2024',
@@ -240,7 +239,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 85000,
-      costPerKm: 0.55,
+      costPerKm: 0.55
     },
     {
       id: 'mercedes-glc-2024',
@@ -253,7 +252,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 82000,
-      costPerKm: 0.52,
+      costPerKm: 0.52
     },
     {
       id: 'audi-q5-2024',
@@ -266,7 +265,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 72000,
-      costPerKm: 0.48,
+      costPerKm: 0.48
     },
     {
       id: 'lexus-rx-2024',
@@ -279,7 +278,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 70000,
-      costPerKm: 0.46,
+      costPerKm: 0.46
     },
 
     // LUXURY CLASS
@@ -294,7 +293,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 1200000,
-      costPerKm: 0.65,
+      costPerKm: 0.65
     },
     {
       id: '2025-bugatti-chiron-super-sport',
@@ -307,7 +306,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 3000000,
-      costPerKm: 1.25,
+      costPerKm: 1.25
     },
     {
       id: '2025-koenigsegg-jesko-absolut',
@@ -320,11 +319,11 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 2500000,
-      costPerKm: 1.15,
+      costPerKm: 1.15
     },
     {
       id: '2025-ssc-tuatara',
-      name: 'SSC Tuatara',
+      name: 'SSC Tuatara',  
       class: 'unrealistic',
       body: 'Sedan',
       newPrice: 1800000,
@@ -333,7 +332,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 1800000,
-      costPerKm: 1.1,
+      costPerKm: 1.1
     },
     {
       id: '2025-aston-martin-valhalla',
@@ -346,7 +345,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 2200000,
-      costPerKm: 1.18,
+      costPerKm: 1.18
     },
     {
       id: '2025-lamborghini-sian-fkp-37',
@@ -359,7 +358,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 2800000,
-      costPerKm: 1.35,
+      costPerKm: 1.35
     },
     {
       id: '2025-ferrari-sf90-stradale',
@@ -372,7 +371,7 @@ export const vehicleDatabase = {
       year: 2024,
       icon: '🏎️',
       baseValue: 650000,
-      costPerKm: 1.1,
+      costPerKm: 1.1
     },
     {
       id: '2025-porsche-918-spyder',
@@ -383,22 +382,22 @@ export const vehicleDatabase = {
       usedPrice: 600000,
       leasePrice: 899,
       year: 2024,
-      icon: '🏎️',
+      icon: '🏎️' ,
       baseValue: 850000,
-      costPerKm: 1.2,
+      costPerKm: 1.2
     },
     {
       id: '2026-hennessey-velociraptor-6x6',
       name: 'Hennessey Velociraptor 6x6',
       class: 'unrealistic',
       body: 'SUV',
-      newPrice: 425000,
+      newPrice: 425000 ,
       usedPrice: 375000,
       leasePrice: 899,
       year: 2025,
-      icon: '🏎️',
+      icon: '🏎️' ,
       baseValue: 425000,
-      costPerKm: 2.3,
+      costPerKm: 2.3
     },
     {
       id: '2026-mercedes-maybach-gls-600',
@@ -411,7 +410,7 @@ export const vehicleDatabase = {
       year: 2026,
       icon: '🏎️',
       baseValue: 180000,
-      costPerKm: 0.55,
+      costPerKm: 0.55
     },
     {
       id: '2026-rolls-royce-cullinan',
@@ -424,82 +423,71 @@ export const vehicleDatabase = {
       year: 2026,
       icon: '🏎️',
       baseValue: 300000,
-      costPerKm: 0.65,
+      costPerKm: 0.65
     },
     {
       id: 'Robinson R44 Raven II',
       name: 'Robinson R44 Raven II',
       class: 'unrealistic',
       body: 'Helicopter',
-      requiredCredentials: [
-        'Commercial Pilot License',
-        'Military Pilot',
-        'Flight School',
-      ],
+      requiredCredentials: ['Commercial Pilot License', 'Military Pilot', 'Flight School'],
       newPrice: 120000,
       usedPrice: 80000,
       leasePrice: 1299,
       year: 2024,
-      icon: '🚁',
+      icon: '🚁' ,
       baseValue: 120000,
-      costPerKm: 6.7,
+      costPerKm: 6.7
     },
     {
       id: 'Bell 505 Jet Ranger X',
       name: 'Bell 505 Jet Ranger X',
       class: 'unrealistic',
       body: 'Helicopter',
-      requiredCredentials: [
-        'Commercial Pilot License',
-        'Military Pilot',
-        'Flight School',
-      ],
+      requiredCredentials: ['Commercial Pilot License', 'Military Pilot', 'Flight School'],
       newPrice: 2500000,
       usedPrice: 1800000,
       leasePrice: 25998,
       year: 2024,
-      icon: '🚁',
+      icon: '🚁' ,
       baseValue: 2500000,
-      costPerKm: 8.5,
+      costPerKm: 8.5
     },
     {
       id: 'Airbus H225 Super Puma',
       name: 'Airbus H225 Super Puma',
       class: 'unrealistic',
       body: 'Helicopter',
-      requiredCredentials: [
-        'Commercial Pilot License',
-        'Military Pilot',
-        'Flight School',
-      ],
+      requiredCredentials: ['Commercial Pilot License', 'Military Pilot', 'Flight School'],
       newPrice: 28000000,
       usedPrice: 15000000,
       leasePrice: 28998,
       year: 2024,
-      icon: '🚁',
+      icon: '🚁' ,
       baseValue: 28000000,
-      costPerKm: 17.5,
+      costPerKm: 17.5
     },
+
   ],
   conditions: {
     new: {
       label: 'New',
-      priceMultiplier: 1.0 + -Math.random() * 0.2,
-      label_short: 'New',
+      priceMultiplier: 1.0 +- Math.random() * 0.2,
+      label_short: 'New'
     },
     used: {
       label: 'Used (2-5 years)',
-      priceMultiplier: 0.65 + -Math.random() * 0.2,
-      label_short: 'Used',
+      priceMultiplier: 0.65 +- Math.random() * 0.2,
+      label_short: 'Used'
     },
     lease: {
       label: 'Lease (36 months)',
-      priceMultiplier: 0.8 + -Math.random() * 0.2,
-      label_short: 'Lease',
-    },
+      priceMultiplier: 0.8 +- Math.random() * 0.2,
+      label_short: 'Lease'
+    }
   },
   financingTerms: {
     monthlyPaymentMonths: 60, // 5-year note
-    apr: 0.065, // 6.5% APR baseline (can be adjusted by credit score)
-  },
-};
+    apr: 0.065 // 6.5% APR baseline (can be adjusted by credit score)
+  }
+}

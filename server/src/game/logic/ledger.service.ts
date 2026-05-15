@@ -104,11 +104,8 @@ export class LedgerService {
     const fix = (n: number) => this.utils.fix(n);
     const ledger: any[] = [];
     let id = 0;
-    const chauffeurActive =
-      Boolean(state?.luxuryServices?.chauffer) &&
-      this.vehicleService.garageHasChauffeurEligibleVehicle(
-        Array.isArray(state?.garage) ? state.garage : [],
-      );
+    const chauffeurActive = Boolean(state?.luxuryServices?.chauffer)
+      && this.vehicleService.garageHasChauffeurEligibleVehicle(Array.isArray(state?.garage) ? state.garage : []);
 
     const job = state.pendingJob || state.job;
 
@@ -121,21 +118,14 @@ export class LedgerService {
       return hash;
     };
 
-    const applyLedgerDecimalVariance = (
-      amount: number,
-      key: string,
-    ): number => {
+    const applyLedgerDecimalVariance = (amount: number, key: string): number => {
       if (amount <= 0) return 0;
       const hash = deterministicHash(key);
       const offset = ((hash % 91) - 45) / 100;
       return fix(Math.max(0.01, amount + offset));
     };
 
-    const rotatingDetails = (
-      poolKey: keyof typeof LEDGER_DETAIL_POOLS,
-      key: string,
-      count = 3,
-    ) => {
+    const rotatingDetails = (poolKey: keyof typeof LEDGER_DETAIL_POOLS, key: string, count = 3) => {
       const pool = LEDGER_DETAIL_POOLS[poolKey] || [];
       if (!pool.length || count <= 0) return [];
 
@@ -149,22 +139,12 @@ export class LedgerService {
 
     // Previous balance
     let bal = fix((state.check || 0) - paySave - payDebt);
-    ledger.push({
-      id: id++,
-      desc: 'Previous Balance',
-      amt: 0,
-      type: 'none',
-      bal,
-      done: true,
-    });
+    ledger.push({ id: id++, desc: 'Previous Balance', amt: 0, type: 'none', bal, done: true });
 
     // Salary
     const grossSalary = fix((job?.base || 0) * (state.city?.p || 1));
     const baseNetSalary = fix(grossSalary * 0.8);
-    const workPenaltyPercent = Math.max(
-      0,
-      Math.min(0.35, state.workPenaltyPercent || 0),
-    );
+    const workPenaltyPercent = Math.max(0, Math.min(0.35, state.workPenaltyPercent || 0));
     const netSalary = applyLedgerDecimalVariance(
       fix(baseNetSalary * (1 - workPenaltyPercent)),
       'net-salary',
@@ -181,17 +161,9 @@ export class LedgerService {
     });
 
     // Real estate income
-    const realEstateIncome = Math.max(
-      0,
-      Number(state.realEstateLastMonthIncome || 0),
-    );
-    const realEstateExpenses = Math.max(
-      0,
-      Number(state.realEstateLastMonthExpenses || 0),
-    );
-    const realEstatePropertyBreakdown = Array.isArray(
-      state.realEstateLastMonthPropertyBreakdown,
-    )
+    const realEstateIncome = Math.max(0, Number(state.realEstateLastMonthIncome || 0));
+    const realEstateExpenses = Math.max(0, Number(state.realEstateLastMonthExpenses || 0));
+    const realEstatePropertyBreakdown = Array.isArray(state.realEstateLastMonthPropertyBreakdown)
       ? state.realEstateLastMonthPropertyBreakdown
       : [];
 
@@ -273,15 +245,9 @@ export class LedgerService {
 
     const mortgagePayment = Math.max(
       0,
-      Number(
-        state.house?.mortgagePayment ??
-          state.house?.monthlyPayment ??
-          state.house?.mortgage ??
-          0,
-      ),
+      Number(state.house?.mortgagePayment ?? state.house?.monthlyPayment ?? state.house?.mortgage ?? 0),
     );
-    const housingPaymentForUtilities =
-      mortgagePayment > 0 ? mortgagePayment : rent;
+    const housingPaymentForUtilities = mortgagePayment > 0 ? mortgagePayment : rent;
 
     // Transportation
     if (!chauffeurActive) {
@@ -297,10 +263,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
-        details: rotatingDetails(
-          'transit',
-          `transit-${state.transit?.name || 'default'}`,
-        ),
+        details: rotatingDetails('transit', `transit-${state.transit?.name || 'default'}`),
       });
 
       // Only charge gas and maintenance if the player owns a vehicle
@@ -321,10 +284,7 @@ export class LedgerService {
           'car',
           state.city?.name || '',
         );
-        const gasAndMaint = applyLedgerDecimalVariance(
-          fix(gas + carMaint),
-          'gas-maint-no-vehicle',
-        );
+        const gasAndMaint = applyLedgerDecimalVariance(fix(gas + carMaint), 'gas-maint-no-vehicle');
         bal = fix(bal - gasAndMaint);
         ledger.push({
           id: id++,
@@ -390,18 +350,16 @@ export class LedgerService {
     }
 
     // Entertainment
-    const entertainmentCap =
-      this.entertainmentService.entertainmentCapForSalary(job, state.city);
-    const adjustedEntertainment =
-      this.entertainmentService.autoAdjustEntertainmentBudgets(
-        state.entertainmentSpending || 0,
-        state.subscriptionEntertainmentSpending || 0,
-        state.year,
-        state.month,
-        job?.title || '',
-        state.city?.name || '',
-        entertainmentCap,
-      );
+    const entertainmentCap = this.entertainmentService.entertainmentCapForSalary(job, state.city);
+    const adjustedEntertainment = this.entertainmentService.autoAdjustEntertainmentBudgets(
+      state.entertainmentSpending || 0,
+      state.subscriptionEntertainmentSpending || 0,
+      state.year,
+      state.month,
+      job?.title || '',
+      state.city?.name || '',
+      entertainmentCap,
+    );
 
     if (adjustedEntertainment.entertainmentBudget > 0) {
       const entertainmentCost = applyLedgerDecimalVariance(
@@ -447,10 +405,7 @@ export class LedgerService {
         type: 'out',
         bal,
         done: false,
-        details: rotatingDetails(
-          'subscriptions',
-          'entertainment-subscriptions',
-        ),
+        details: rotatingDetails('subscriptions', 'entertainment-subscriptions'),
       });
     }
 
@@ -508,10 +463,7 @@ export class LedgerService {
         if (!chauffeurActive) {
           const gasCost = this.vehicleService.calculateMonthlyGasCost(g);
           if (gasCost > 0) {
-            const adjustedGasCost = applyLedgerDecimalVariance(
-              gasCost,
-              `vehicle-gas-${g.id}`,
-            );
+            const adjustedGasCost = applyLedgerDecimalVariance(gasCost, `vehicle-gas-${g.id}`);
             bal = fix(bal - adjustedGasCost);
             ledger.push({
               id: id++,
@@ -551,8 +503,7 @@ export class LedgerService {
     let luxuryCosts = 0;
     const luxuryServicesList: string[] = [];
     const luxuryLineItems: Array<{ desc: string; amt: number }> = [];
-    const netMonthlyIncome =
-      this.entertainmentService.totalMonthlyIncomeForLuxuryPricing(state);
+    const netMonthlyIncome = this.entertainmentService.totalMonthlyIncomeForLuxuryPricing(state);
     const explicitPropertyCount = Number(state?.investmentPropertyCount);
     const propertyCount = Number.isFinite(explicitPropertyCount)
       ? Math.max(0, Math.floor(explicitPropertyCount))
@@ -562,40 +513,25 @@ export class LedgerService {
 
     const luxuryServiceConfigs = [
       { id: 'chef', label: 'Chef', varianceKey: 'luxury-chef' },
-      {
-        id: 'housekeeper',
-        label: 'Housekeeper',
-        varianceKey: 'luxury-housekeeper',
-      },
+      { id: 'housekeeper', label: 'Housekeeper', varianceKey: 'luxury-housekeeper' },
       { id: 'chauffer', label: 'Chauffeur', varianceKey: 'luxury-chauffeur' },
       { id: 'therapist', label: 'Therapist', varianceKey: 'luxury-therapist' },
       { id: 'trainer', label: 'Trainer', varianceKey: 'luxury-trainer' },
       { id: 'concierge', label: 'Concierge', varianceKey: 'luxury-concierge' },
-      {
-        id: 'accountant',
-        label: 'Accountant',
-        varianceKey: 'luxury-accountant',
-      },
+      { id: 'accountant', label: 'Accountant', varianceKey: 'luxury-accountant' },
     ];
 
     for (const cfg of luxuryServiceConfigs) {
-      if (!state.luxuryServices?.[cfg.id]) continue;
-      const baseCost =
-        this.entertainmentService.calculateLuxuryServiceMonthlyPay(
-          cfg.id,
-          netMonthlyIncome,
-          { propertyCount },
-        );
-      const adjustedCost = applyLedgerDecimalVariance(
-        baseCost,
-        cfg.varianceKey,
+      if (!(state.luxuryServices as any)?.[cfg.id]) continue;
+      const baseCost = this.entertainmentService.calculateLuxuryServiceMonthlyPay(
+        cfg.id,
+        netMonthlyIncome,
+        { propertyCount },
       );
+      const adjustedCost = applyLedgerDecimalVariance(baseCost, cfg.varianceKey);
       luxuryCosts += adjustedCost;
       luxuryServicesList.push(`${cfg.label}: $${adjustedCost}`);
-      luxuryLineItems.push({
-        desc: `Luxury Service: ${cfg.label}`,
-        amt: adjustedCost,
-      });
+      luxuryLineItems.push({ desc: `Luxury Service: ${cfg.label}`, amt: adjustedCost });
     }
 
     if (luxuryCosts > 0) {
@@ -639,9 +575,7 @@ export class LedgerService {
       const nonDebitRows = others.filter((row: any) => row?.type !== 'out');
 
       let runningBal = Number(first?.bal || 0);
-      const simplified: any[] = [
-        { ...first, id: 0, bal: runningBal, done: true },
-      ];
+      const simplified: any[] = [{ ...first, id: 0, bal: runningBal, done: true }];
 
       if (totalDebits > 0) {
         runningBal = fix(runningBal - totalDebits);
@@ -657,14 +591,8 @@ export class LedgerService {
       }
 
       for (const row of nonDebitRows) {
-        if (row?.type === 'in')
-          runningBal = fix(runningBal + Number(row?.amt || 0));
-        simplified.push({
-          ...row,
-          id: simplified.length,
-          bal: runningBal,
-          done: false,
-        });
+        if (row?.type === 'in') runningBal = fix(runningBal + Number(row?.amt || 0));
+        simplified.push({ ...row, id: simplified.length, bal: runningBal, done: false });
       }
 
       return simplified;

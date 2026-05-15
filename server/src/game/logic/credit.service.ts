@@ -44,36 +44,30 @@ export class CreditService {
     // Job compatibility contribution: 0-3% based on how well matched you are (0-100)
     const compatibilityContribution = (jobCompatibilityScore / 100) * 3;
 
-    const modifier =
-      creditContribution + tenureContribution + compatibilityContribution;
+    const modifier = creditContribution + tenureContribution + compatibilityContribution;
 
     return {
       modifier: Math.min(3, modifier), // Cap at 3% max raise
       creditContribution: Math.round(creditContribution * 100) / 100,
       tenureContribution: Math.round(tenureContribution * 100) / 100,
-      compatibilityContribution:
-        Math.round(compatibilityContribution * 100) / 100,
+      compatibilityContribution: Math.round(compatibilityContribution * 100) / 100,
     };
   }
 
   // Calculate interest accrual on savings
   calculateSavingsInterest(balance: number, aprRate: number = 0.04): number {
     const monthlyRate = aprRate / 12;
-    return Math.round(balance * monthlyRate * 100) / 100;
+    return Math.round((balance * monthlyRate) * 100) / 100;
   }
 
   // Calculate debt interest accrual
   calculateDebtInterest(balance: number, aprRate: number): number {
     const monthlyRate = aprRate / 12;
-    return Math.round(balance * monthlyRate * 100) / 100;
+    return Math.round((balance * monthlyRate) * 100) / 100;
   }
 
   // Determine if auto loan should be created from negative checking
-  shouldCreateAutoLoan(
-    checkingBalance: number,
-    debt: number,
-    credit: number,
-  ): boolean {
+  shouldCreateAutoLoan(checkingBalance: number, debt: number, credit: number): boolean {
     return checkingBalance < 0 && debt === 0;
   }
 }

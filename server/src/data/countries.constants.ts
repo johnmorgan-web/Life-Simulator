@@ -16,23 +16,23 @@ const countries = [
   { code: 'AR', name: 'Argentina', lat: -38.4161, lon: -63.6167 },
   { code: 'EG', name: 'Egypt', lat: 26.8206, lon: 30.8025 },
   { code: 'TR', name: 'Turkey', lat: 38.9637, lon: 35.2433 },
-  { code: 'RU', name: 'Russia', lat: 61.524, lon: 105.3188 },
+  { code: 'RU', name: 'Russia', lat: 61.5240, lon: 105.3188 },
   { code: 'AE', name: 'United Arab Emirates', lat: 23.4241, lon: 53.8478 },
   { code: 'CN', name: 'China', lat: 35.8617, lon: 104.1954 },
   { code: 'FR', name: 'France', lat: 46.2276, lon: 2.2137 },
   { code: 'NL', name: 'Netherlands', lat: 52.1326, lon: 5.2913 },
   { code: 'AT', name: 'Austria', lat: 47.5162, lon: 14.5501 },
-  { code: 'CZ', name: 'Czech Republic', lat: 49.8175, lon: 15.473 },
+  { code: 'CZ', name: 'Czech Republic', lat: 49.8175, lon: 15.4730 },
   { code: 'SE', name: 'Sweden', lat: 60.1282, lon: 18.6435 },
   { code: 'CH', name: 'Switzerland', lat: 46.8182, lon: 8.2275 },
   { code: 'DK', name: 'Denmark', lat: 56.2639, lon: 9.5018 },
   { code: 'FI', name: 'Finland', lat: 61.9241, lon: 25.7482 },
-  { code: 'NO', name: 'Norway', lat: 60.472, lon: 8.4689 },
+  { code: 'NO', name: 'Norway', lat: 60.4720, lon: 8.4689 },
   { code: 'BE', name: 'Belgium', lat: 50.5039, lon: 4.4699 },
   { code: 'PL', name: 'Poland', lat: 51.9194, lon: 19.1451 },
   { code: 'HU', name: 'Hungary', lat: 47.1625, lon: 19.5033 },
   { code: 'IE', name: 'Ireland', lat: 53.1424, lon: -7.6921 },
-  { code: 'UK', name: 'United Kingdom', lat: 55.3781, lon: -3.436 },
-];
+  { code: 'UK', name: 'United Kingdom', lat: 55.3781, lon: -3.4360 },
+]
 
-export default countries;
+export default countries
