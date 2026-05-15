@@ -63,17 +63,45 @@ describe('MarketService stock advance', () => {
       nextMonthStockShock: -0.03,
     };
 
-    const first = marketService.advanceMarketPrices(currentPrices, 2026, 5, overrides);
-    const second = marketService.advanceMarketPrices(currentPrices, 2026, 5, overrides);
+    const first = marketService.advanceMarketPrices(
+      currentPrices,
+      2026,
+      5,
+      overrides,
+    );
+    const second = marketService.advanceMarketPrices(
+      currentPrices,
+      2026,
+      5,
+      overrides,
+    );
 
     expect(second).toEqual(first);
   });
 
   it('appends market history with bounded length', () => {
     const prices = marketService.initializeMarketPrices();
-    const history = marketService.appendMarketPriceHistory([], prices, 2, 2026, 2);
-    const history2 = marketService.appendMarketPriceHistory(history, prices, 3, 2026, 2);
-    const history3 = marketService.appendMarketPriceHistory(history2, prices, 4, 2026, 2);
+    const history = marketService.appendMarketPriceHistory(
+      [],
+      prices,
+      2,
+      2026,
+      2,
+    );
+    const history2 = marketService.appendMarketPriceHistory(
+      history,
+      prices,
+      3,
+      2026,
+      2,
+    );
+    const history3 = marketService.appendMarketPriceHistory(
+      history2,
+      prices,
+      4,
+      2026,
+      2,
+    );
 
     expect(history3).toHaveLength(2);
     expect(history3[0].month).toBe(3);

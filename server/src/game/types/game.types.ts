@@ -1,13 +1,23 @@
 // Type definitions for Life Simulator game state and objects
 
-export type GameAction = 
+export type GameAction =
   | { type: 'PROCESS_MONTH' }
   | { type: 'APPLY_JOB'; payload: any }
   | { type: 'ACCEPT_JOB'; payload: any }
   | { type: 'UPDATE_STATE'; payload: Partial<GameState> }
   | { type: string; payload?: any };
 
-export type Celebration = 'pay-bump' | 'degree' | 'certification' | 'car-paid-off' | 'debt-paid-off' | 'promotion' | 'job-accepted' | 'achievement' | 'rainbow' | null;
+export type Celebration =
+  | 'pay-bump'
+  | 'degree'
+  | 'certification'
+  | 'car-paid-off'
+  | 'debt-paid-off'
+  | 'promotion'
+  | 'job-accepted'
+  | 'achievement'
+  | 'rainbow'
+  | null;
 
 export interface City {
   name: string;
