@@ -6,6 +6,7 @@ import { LedgerService } from './logic/ledger.service';
 import { RewardService } from './logic/reward.service';
 import { ApplicationService } from './logic/application.service';
 import { RealEstateService } from './logic/realEstate.service';
+import { MarketService } from './logic/market.service';
 import { cityData } from '../data/cityData.constants';
 import { academyCourses } from '../data/academyCourses.constants';
 import jobBoard from '../data/jobBoard.constants';
@@ -48,6 +49,7 @@ export class GameController {
     private readonly rewardService: RewardService,
     private readonly applicationService: ApplicationService,
     private readonly realEstateService: RealEstateService,
+    private readonly marketService: MarketService,
     @InjectRepository(UserStateEntity)
     private readonly userStateRepository: Repository<UserStateEntity>,
   ) {}
@@ -131,6 +133,52 @@ export class GameController {
     return {
       market: synced.market,
       meta: synced.meta,
+    };
+  }
+
+  @Post('stocks/advance')
+  async advanceStockMarket(
+    @Body() body: { state?: any },
+  ) {
+    const userSnapshots = await this.getLiveUserSnapshots();
+    const registeredUsers = Array.isArray(userSnapshots) ? userSnapshots.length : 0;
+    const stateSnapshot = body?.state || {};
+    const currentMonth = Math.max(1, Math.min(12, Number(stateSnapshot?.month || 1)));
+    const currentYear = Math.max(1, Number(stateSnapshot?.year || 2026));
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+
+    const previousMarketPrices = this.marketService.normalizeMarketPrices(stateSnapshot?.marketPrices);
+    const mergedEconomy = this.marketService.deriveStockEconomyOverridesForMonth(stateSnapshot);
+    const nextMarketPrices = this.marketService.advanceMarketPrices(
+      previousMarketPrices,
+      nextYear,
+      nextMonth,
+      mergedEconomy.economyOverrides,
+    );
+    const marketPriceHistory = this.marketService.appendMarketPriceHistory(
+      stateSnapshot?.marketPriceHistory,
+      nextMarketPrices,
+      nextMonth,
+      nextYear,
+    );
+    const dynamicMarket = this.marketService.calculateDynamicMarketCaps(
+      nextMarketPrices,
+      registeredUsers,
+    );
+
+    return {
+      marketPricesPrevious: previousMarketPrices,
+      marketPrices: nextMarketPrices,
+      marketPriceHistory,
+      appliedShock: Number(mergedEconomy.appliedShock || 0),
+      registeredUsers,
+      marketCapsByTicker: dynamicMarket.marketCapsByTicker,
+      floatSharesByTicker: dynamicMarket.floatSharesByTicker,
+      economyOverrides: {
+        ...mergedEconomy.economyOverrides,
+        nextMonthStockShock: 0,
+      },
     };
   }
 
