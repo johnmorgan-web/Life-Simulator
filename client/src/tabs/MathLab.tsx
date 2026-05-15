@@ -532,7 +532,9 @@ export default function MathLab() {
       type: 'SET_STATE',
       payload,
     })
-    void saveGame({ ...state, ...payload })
+    window.setTimeout(() => {
+      void saveGame()
+    }, 0)
 
     setFeedback(`Correct! ${challenge.expected} ${challenge.unit}. Rewards claimed: +$${cashReward}, +${creditBoost} credit, +${tokenReward} token.${elementaryRewardLimited ? ' Elementary-level reward cap applied due to repeated elementary solves.' : ''}`)
   }
