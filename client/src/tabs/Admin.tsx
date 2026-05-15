@@ -18,6 +18,7 @@ type AdminUserRow = {
   progression?: {
     month: number
     year: number
+    cityName?: string
     tenureMonths: number
     jobTitle: string
     jobBase: number
@@ -28,6 +29,7 @@ type AdminUserRow = {
     creditScore: number
     happiness: number
     netWorth: number
+    pandemicHistoryMonths?: number
     historicalEventTitle?: string
     historicalEventMonthsRemaining?: number
     historicalEventResetNextMonth?: boolean
@@ -74,7 +76,7 @@ export default function Admin() {
   const [creditFilter, setCreditFilter] = useState('all')
   const [yearFilter, setYearFilter] = useState('all')
   const [jobFilter, setJobFilter] = useState('')
-  const [sortBy, setSortBy] = useState('created-asc')
+  const [sortBy, setSortBy] = useState('updated-desc')
   const [riskPreset, setRiskPreset] = useState<'none' | 'at-risk'>('none')
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -162,6 +164,7 @@ export default function Admin() {
           user.username,
           String(user.id),
           String(user.progression?.jobTitle || ''),
+          String(user.progression?.cityName || ''),
           String(user.progression?.educationLevel || ''),
           String(user.progression?.activeEducation || ''),
         ].join(' ').toLowerCase()
@@ -193,9 +196,8 @@ export default function Admin() {
         case 'tenure-desc': return bTenure - aTenure
         case 'month-desc': return bMonthKey - aMonthKey
         case 'username-asc': return a.username.localeCompare(b.username)
-        case 'created-asc':
         default:
-          return (Number.isFinite(aCreated) ? aCreated : 0) - (Number.isFinite(bCreated) ? bCreated : 0)
+          return (Number.isFinite(bUpdated) ? bUpdated : 0) - (Number.isFinite(aUpdated) ? aUpdated : 0)
       }
     })
   }, [users, searchQuery, educationFilter, creditFilter, yearFilter, jobFilter, sortBy, riskPreset])
@@ -885,6 +887,7 @@ export default function Admin() {
                     {pendingAssignedJobs[user.id] ? <div className="text-indigo-700"><span className="font-semibold">Queued Job:</span> {pendingAssignedJobs[user.id]}</div> : null}
                     <div><span className="font-semibold">Edu:</span> {user.progression?.educationLevel || 'Unknown'} ({user.progression?.credentialsCount || 0} creds)</div>
                     <div><span className="font-semibold">Date:</span> M{user.progression?.month || 0} / Y{user.progression?.year || 0} · Tenure {user.progression?.tenureMonths || 0}mo</div>
+                    <div><span className="font-semibold">City:</span> {user.progression?.cityName || 'Unknown'} · <span className="font-semibold">Pandemic History:</span> {Number(user.progression?.pandemicHistoryMonths || 0)} month(s)</div>
                     <div><span className="font-semibold">Credit/Happiness:</span> {user.progression?.creditScore || 0} / {user.progression?.happiness || 0}</div>
                     <div><span className="font-semibold">Transit:</span> L{user.progression?.transitLevel || 0} · <span className="font-semibold">Net Worth:</span> ${formatMoney(user.progression?.netWorth || 0)}</div>
                     {/* Removed event scenario display */}

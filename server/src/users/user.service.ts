@@ -285,6 +285,40 @@ export class UserService implements OnModuleInit {
         }, 0)
       : 0;
     const netWorth = Math.round((checking + savings + stockValue - debt) * 100) / 100;
+    const pandemicHistoryMonths = (() => {
+      const monthKeys = new Set<string>();
+      const logs = Array.isArray((state as any).logs) ? (state as any).logs : [];
+      for (const entry of logs) {
+      const msg = String(entry?.msg || '').toLowerCase();
+      if (!msg.includes('pandemic')) continue;
+      const date = String(entry?.date || '').trim();
+      if (date) monthKeys.add(date);
+      }
+
+      const eventHistory = Array.isArray((state as any).eventHistory)
+      ? (state as any).eventHistory
+      : [];
+      for (const event of eventHistory) {
+      const title = String(event?.title || '').toLowerCase();
+      const desc = String(event?.desc || '').toLowerCase();
+      if (!title.includes('pandemic') && !desc.includes('pandemic')) continue;
+      const month = Number(event?.month || 0);
+      const year = Number(event?.year || 0);
+      if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
+      }
+
+      const activeHistoricalEvent = (state as any).historicalEconomicEvent;
+      const activeTitle = String(activeHistoricalEvent?.title || '').toLowerCase();
+      const activeId = String(activeHistoricalEvent?.id || '').toLowerCase();
+      const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
+      if ((activeTitle.includes('pandemic') || activeId.includes('pandemic')) && activeMonthsRemaining > 0) {
+      const month = Number((state as any).month || 0);
+      const year = Number((state as any).year || 0);
+      if (month > 0 && year > 0) monthKeys.add(`${month}/${year}`);
+      }
+
+      return monthKeys.size;
+    })();
 
     return {
       id: entity.id,
@@ -301,6 +335,7 @@ export class UserService implements OnModuleInit {
       progression: {
         month: Number((state as any).month || 0),
         year: Number((state as any).year || 0),
+        cityName: String((state as any).city?.name || 'Unknown'),
         tenureMonths: Number((state as any).tenure || 0),
         jobTitle: String((state as any).job?.title || 'Unemployed'),
         jobBase: Number((state as any).job?.base || 0),
@@ -311,6 +346,7 @@ export class UserService implements OnModuleInit {
         creditScore: Number((state as any).credit || 0),
         happiness: Number((state as any).happiness || 0),
         netWorth,
+        pandemicHistoryMonths,
         historicalEventTitle: String((state as any).historicalEconomicEvent?.title || ''),
         historicalEventMonthsRemaining: Math.max(0, Number((state as any).historicalEconomicEvent?.monthsRemaining || 0)),
         historicalEventResetNextMonth: Boolean((state as any).historicalEventResetNextMonth),
