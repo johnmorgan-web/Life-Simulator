@@ -278,6 +278,25 @@ async function fetchNormalizedRealEstateStateFromServer(stateSnapshot: any) {
 	}
 }
 
+async function fetchAdvancedStockStateFromServer(stateSnapshot: any) {
+	const response = await fetch(`${API_BASE_URL}/game/stocks/advance`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {} }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+
+	return {
+		marketPricesPrevious: data.marketPricesPrevious && typeof data.marketPricesPrevious === 'object' ? data.marketPricesPrevious : null,
+		marketPrices: data.marketPrices && typeof data.marketPrices === 'object' ? data.marketPrices : null,
+		marketPriceHistory: Array.isArray(data.marketPriceHistory) ? data.marketPriceHistory : null,
+		economyOverrides: data.economyOverrides && typeof data.economyOverrides === 'object' ? data.economyOverrides : null,
+		appliedShock: Number(data.appliedShock || 0),
+	}
+}
+
 async function submitRealEstateOfferToServer(
 	stateSnapshot: any,
 	listing: any,
@@ -1056,24 +1075,6 @@ function realEstateEquityValue(snapshot: any) {
 		const loan = Number(p?.loanBalance || 0)
 		return sum + Math.max(0, value - loan)
 	}, 0))
-}
-
-function advanceMarketPrices(currentPrices: any, year: number, month: number, overrides?: any) {
-	const base = normalizeMarketPrices(currentPrices)
-	const economy = normalizeEconomyOverrides(overrides)
-	const next: Record<string, number> = {}
-	const driftPenalty = (economy.recessionSeverity * 0.0014) + (economy.inflationPressure * 0.0008)
-	const volatilityMultiplier = Math.max(0.5, (economy.marketVolatility / 100) * (1 + economy.recessionSeverity * 0.006))
-	const shock = Number(economy.nextMonthStockShock || 0)
-	for (const asset of stockMarketAssets) {
-		const seed = hashString(`${asset.ticker}-${year}-${month}`)
-		const noise = (mulberry32(seed)() - 0.5) * 2
-		const monthlyMove = (asset.drift - driftPenalty) + (noise * asset.volatility * volatilityMultiplier) + shock
-		const boundedMove = Math.max(-0.45, Math.min(0.45, monthlyMove))
-		const updated = Math.max(1, base[asset.ticker] * (1 + boundedMove))
-		next[asset.ticker] = round2(updated)
-	}
-	return next
 }
 
 function normalizeAutoInvestConfig(config: any) {
@@ -2990,7 +2991,14 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				}
 			}
 
-			const previousMarketPrices = normalizeMarketPrices(state.marketPrices)
+			const stockMarketOverride = action.payload?.stockMarketOverride && typeof action.payload.stockMarketOverride === 'object'
+				? action.payload.stockMarketOverride
+				: null
+			if (!stockMarketOverride?.marketPricesPrevious || !stockMarketOverride?.marketPrices || !Array.isArray(stockMarketOverride?.marketPriceHistory) || !stockMarketOverride?.economyOverrides) {
+				console.error('PROCESS_MONTH missing server stock market override payload. Month processing aborted.')
+				return state
+			}
+			const previousMarketPrices = normalizeMarketPrices(stockMarketOverride.marketPricesPrevious)
 			const autoInvestResult = applyAutoInvestCycle(
 				resultingCheck,
 				Array.isArray(state.portfolio) ? state.portfolio : [],
@@ -3045,15 +3053,17 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				})
 			}
 			const stockInvestedLastMonth = round2(Number(autoInvestResult.investedAmount || 0))
-			const nextMarketPrices = advanceMarketPrices(previousMarketPrices, nextYear, nextMonth, economyOverrides)
-			if (Math.abs(Number(economyOverrides.nextMonthStockShock || 0)) > 0.001) {
-				const shockPct = Math.round(Number(economyOverrides.nextMonthStockShock || 0) * 100)
+			const nextMarketPrices = normalizeMarketPrices(stockMarketOverride.marketPrices)
+			const appliedShock = Number(stockMarketOverride.appliedShock || 0)
+			if (Math.abs(appliedShock) > 0.001) {
+				const shockPct = Math.round(appliedShock * 100)
 				logs.push({
 					date: `${nextMonth}/${nextYear}`,
 					msg: `🌐 Macro intervention applied: ${shockPct >= 0 ? '+' : ''}${shockPct}% market shock.`
 				})
 			}
-			const marketPriceHistory = appendMarketPriceHistory(state.marketPriceHistory, nextMarketPrices, nextMonth, nextYear)
+			const marketPriceHistory = stockMarketOverride.marketPriceHistory
+			const resolvedEconomyOverrides = normalizeEconomyOverrides(stockMarketOverride.economyOverrides)
 			creditAccountAgeMonths += 1
 
 			const checkSuccessCredit = monthlyCheckSuccesses * 5
@@ -3271,10 +3281,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				marketPriceHistory,
 				economyOverrides: (economyCampaignExpired || shouldResetHistoricalEventNextMonth)
 					? { ...DEFAULT_ECONOMY_OVERRIDES }
-					: {
-						...economyOverrides,
-						nextMonthStockShock: 0,
-					},
+					: { ...resolvedEconomyOverrides },
 				economyOverrideMonthsRemaining: shouldResetHistoricalEventNextMonth ? 0 : nextEconomyMonthsRemaining,
 				historicalEconomicEvent: effectiveHistoricalEvent && nextHistoricalMonthsRemaining > 0
 					? { ...effectiveHistoricalEvent, monthsRemaining: nextHistoricalMonthsRemaining }
@@ -3679,9 +3686,16 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		const runMonth = async () => {
 			const snapshot = stateRef.current || state
-			const serverMarket = await fetchSharedRealEstateMarketFromServer(snapshot, true)
+			const [serverMarket, serverStock] = await Promise.all([
+				fetchSharedRealEstateMarketFromServer(snapshot, true),
+				fetchAdvancedStockStateFromServer(snapshot),
+			])
 			if (!serverMarket) {
 				console.error('Failed to advance real-estate market on server. Month processing aborted.')
+				return
+			}
+			if (!serverStock || !serverStock.marketPricesPrevious || !serverStock.marketPrices || !serverStock.marketPriceHistory || !serverStock.economyOverrides) {
+				console.error('Failed to advance stock market on server. Month processing aborted.')
 				return
 			}
 
@@ -3699,6 +3713,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					paySave: safePaySave,
 					payDebt: safePayDebt,
 					skippedPayment,
+					stockMarketOverride: serverStock,
 				},
 			})
 		}

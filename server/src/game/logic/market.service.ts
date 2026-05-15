@@ -2,9 +2,111 @@ import { Injectable } from '@nestjs/common';
 import { UtilitiesService } from './utilities.service';
 import { stockMarketAssets, autoInvestProfiles } from '../../data/stockMarket.constants';
 
+const BASE_FLOAT_SHARES_AT_77_USERS: Record<string, number> = {
+  AAPL: 32340,
+  MSFT: 32340,
+  NVDA: 27720,
+  AMZN: 32340,
+  KO: 38500,
+  JPM: 38500,
+  XOM: 38500,
+  VTI: 50050,
+  TSLA: 27720,
+  GOOGL: 32340,
+  META: 27720,
+  NFLX: 27720,
+  DIS: 38500,
+  SPY: 50050,
+  QQQ: 50050,
+  DIA: 50050,
+};
+
 @Injectable()
 export class MarketService {
   constructor(private utilitiesService: UtilitiesService) {}
+
+  normalizeEconomyOverrides(raw: any): {
+    recessionSeverity: number;
+    inflationPressure: number;
+    jobAvailability: number;
+    marketVolatility: number;
+    nextMonthStockShock: number;
+  } {
+    if (!raw || typeof raw !== 'object') {
+      return {
+        recessionSeverity: 0,
+        inflationPressure: 0,
+        jobAvailability: 100,
+        marketVolatility: 100,
+        nextMonthStockShock: 0,
+      };
+    }
+
+    return {
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
+      jobAvailability: 100,
+      marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw?.marketVolatility || 100)))),
+      nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw?.nextMonthStockShock || 0))),
+    };
+  }
+
+  normalizeHistoricalEconomicEvent(raw: any): { effects: { monthlyStockShock: number }; monthsRemaining: number } | null {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const id = String(raw?.id || '').trim();
+    const title = String(raw?.title || '').trim();
+    if (!id || !title) return null;
+
+    const effectsRaw = raw?.effects && typeof raw.effects === 'object' ? raw.effects : {};
+    const monthsRemaining = Math.max(
+      0,
+      Math.min(36, Math.floor(Number(raw?.monthsRemaining || raw?.totalMonths || 1))),
+    );
+
+    return {
+      monthsRemaining,
+      effects: {
+        monthlyStockShock: Math.max(-0.7, Math.min(0.7, Number(effectsRaw?.monthlyStockShock || 0))),
+      },
+    };
+  }
+
+  deriveStockEconomyOverridesForMonth(state: any): {
+    economyOverrides: {
+      recessionSeverity: number;
+      inflationPressure: number;
+      jobAvailability: number;
+      marketVolatility: number;
+      nextMonthStockShock: number;
+    };
+    appliedShock: number;
+  } {
+    const baseEconomy = this.normalizeEconomyOverrides(state?.economyOverrides);
+    const shouldResetHistoricalEventNextMonth = Boolean(state?.historicalEventResetNextMonth);
+    const activeHistoricalEvent = shouldResetHistoricalEventNextMonth
+      ? null
+      : this.normalizeHistoricalEconomicEvent(state?.historicalEconomicEvent);
+
+    let mergedShock = Number(baseEconomy.nextMonthStockShock || 0);
+    if (activeHistoricalEvent && Number(activeHistoricalEvent.monthsRemaining || 0) > 0) {
+      const forcedShock = Math.max(
+        -0.7,
+        Math.min(0.7, Number(activeHistoricalEvent.effects?.monthlyStockShock || 0)),
+      );
+      if (Math.abs(forcedShock) > 0.001) {
+        mergedShock = Math.max(-0.7, Math.min(0.7, mergedShock + forcedShock));
+      }
+    }
+
+    return {
+      economyOverrides: {
+        ...baseEconomy,
+        nextMonthStockShock: mergedShock,
+      },
+      appliedShock: mergedShock,
+    };
+  }
 
   private roundShareQuantity(value: number): number {
     return Math.round(value * 1000) / 1000;
@@ -37,18 +139,89 @@ export class MarketService {
     return prices;
   }
 
-  advanceMarketPrices(currentPrices: any, year: number, month: number): Record<string, number> {
+  advanceMarketPrices(currentPrices: any, year: number, month: number, overrides?: any): Record<string, number> {
     const base = this.normalizeMarketPrices(currentPrices);
+    const economy = this.normalizeEconomyOverrides(overrides);
     const next: Record<string, number> = {};
+    const driftPenalty = (economy.recessionSeverity * 0.0014) + (economy.inflationPressure * 0.0008);
+    const volatilityMultiplier = Math.max(
+      0.5,
+      (economy.marketVolatility / 100) * (1 + economy.recessionSeverity * 0.006),
+    );
+    const shock = Number(economy.nextMonthStockShock || 0);
+
     for (const asset of stockMarketAssets) {
       const seed = this.utilitiesService.hashString(`${asset.ticker}-${year}-${month}`);
       const noise = (this.utilitiesService.mulberry32(seed)() - 0.5) * 2;
-      const monthlyMove = asset.drift + noise * asset.volatility;
-      const boundedMove = Math.max(-0.25, Math.min(0.25, monthlyMove));
+      const monthlyMove = (asset.drift - driftPenalty) + (noise * asset.volatility * volatilityMultiplier) + shock;
+      const boundedMove = Math.max(-0.45, Math.min(0.45, monthlyMove));
       const updated = Math.max(1, base[asset.ticker] * (1 + boundedMove));
       next[asset.ticker] = this.utilitiesService.round2(updated);
     }
     return next;
+  }
+
+  appendMarketPriceHistory(
+    history: any,
+    prices: any,
+    month: number,
+    year: number,
+    maxPoints = 24,
+  ): any[] {
+    const normalizedPrices = this.normalizeMarketPrices(prices);
+    const normalizedMonth = Math.max(1, Math.min(12, Math.floor(Number(month || 1))));
+    const normalizedYear = Math.max(1, Math.floor(Number(year || 2026)));
+
+    const list = Array.isArray(history)
+      ? history
+          .filter((entry: any) => entry && typeof entry === 'object')
+          .map((entry: any) => ({
+            month: Math.max(1, Math.min(12, Math.floor(Number(entry.month || normalizedMonth)))),
+            year: Math.max(1, Math.floor(Number(entry.year || normalizedYear))),
+            prices: this.normalizeMarketPrices(entry.prices),
+          }))
+      : [];
+
+    const last = list[list.length - 1];
+    if (last && Number(last.month) === normalizedMonth && Number(last.year) === normalizedYear) {
+      list[list.length - 1] = {
+        month: normalizedMonth,
+        year: normalizedYear,
+        prices: normalizedPrices,
+      };
+    } else {
+      list.push({
+        month: normalizedMonth,
+        year: normalizedYear,
+        prices: normalizedPrices,
+      });
+    }
+
+    return list.slice(Math.max(0, list.length - maxPoints));
+  }
+
+  calculateDynamicMarketCaps(prices: any, registeredUsers: number): {
+    marketCapsByTicker: Record<string, number>;
+    floatSharesByTicker: Record<string, number>;
+  } {
+    const normalizedPrices = this.normalizeMarketPrices(prices);
+    const effectiveUsers = Math.max(1, Number(registeredUsers || 0));
+    const userScale = effectiveUsers / 77;
+
+    const marketCapsByTicker: Record<string, number> = {};
+    const floatSharesByTicker: Record<string, number> = {};
+    for (const asset of stockMarketAssets) {
+      const baselineFloat = Number(BASE_FLOAT_SHARES_AT_77_USERS[asset.ticker] || 25000);
+      const scaledFloat = Math.max(100, Math.round(baselineFloat * userScale));
+      const price = Number(normalizedPrices[asset.ticker] || asset.basePrice || 0);
+      floatSharesByTicker[asset.ticker] = scaledFloat;
+      marketCapsByTicker[asset.ticker] = this.utilitiesService.round2(Math.max(0, price * scaledFloat));
+    }
+
+    return {
+      marketCapsByTicker,
+      floatSharesByTicker,
+    };
   }
 
   normalizeAutoInvestConfig(config: any): any {
