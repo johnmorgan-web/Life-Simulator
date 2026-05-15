@@ -215,7 +215,8 @@ export class JobService {
     const prices: Record<string, number> = state?.marketPrices && typeof state.marketPrices === 'object' ? state.marketPrices : {};
     const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
       const shares = Number(holding?.shares || 0);
-      const price = Number(prices[String(holding?.ticker || '')] || 0);
+      const ticker = String(holding?.ticker || '');
+      const price = Number(prices[ticker] || 0) || Number(holding?.avgCost || 0);
       return sum + (shares * price);
     }, 0);
     const vehicles = this.estimateVehicleAssets(state);
