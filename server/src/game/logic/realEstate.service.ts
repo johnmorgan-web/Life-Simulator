@@ -18,18 +18,26 @@ export class RealEstateService {
     return Math.max(1, Array.isArray(userSnapshots) ? userSnapshots.length : 1);
   }
 
-  private getUserCityCounts(userSnapshots: any[], liveSnapshot?: any): Record<string, number> {
+  private getUserCityCounts(
+    userSnapshots: any[],
+    liveSnapshot?: any,
+  ): Record<string, number> {
     const userCityMap = new Map<string, string>();
     const snapshots = Array.isArray(userSnapshots) ? userSnapshots : [];
 
     for (const snapshot of snapshots) {
-      const username = String(snapshot?.username || snapshot?.currentUser || '').trim();
+      const username = String(
+        snapshot?.username || snapshot?.currentUser || '',
+      ).trim();
       const cityName = snapshot?.city?.name;
       if (username && cityName) userCityMap.set(username, cityName);
     }
 
     if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
-      userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name));
+      userCityMap.set(
+        String(liveSnapshot.currentUser),
+        String(liveSnapshot.city.name),
+      );
     }
 
     const counts: Record<string, number> = {};
@@ -39,7 +47,10 @@ export class RealEstateService {
     return counts;
   }
 
-  private initializeSharedRealEstateMarket(userSnapshots: any[], liveSnapshot?: any): { market: Record<string, any[]>; meta: any } {
+  private initializeSharedRealEstateMarket(
+    userSnapshots: any[],
+    liveSnapshot?: any,
+  ): { market: Record<string, any[]>; meta: any } {
     const market: Record<string, any[]> = {};
     const counts = this.getUserCityCounts(userSnapshots, liveSnapshot);
     const meta = this.defaultRealEstateMeta();
@@ -53,12 +64,22 @@ export class RealEstateService {
 
       for (let i = 0; i < initialCount; i++) {
         const template = realEstateTemplates[i % realEstateTemplates.length];
-        listings.push(this.buildRealEstateListing(city, template, i, pressure, `re-${city.name}-${template.id}-${i}`));
+        listings.push(
+          this.buildRealEstateListing(
+            city,
+            template,
+            i,
+            pressure,
+            `re-${city.name}-${template.id}-${i}`,
+          ),
+        );
       }
 
       meta.seededUsersByCity[city.name] = cityUserCount;
       meta.nextSequenceByCity[city.name] = initialCount;
-      market[city.name] = listings.sort((a, b) => a.askingPrice - b.askingPrice);
+      market[city.name] = listings.sort(
+        (a, b) => a.askingPrice - b.askingPrice,
+      );
     }
 
     return { market, meta };
@@ -93,7 +114,9 @@ export class RealEstateService {
     pressure: number,
     customId?: string,
   ): any {
-    const seed = this.utilitiesService.hashString(`${city.name}-${template.id}-${sequence}`);
+    const seed = this.utilitiesService.hashString(
+      `${city.name}-${template.id}-${sequence}`,
+    );
     const rnd = this.utilitiesService.mulberry32(seed);
     const quality = 0.86 + rnd() * 0.32;
     const dom = Math.max(0, Math.floor(rnd() * 7));
@@ -113,7 +136,8 @@ export class RealEstateService {
         (0.95 + (pressure - 1) * 0.25),
     );
     return {
-      id: customId || `re-${city.name}-${template.id}-${sequence}-${Date.now()}`,
+      id:
+        customId || `re-${city.name}-${template.id}-${sequence}-${Date.now()}`,
       cityName: city.name,
       templateId: template.id,
       templateName: template.name,
@@ -140,10 +164,17 @@ export class RealEstateService {
       pendingListingTimersByCity[city.name] = [];
       nextSequenceByCity[city.name] = 0;
     }
-    return { seededUsersByCity, pendingListingTimersByCity, nextSequenceByCity };
+    return {
+      seededUsersByCity,
+      pendingListingTimersByCity,
+      nextSequenceByCity,
+    };
   }
 
-  initializeRealEstateMarket(liveSnapshot?: any): { market: Record<string, any[]>; meta: any } {
+  initializeRealEstateMarket(liveSnapshot?: any): {
+    market: Record<string, any[]>;
+    meta: any;
+  } {
     // Note: This would need user data from DB. Simplified for now.
     const market: Record<string, any[]> = {};
     const meta = this.defaultRealEstateMeta();
@@ -156,12 +187,20 @@ export class RealEstateService {
       for (let i = 0; i < initialCount; i++) {
         const template = realEstateTemplates[i % realEstateTemplates.length];
         listings.push(
-          this.buildRealEstateListing(city, template, i, pressure, `re-${city.name}-${template.id}-${i}`),
+          this.buildRealEstateListing(
+            city,
+            template,
+            i,
+            pressure,
+            `re-${city.name}-${template.id}-${i}`,
+          ),
         );
       }
       meta.seededUsersByCity[city.name] = users;
       meta.nextSequenceByCity[city.name] = initialCount;
-      market[city.name] = listings.sort((a, b) => a.askingPrice - b.askingPrice);
+      market[city.name] = listings.sort(
+        (a, b) => a.askingPrice - b.askingPrice,
+      );
     }
     return { market, meta };
   }
@@ -205,7 +244,11 @@ export class RealEstateService {
     );
   }
 
-  private shapeNormalizedRealEstateState(data: any, market: Record<string, any[]>, meta: any): any {
+  private shapeNormalizedRealEstateState(
+    data: any,
+    market: Record<string, any[]>,
+    meta: any,
+  ): any {
     const normalizedMarket: Record<string, any[]> = {};
 
     for (const city of cityData) {
@@ -218,16 +261,22 @@ export class RealEstateService {
         templateName: l?.templateName || realEstateTemplates[0].name,
         assetClass:
           l?.assetClass ||
-          (realEstateTemplates.find((t) => t.id === l?.templateId)?.assetClass || 'Residential'),
+          realEstateTemplates.find((t) => t.id === l?.templateId)?.assetClass ||
+          'Residential',
         incomeLabel:
           l?.incomeLabel ||
-          (realEstateTemplates.find((t) => t.id === l?.templateId)?.incomeLabel || 'Monthly Rent'),
+          realEstateTemplates.find((t) => t.id === l?.templateId)
+            ?.incomeLabel ||
+          'Monthly Rent',
         units: Math.max(1, Number(l?.units || 1)),
         askingPrice: Math.max(50000, Number(l?.askingPrice || 250000)),
         askingRentPerUnit: Math.max(400, Number(l?.askingRentPerUnit || 1500)),
         amenities: Array.isArray(l?.amenities) ? l.amenities : [],
         dom: Math.max(0, Math.floor(Number(l?.dom || 0))),
-        condition: Math.max(20, Math.min(100, Math.round(Number(l?.condition || 75)))),
+        condition: Math.max(
+          20,
+          Math.min(100, Math.round(Number(l?.condition || 75))),
+        ),
         ownershipCount: Math.max(0, Math.floor(Number(l?.ownershipCount || 0))),
         foreclosure: !!l?.foreclosure,
         listedByUser: l?.listedByUser || null,
@@ -242,22 +291,34 @@ export class RealEstateService {
             ...p,
             assetClass:
               p?.assetClass ||
-              (realEstateTemplates.find((t) => t.id === p?.templateId)?.assetClass || 'Residential'),
+              realEstateTemplates.find((t) => t.id === p?.templateId)
+                ?.assetClass ||
+              'Residential',
             incomeLabel:
               p?.incomeLabel ||
-              (realEstateTemplates.find((t) => t.id === p?.templateId)?.incomeLabel || 'Monthly Rent'),
-            ownershipCount: Math.max(0, Math.floor(Number(p?.ownershipCount || 0))),
+              realEstateTemplates.find((t) => t.id === p?.templateId)
+                ?.incomeLabel ||
+              'Monthly Rent',
+            ownershipCount: Math.max(
+              0,
+              Math.floor(Number(p?.ownershipCount || 0)),
+            ),
             mortgageTermMonths: Number(p?.mortgageTermMonths || 0),
             purchaseMode:
-              p?.purchaseMode || (Number(p?.loanBalance || 0) > 0 ? 'mortgage' : 'cash'),
+              p?.purchaseMode ||
+              (Number(p?.loanBalance || 0) > 0 ? 'mortgage' : 'cash'),
           }))
         : [],
       pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals)
         ? data.pendingRealEstateDeals
         : [],
       realEstateLastMonthIncome: Number(data?.realEstateLastMonthIncome || 0),
-      realEstateLastMonthExpenses: Number(data?.realEstateLastMonthExpenses || 0),
-      realEstateLastMonthPropertyBreakdown: Array.isArray(data?.realEstateLastMonthPropertyBreakdown)
+      realEstateLastMonthExpenses: Number(
+        data?.realEstateLastMonthExpenses || 0,
+      ),
+      realEstateLastMonthPropertyBreakdown: Array.isArray(
+        data?.realEstateLastMonthPropertyBreakdown,
+      )
         ? data.realEstateLastMonthPropertyBreakdown.map((entry: any) => ({
             propertyId: String(entry?.propertyId || ''),
             propertyName: String(entry?.propertyName || 'Property'),
@@ -281,8 +342,16 @@ export class RealEstateService {
     userSnapshots: any[],
     liveSnapshot?: any,
   ): any {
-    const shared = this.syncSharedRealEstateMarket(userSnapshots, liveSnapshot || data, false);
-    return this.shapeNormalizedRealEstateState(data, shared.market, shared.meta);
+    const shared = this.syncSharedRealEstateMarket(
+      userSnapshots,
+      liveSnapshot || data,
+      false,
+    );
+    return this.shapeNormalizedRealEstateState(
+      data,
+      shared.market,
+      shared.meta,
+    );
   }
 
   syncSharedRealEstateMarket(
@@ -291,7 +360,10 @@ export class RealEstateService {
     advanceOneMonth = false,
   ): { market: Record<string, any[]>; meta: any } {
     if (!this.sharedRealEstateMarket || !this.sharedRealEstateMarketMeta) {
-      const initialized = this.initializeSharedRealEstateMarket(userSnapshots, liveSnapshot);
+      const initialized = this.initializeSharedRealEstateMarket(
+        userSnapshots,
+        liveSnapshot,
+      );
       this.sharedRealEstateMarket = initialized.market;
       this.sharedRealEstateMarketMeta = initialized.meta;
     }
@@ -307,7 +379,8 @@ export class RealEstateService {
       },
       pendingListingTimersByCity: {
         ...defaultMeta.pendingListingTimersByCity,
-        ...((this.sharedRealEstateMarketMeta || {})?.pendingListingTimersByCity || {}),
+        ...((this.sharedRealEstateMarketMeta || {})
+          ?.pendingListingTimersByCity || {}),
       },
       nextSequenceByCity: {
         ...defaultMeta.nextSequenceByCity,
@@ -323,7 +396,9 @@ export class RealEstateService {
       const currentUsers = Number(cityUserCounts[cityName] || 0);
       const seededUsers = Number(meta.seededUsersByCity?.[cityName] || 0);
       const pressure = this.cityPressureMultiplier(users, city);
-      const existing = Array.isArray(market[cityName]) ? [...market[cityName]] : [];
+      const existing = Array.isArray(market[cityName])
+        ? [...market[cityName]]
+        : [];
 
       let additions = 0;
       if (seededUsers === 0 && currentUsers > 0 && existing.length === 0) {
@@ -332,9 +407,12 @@ export class RealEstateService {
         additions = (currentUsers - seededUsers) * 2;
       }
 
-      let nextSequence = Number(meta.nextSequenceByCity?.[cityName] || existing.length);
+      let nextSequence = Number(
+        meta.nextSequenceByCity?.[cityName] || existing.length,
+      );
       for (let i = 0; i < additions; i++) {
-        const template = realEstateTemplates[nextSequence % realEstateTemplates.length];
+        const template =
+          realEstateTemplates[nextSequence % realEstateTemplates.length];
         existing.push(
           this.buildRealEstateListing(
             city,
@@ -348,16 +426,21 @@ export class RealEstateService {
       }
 
       if (advanceOneMonth) {
-        const timers = Array.isArray(meta.pendingListingTimersByCity?.[cityName])
+        const timers = Array.isArray(
+          meta.pendingListingTimersByCity?.[cityName],
+        )
           ? [...meta.pendingListingTimersByCity[cityName]]
           : [];
-        const maturedCount = timers.filter((months: number) => Number(months || 0) <= 1).length;
+        const maturedCount = timers.filter(
+          (months: number) => Number(months || 0) <= 1,
+        ).length;
         meta.pendingListingTimersByCity[cityName] = timers
           .map((months: number) => Math.max(0, Number(months || 0) - 1))
           .filter((months: number) => months > 0);
 
         for (let i = 0; i < maturedCount; i++) {
-          const template = realEstateTemplates[nextSequence % realEstateTemplates.length];
+          const template =
+            realEstateTemplates[nextSequence % realEstateTemplates.length];
           existing.push(
             this.buildRealEstateListing(
               city,
@@ -373,7 +456,10 @@ export class RealEstateService {
 
       meta.seededUsersByCity[cityName] = Math.max(seededUsers, currentUsers);
       meta.nextSequenceByCity[cityName] = nextSequence;
-      market[cityName] = existing.sort((a: any, b: any) => Number(a.askingPrice || 0) - Number(b.askingPrice || 0));
+      market[cityName] = existing.sort(
+        (a: any, b: any) =>
+          Number(a.askingPrice || 0) - Number(b.askingPrice || 0),
+      );
     }
 
     this.sharedRealEstateMarket = market;
@@ -386,6 +472,8 @@ export class RealEstateService {
 
   setSharedRealEstateMarket(market: Record<string, any[]>, meta: any) {
     this.sharedRealEstateMarket = this.cloneDeep(market || {});
-    this.sharedRealEstateMarketMeta = this.cloneDeep(meta || this.defaultRealEstateMeta());
+    this.sharedRealEstateMarketMeta = this.cloneDeep(
+      meta || this.defaultRealEstateMeta(),
+    );
   }
 }

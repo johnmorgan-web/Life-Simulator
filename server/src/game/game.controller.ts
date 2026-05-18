@@ -1,4 +1,3 @@
-
 import { Controller, Post, Body, Param, Get } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,7 +15,10 @@ import { UserStateEntity } from '../users/entities/user-state.entity';
 
 function getCareerLinkedAcademyCourses() {
   const courseByName = new Map(
-    academyCourses.map((course: any) => [String(course?.n || '').trim(), course]),
+    academyCourses.map((course: any) => [
+      String(course?.n || '').trim(),
+      course,
+    ]),
   );
   const relevantCourseNames = new Set<string>();
 
@@ -32,7 +34,8 @@ function getCareerLinkedAcademyCourses() {
     const currentName = stack.pop()!;
     const course = courseByName.get(currentName);
     const prereq = String(course?.prereq || '').trim();
-    if (!prereq || relevantCourseNames.has(prereq) || !courseByName.has(prereq)) continue;
+    if (!prereq || relevantCourseNames.has(prereq) || !courseByName.has(prereq))
+      continue;
     relevantCourseNames.add(prereq);
     stack.push(prereq);
   }
@@ -117,7 +120,10 @@ export class GameController {
 
   @Post('apply-job')
   applyForJob(@Body() body: { state: any; jobTitle: string }) {
-    return this.applicationService.applyForJob(body?.state || {}, body?.jobTitle || '');
+    return this.applicationService.applyForJob(
+      body?.state || {},
+      body?.jobTitle || '',
+    );
   }
 
   @Post('real-estate/market')
@@ -137,19 +143,25 @@ export class GameController {
   }
 
   @Post('stocks/advance')
-  async advanceStockMarket(
-    @Body() body: { state?: any },
-  ) {
+  async advanceStockMarket(@Body() body: { state?: any }) {
     const userSnapshots = await this.getLiveUserSnapshots();
-    const registeredUsers = Array.isArray(userSnapshots) ? userSnapshots.length : 0;
+    const registeredUsers = Array.isArray(userSnapshots)
+      ? userSnapshots.length
+      : 0;
     const stateSnapshot = body?.state || {};
-    const currentMonth = Math.max(1, Math.min(12, Number(stateSnapshot?.month || 1)));
+    const currentMonth = Math.max(
+      1,
+      Math.min(12, Number(stateSnapshot?.month || 1)),
+    );
     const currentYear = Math.max(1, Number(stateSnapshot?.year || 2026));
     const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
     const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
 
-    const previousMarketPrices = this.marketService.normalizeMarketPrices(stateSnapshot?.marketPrices);
-    const mergedEconomy = this.marketService.deriveStockEconomyOverridesForMonth(stateSnapshot);
+    const previousMarketPrices = this.marketService.normalizeMarketPrices(
+      stateSnapshot?.marketPrices,
+    );
+    const mergedEconomy =
+      this.marketService.deriveStockEconomyOverridesForMonth(stateSnapshot);
     const nextMarketPrices = this.marketService.advanceMarketPrices(
       previousMarketPrices,
       nextYear,
@@ -199,7 +211,11 @@ export class GameController {
     body: {
       state: any;
       listing: any;
-      options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 };
+      options?: {
+        downPaymentPct?: number;
+        purchaseMode?: 'cash' | 'mortgage';
+        mortgageTermYears?: 15 | 30;
+      };
     },
   ) {
     const listing = body?.listing;
@@ -209,11 +225,19 @@ export class GameController {
     }
 
     const userSnapshots = await this.getLiveUserSnapshots();
-    const shared = this.realEstateService.syncSharedRealEstateMarket(userSnapshots, liveState, false);
+    const shared = this.realEstateService.syncSharedRealEstateMarket(
+      userSnapshots,
+      liveState,
+      false,
+    );
     const market = shared.market;
     const meta = shared.meta;
-    const cityListings = Array.isArray(market[listing.cityName]) ? market[listing.cityName] : [];
-    const stillAvailable = cityListings.some((entry: any) => entry.id === listing.id);
+    const cityListings = Array.isArray(market[listing.cityName])
+      ? market[listing.cityName]
+      : [];
+    const stillAvailable = cityListings.some(
+      (entry: any) => entry.id === listing.id,
+    );
     if (!stillAvailable) {
       return {
         ok: false,
@@ -223,18 +247,29 @@ export class GameController {
       };
     }
 
-    const nextCityListings = cityListings.filter((entry: any) => entry.id !== listing.id);
+    const nextCityListings = cityListings.filter(
+      (entry: any) => entry.id !== listing.id,
+    );
     const nextMarket = { ...market, [listing.cityName]: nextCityListings };
     const nextMeta = meta;
     this.realEstateService.setSharedRealEstateMarket(nextMarket, nextMeta);
 
     const credit = Number(liveState.credit || 600);
-    const approvalMonthsRequired = Math.max(1, Math.round(4 - Math.min(1.5, (credit - 580) / 220)));
-    const downPaymentPct = Math.max(0.1, Math.min(0.5, Number(body?.options?.downPaymentPct || 0.25)));
-    const purchaseMode = body?.options?.purchaseMode === 'cash' ? 'cash' : 'mortgage';
+    const approvalMonthsRequired = Math.max(
+      1,
+      Math.round(4 - Math.min(1.5, (credit - 580) / 220)),
+    );
+    const downPaymentPct = Math.max(
+      0.1,
+      Math.min(0.5, Number(body?.options?.downPaymentPct || 0.25)),
+    );
+    const purchaseMode =
+      body?.options?.purchaseMode === 'cash' ? 'cash' : 'mortgage';
     const mortgageTermYears = body?.options?.mortgageTermYears === 15 ? 15 : 30;
 
-    const existingDeals = Array.isArray(liveState.pendingRealEstateDeals) ? liveState.pendingRealEstateDeals : [];
+    const existingDeals = Array.isArray(liveState.pendingRealEstateDeals)
+      ? liveState.pendingRealEstateDeals
+      : [];
     const nextDeals = [
       ...existingDeals,
       {
@@ -281,18 +316,27 @@ export class GameController {
     const properties = Array.isArray(liveState.investmentProperties)
       ? liveState.investmentProperties
       : [];
-    const property = properties.find((entry: any) => String(entry?.id || '') === propertyId);
+    const property = properties.find(
+      (entry: any) => String(entry?.id || '') === propertyId,
+    );
     if (!property) {
       return { ok: false, reason: 'not-found' };
     }
 
     const userSnapshots = await this.getLiveUserSnapshots();
-    const shared = this.realEstateService.syncSharedRealEstateMarket(userSnapshots, liveState, false);
+    const shared = this.realEstateService.syncSharedRealEstateMarket(
+      userSnapshots,
+      liveState,
+      false,
+    );
     const market = shared.market;
     const meta = shared.meta;
 
-    const round2 = (value: number) => Math.round(Number(value || 0) * 100) / 100;
-    const salePrice = round2(Math.max(50000, Number(property.propertyValue || 0) * 0.98));
+    const round2 = (value: number) =>
+      Math.round(Number(value || 0) * 100) / 100;
+    const salePrice = round2(
+      Math.max(50000, Number(property.propertyValue || 0) * 0.98),
+    );
     const transactionCosts = round2(salePrice * 0.04);
     const loanBalance = Math.max(0, Number(property.loanBalance || 0));
     const netAfterLoan = round2(salePrice - transactionCosts - loanBalance);
@@ -311,24 +355,39 @@ export class GameController {
       incomeLabel: property.incomeLabel || 'Monthly Rent',
       units: Math.max(1, Number(property.units || 1)),
       askingPrice: salePrice,
-      askingRentPerUnit: round2(Math.max(300, Number(property.rentPerUnit || property.marketRentPerUnit || 1200))),
+      askingRentPerUnit: round2(
+        Math.max(
+          300,
+          Number(property.rentPerUnit || property.marketRentPerUnit || 1200),
+        ),
+      ),
       amenities: Array.isArray(property.amenities) ? property.amenities : [],
       dom: 0,
-      condition: Math.max(25, Math.min(100, Math.round(Number(property.condition || 70)))),
-      ownershipCount: Math.max(0, Math.floor(Number(property.ownershipCount || 0))),
+      condition: Math.max(
+        25,
+        Math.min(100, Math.round(Number(property.condition || 70))),
+      ),
+      ownershipCount: Math.max(
+        0,
+        Math.floor(Number(property.ownershipCount || 0)),
+      ),
       foreclosure: false,
       listedByUser: liveState.currentUser || null,
     };
 
     const cityName = String(property.cityName || '');
-    const cityListings = Array.isArray(market[cityName]) ? market[cityName] : [];
+    const cityListings = Array.isArray(market[cityName])
+      ? market[cityName]
+      : [];
     const nextMarket = {
       ...market,
       [cityName]: [...cityListings, listing],
     };
     this.realEstateService.setSharedRealEstateMarket(nextMarket, meta);
 
-    const nextProperties = properties.filter((entry: any) => String(entry?.id || '') !== propertyId);
+    const nextProperties = properties.filter(
+      (entry: any) => String(entry?.id || '') !== propertyId,
+    );
     const logEntry = {
       date: `${Number(liveState.month || 1)}/${Number(liveState.year || 2026)}`,
       msg: `🏷️ Sold ${property.templateName} for $${salePrice.toLocaleString()} and relisted to market.${netAfterLoan >= 0 ? ` Net proceeds +$${netAfterLoan.toLocaleString()}.` : ` Shortfall added to debt: $${Math.abs(netAfterLoan).toLocaleString()}.`}`,

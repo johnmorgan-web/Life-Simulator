@@ -4,22 +4,45 @@ import { vehicleDatabase } from '../../data/vehicleDatabase.constants';
 @Injectable()
 export class VehicleService {
   // Relocation cost calculation based on distance and vehicle transport
-  calculateRelocationCost(current: any, target: any, ownedVehicle: any, haversineDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number) {
+  calculateRelocationCost(
+    current: any,
+    target: any,
+    ownedVehicle: any,
+    haversineDistance: (
+      lat1: number,
+      lon1: number,
+      lat2: number,
+      lon2: number,
+    ) => number,
+  ) {
     if (!current || !target || !('lat' in current) || !('lat' in target)) {
-      return { distance: 0, relocationCost: 1500, transportCost: 0, sellVehicle: false };
+      return {
+        distance: 0,
+        relocationCost: 1500,
+        transportCost: 0,
+        sellVehicle: false,
+      };
     }
-    const distance = haversineDistance(current.lat, current.lon, target.lat, target.lon);
+    const distance = haversineDistance(
+      current.lat,
+      current.lon,
+      target.lat,
+      target.lon,
+    );
     // base moving cost per km and fixed overhead
     const basePerKm = 0.8; // $0.8 per km
     const overhead = 800;
-    const relocationCost = Math.round((distance * basePerKm + overhead) * 100) / 100;
+    const relocationCost =
+      Math.round((distance * basePerKm + overhead) * 100) / 100;
 
     // vehicle transport cost based on vehicle being owned
     let transportCost = 0;
     if (ownedVehicle && ownedVehicle.vehicleId) {
-      const vehicle = vehicleDatabase.vehicles.find((v) => v.id === ownedVehicle.vehicleId);
+      const vehicle = vehicleDatabase.vehicles.find(
+        (v) => v.id === ownedVehicle.vehicleId,
+      );
       if (vehicle) {
-        transportCost = Math.round((distance * vehicle.costPerKm) * 100) / 100;
+        transportCost = Math.round(distance * vehicle.costPerKm * 100) / 100;
       }
     }
 
@@ -29,16 +52,26 @@ export class VehicleService {
   }
 
   // Calculate vehicle depreciation based on age and condition
-  calculateVehicleValue(vehicle: any, currentMonth: number, currentYear: number): number {
+  calculateVehicleValue(
+    vehicle: any,
+    currentMonth: number,
+    currentYear: number,
+  ): number {
     if (!vehicle) return 0;
-    const vehicleData = vehicleDatabase.vehicles.find((v) => v.id === vehicle.vehicleId);
+    const vehicleData = vehicleDatabase.vehicles.find(
+      (v) => v.id === vehicle.vehicleId,
+    );
     if (!vehicleData) return vehicle.purchasePrice;
 
     const ageMonths =
-      (currentYear - vehicle.purchaseYear) * 12 + (currentMonth - vehicle.purchaseMonth);
+      (currentYear - vehicle.purchaseYear) * 12 +
+      (currentMonth - vehicle.purchaseMonth);
     const ageYears = ageMonths / 12;
 
-    const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes];
+    const classData =
+      vehicleDatabase.classes[
+        vehicleData.class as keyof typeof vehicleDatabase.classes
+      ];
     let currentValue = vehicle.purchasePrice;
 
     // Apply depreciation for each year
@@ -46,14 +79,19 @@ export class VehicleService {
       const depreciationRate = vehicle.purchasedNew
         ? classData.depreciation.new
         : classData.depreciation.used;
-      currentValue = vehicle.purchasePrice * Math.pow(1 - depreciationRate, ageYears);
+      currentValue =
+        vehicle.purchasePrice * Math.pow(1 - depreciationRate, ageYears);
     }
 
     return Math.round(currentValue * 100) / 100;
   }
 
   // Calculate monthly car payment based on purchase price, APR, and term
-  calculateMonthlyPayment(principal: number, aprRate: number, months: number): number {
+  calculateMonthlyPayment(
+    principal: number,
+    aprRate: number,
+    months: number,
+  ): number {
     if (months <= 0 || principal <= 0) return 0;
     const monthlyRate = aprRate / 12;
     if (monthlyRate === 0) return principal / months;
@@ -66,24 +104,39 @@ export class VehicleService {
   // Calculate gas cost per month based on vehicle efficiency
   calculateMonthlyGasCost(vehicle: any, milesPerMonth: number = 1000): number {
     if (!vehicle) return 0;
-    const vehicleData = vehicleDatabase.vehicles.find((v) => v.id === vehicle.vehicleId);
+    const vehicleData = vehicleDatabase.vehicles.find(
+      (v) => v.id === vehicle.vehicleId,
+    );
     if (!vehicleData) return 0;
 
-    const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes];
+    const classData =
+      vehicleDatabase.classes[
+        vehicleData.class as keyof typeof vehicleDatabase.classes
+      ];
     const gasPricePerGallon = 3.5; // Can be made dynamic
     const gallonsNeeded = milesPerMonth / classData.gasMileage;
     return Math.round(gallonsNeeded * gasPricePerGallon * 100) / 100;
   }
 
   // Calculate maintenance cost per month based on vehicle age and class
-  calculateMonthlyMaintenanceCost(vehicle: any, currentMonth: number, currentYear: number): number {
+  calculateMonthlyMaintenanceCost(
+    vehicle: any,
+    currentMonth: number,
+    currentYear: number,
+  ): number {
     if (!vehicle) return 0;
-    const vehicleData = vehicleDatabase.vehicles.find((v) => v.id === vehicle.vehicleId);
+    const vehicleData = vehicleDatabase.vehicles.find(
+      (v) => v.id === vehicle.vehicleId,
+    );
     if (!vehicleData) return 0;
 
-    const classData = vehicleDatabase.classes[vehicleData.class as keyof typeof vehicleDatabase.classes];
+    const classData =
+      vehicleDatabase.classes[
+        vehicleData.class as keyof typeof vehicleDatabase.classes
+      ];
     const ageMonths =
-      (currentYear - vehicle.purchaseYear) * 12 + (currentMonth - vehicle.purchaseMonth);
+      (currentYear - vehicle.purchaseYear) * 12 +
+      (currentMonth - vehicle.purchaseMonth);
     const ageYears = ageMonths / 12;
 
     // Base maintenance: $50-150 per month depending on class
@@ -100,7 +153,9 @@ export class VehicleService {
   // Detect if garage has helicopter
   garageHasHelicopter(garage: any[]): boolean {
     return garage.some((g) => {
-      const vehicle = vehicleDatabase.vehicles.find((v) => v.id === g.vehicleId);
+      const vehicle = vehicleDatabase.vehicles.find(
+        (v) => v.id === g.vehicleId,
+      );
       if (!vehicle) return false;
       const body = (vehicle.body || '').toLowerCase();
       return body.includes('helicopter') || vehicle.icon === '🚁';
@@ -111,7 +166,9 @@ export class VehicleService {
   garageHasChauffeurEligibleVehicle(garage: any[]): boolean {
     if (!Array.isArray(garage) || garage.length === 0) return false;
     return garage.some((g) => {
-      const vehicle = vehicleDatabase.vehicles.find((v) => v.id === g.vehicleId);
+      const vehicle = vehicleDatabase.vehicles.find(
+        (v) => v.id === g.vehicleId,
+      );
       if (!vehicle) return false;
       const cls = String((vehicle as any).class || '').toLowerCase();
       return cls === 'luxury' || cls === 'unrealistic';
@@ -119,7 +176,10 @@ export class VehicleService {
   }
 
   // Get preferred transit from garage
-  preferredTransitFromGarage(garage: any[], transitStateByName: (name: string) => any): any {
+  preferredTransitFromGarage(
+    garage: any[],
+    transitStateByName: (name: string) => any,
+  ): any {
     if (!garage || garage.length === 0) return null;
     if (this.garageHasHelicopter(garage)) {
       return transitStateByName('L5 - Helicopter');
@@ -128,8 +188,15 @@ export class VehicleService {
   }
 
   // Sync transit with garage
-  syncTransitWithGarage(currentTransit: any, garage: any[], transitStateByName: (name: string) => any): any {
-    const vehicleTransit = this.preferredTransitFromGarage(garage, transitStateByName);
+  syncTransitWithGarage(
+    currentTransit: any,
+    garage: any[],
+    transitStateByName: (name: string) => any,
+  ): any {
+    const vehicleTransit = this.preferredTransitFromGarage(
+      garage,
+      transitStateByName,
+    );
     if (vehicleTransit) return vehicleTransit;
     if ((currentTransit?.level || 1) >= 4) {
       return transitStateByName('L3 - Rideshare - Uber/Lyft');
