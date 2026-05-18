@@ -1,16 +1,16 @@
 export type LuxuryService = {
-  id: string;
-  name: string;
-  monthlyBase: number;
-  minSalary: number;
-  icon: string;
-  description: string;
-};
+  id: string
+  name: string
+  monthlyBase: number
+  minSalary: number
+  icon: string
+  description: string
+}
 
 export type LifestyleExpenses = {
-  luxuryServices: LuxuryService[];
-  entertainmentOptions: { name: string; monthlyCost: number; icon: string }[];
-};
+  luxuryServices: LuxuryService[]
+  entertainmentOptions: { name: string; monthlyCost: number; icon: string }[]
+}
 
 const lifestyleExpenses: LifestyleExpenses = {
   luxuryServices: [
@@ -20,7 +20,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 4000,
       minSalary: 6000,
       icon: '👨‍🍳',
-      description: 'Meals prepared fresh daily. Eliminates food costs.',
+      description: 'Meals prepared fresh daily. Eliminates food costs.'
     },
     {
       id: 'housekeeper',
@@ -28,7 +28,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 2000,
       minSalary: 4000,
       icon: '🧹',
-      description: 'Professional cleaning and maintenance of your residence.',
+      description: 'Professional cleaning and maintenance of your residence.'
     },
     {
       id: 'chauffer',
@@ -36,8 +36,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 3500,
       minSalary: 5500,
       icon: '🚗',
-      description:
-        'Transportation service. Eliminates gas and car maintenance costs.',
+      description: 'Transportation service. Eliminates gas and car maintenance costs.'
     },
     {
       id: 'therapist',
@@ -45,7 +44,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 2500,
       minSalary: 4500,
       icon: '🧠',
-      description: 'Mental health support and wellness counseling.',
+      description: 'Mental health support and wellness counseling.'
     },
     {
       id: 'trainer',
@@ -53,7 +52,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 1500,
       minSalary: 3000,
       icon: '💪',
-      description: 'In-home fitness coaching and nutrition planning.',
+      description: 'In-home fitness coaching and nutrition planning.'
     },
     {
       id: 'concierge',
@@ -61,8 +60,7 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 3000,
       minSalary: 6500,
       icon: '🎩',
-      description:
-        'Premium service handling errands, reservations, and lifestyle management.',
+      description: 'Premium service handling errands, reservations, and lifestyle management.'
     },
     {
       id: 'accountant',
@@ -70,20 +68,20 @@ const lifestyleExpenses: LifestyleExpenses = {
       monthlyBase: 1250000,
       minSalary: 0,
       icon: '🧾',
-      description:
-        'Automatically sums all monthly debits into one simplified ledger entry. Requires $50M net worth to hire.',
+      description: 'Automatically sums all monthly debits into one simplified ledger entry. Requires $50M net worth to hire.'
     },
+
   ],
   entertainmentOptions: [
     { name: 'Streaming Service', monthlyCost: 15, icon: '📺' },
     { name: 'Movie Tickets (2x/mo)', monthlyCost: 30, icon: '🎬' },
     { name: 'Concert/Sports (1x/mo)', monthlyCost: 75, icon: '🎵' },
     { name: 'Gaming Subscription', monthlyCost: 20, icon: '🎮' },
-    { name: 'Gym Membership', monthlyCost: 50, icon: '🏋️' },
+    { name: 'Gym Membership', monthlyCost: 50, icon: '🏋️' }, 
     { name: 'Dining Out (2x/mo)', monthlyCost: 100, icon: '🍽️' },
     { name: 'Hobby Supplies', monthlyCost: 40, icon: '🎨' },
     { name: 'Travel Fund', monthlyCost: 200, icon: '✈️' },
-  ],
-};
+  ]
+}
 
-export default lifestyleExpenses;
+export default lifestyleExpenses

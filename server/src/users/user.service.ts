@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  OnModuleInit,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import bcrypt from 'bcryptjs';
@@ -46,28 +39,14 @@ const ADMIN_GIFT_TEMPLATES: Record<string, string> = {
   streak: 'Great consistency this month. Keep the streak alive!',
   'recovery-grant': 'Recovery support grant: keep rebuilding momentum.',
   'hardship-relief': 'Hardship relief support has been approved this month.',
-  'transition-support':
-    'Workforce transition support granted for your next step.',
+  'transition-support': 'Workforce transition support granted for your next step.',
   milestone: 'Great progress this month. Keep going!',
 };
 
 @Injectable()
 export class UserService implements OnModuleInit {
-  private readonly authSessions = new Map<
-    string,
-    { userId: string; expiresAt: number }
-  >();
-  private readonly pandemicKeywords = [
-    'pandemic',
-    'epidemic',
-    'outbreak',
-    'covid',
-    'sars',
-    'h1n1',
-    'influenza',
-    'flu',
-    'virus',
-  ];
+  private readonly authSessions = new Map<string, { userId: string; expiresAt: number }>();
+  private readonly pandemicKeywords = ['pandemic', 'epidemic', 'outbreak', 'covid', 'sars', 'h1n1', 'influenza', 'flu', 'virus'];
 
   private hasPandemicKeyword(value: unknown): boolean {
     const text = String(value || '').toLowerCase();
@@ -84,9 +63,7 @@ export class UserService implements OnModuleInit {
     if (this.hasPandemicKeyword(event.realWorldImpact)) return true;
 
     if (Array.isArray(event.keyStatistics)) {
-      return event.keyStatistics.some((entry: unknown) =>
-        this.hasPandemicKeyword(entry),
-      );
+      return event.keyStatistics.some((entry: unknown) => this.hasPandemicKeyword(entry));
     }
 
     return false;
@@ -103,23 +80,11 @@ export class UserService implements OnModuleInit {
       };
     }
     return {
-      recessionSeverity: Math.max(
-        0,
-        Math.min(100, Math.round(Number(raw?.recessionSeverity || 0))),
-      ),
-      inflationPressure: Math.max(
-        0,
-        Math.min(100, Math.round(Number(raw?.inflationPressure || 0))),
-      ),
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
       jobAvailability: 100, // always deterministic, not event/admin modifiable
-      marketVolatility: Math.max(
-        50,
-        Math.min(220, Math.round(Number(raw?.marketVolatility || 100))),
-      ),
-      nextMonthStockShock: Math.max(
-        -0.7,
-        Math.min(0.7, Number(raw?.nextMonthStockShock || 0)),
-      ),
+      marketVolatility: Math.max(50, Math.min(220, Math.round(Number(raw?.marketVolatility || 100)))),
+      nextMonthStockShock: Math.max(-0.7, Math.min(0.7, Number(raw?.nextMonthStockShock || 0))),
     };
   }
 
@@ -131,8 +96,7 @@ export class UserService implements OnModuleInit {
     const title = String(raw?.title || '').trim();
     if (!id || !title) return null;
 
-    const effectsRaw =
-      raw?.effects && typeof raw.effects === 'object' ? raw.effects : {};
+    const effectsRaw = raw?.effects && typeof raw.effects === 'object' ? raw.effects : {};
     return {
       id,
       title,
@@ -140,51 +104,19 @@ export class UserService implements OnModuleInit {
       summary: String(raw?.summary || ''),
       realWorldImpact: String(raw?.realWorldImpact || ''),
       keyStatistics: Array.isArray(raw?.keyStatistics)
-        ? raw.keyStatistics
-            .map((entry: any) => String(entry || '').trim())
-            .filter(Boolean)
+        ? raw.keyStatistics.map((entry: any) => String(entry || '').trim()).filter(Boolean)
         : [],
-      totalMonths: Math.max(
-        1,
-        Math.min(
-          36,
-          Math.floor(Number(raw?.totalMonths || raw?.monthsRemaining || 1)),
-        ),
-      ),
-      monthsRemaining: Math.max(
-        0,
-        Math.min(
-          36,
-          Math.floor(Number(raw?.monthsRemaining || raw?.totalMonths || 1)),
-        ),
-      ),
+      totalMonths: Math.max(1, Math.min(36, Math.floor(Number(raw?.totalMonths || raw?.monthsRemaining || 1)))),
+      monthsRemaining: Math.max(0, Math.min(36, Math.floor(Number(raw?.monthsRemaining || raw?.totalMonths || 1)))),
       startedMonth: Math.max(1, Math.min(12, Number(raw?.startedMonth || 1))),
       startedYear: Math.max(1, Number(raw?.startedYear || 2026)),
       effects: {
-        jobLossChance: Math.max(
-          0,
-          Math.min(1, Number(effectsRaw?.jobLossChance || 0)),
-        ),
-        forcedDowngradeChance: Math.max(
-          0,
-          Math.min(1, Number(effectsRaw?.forcedDowngradeChance || 0)),
-        ),
-        payCutPercent: Math.max(
-          0,
-          Math.min(0.9, Number(effectsRaw?.payCutPercent || 0)),
-        ),
-        monthlyStockShock: Math.max(
-          -0.7,
-          Math.min(0.7, Number(effectsRaw?.monthlyStockShock || 0)),
-        ),
-        essentialCostIncreasePercent: Math.max(
-          0,
-          Math.min(0.6, Number(effectsRaw?.essentialCostIncreasePercent || 0)),
-        ),
-        creditDragPerMonth: Math.max(
-          0,
-          Math.min(50, Number(effectsRaw?.creditDragPerMonth || 0)),
-        ),
+        jobLossChance: Math.max(0, Math.min(1, Number(effectsRaw?.jobLossChance || 0))),
+        forcedDowngradeChance: Math.max(0, Math.min(1, Number(effectsRaw?.forcedDowngradeChance || 0))),
+        payCutPercent: Math.max(0, Math.min(0.9, Number(effectsRaw?.payCutPercent || 0))),
+        monthlyStockShock: Math.max(-0.7, Math.min(0.7, Number(effectsRaw?.monthlyStockShock || 0))),
+        essentialCostIncreasePercent: Math.max(0, Math.min(0.6, Number(effectsRaw?.essentialCostIncreasePercent || 0))),
+        creditDragPerMonth: Math.max(0, Math.min(50, Number(effectsRaw?.creditDragPerMonth || 0))),
         jobSearchBlocked: Boolean(effectsRaw?.jobSearchBlocked),
       },
     };
@@ -201,9 +133,7 @@ export class UserService implements OnModuleInit {
   }
 
   private async ensureAdminUserOnStartup() {
-    const adminCount = await this.userStateRepository.count({
-      where: { isAdmin: true },
-    });
+    const adminCount = await this.userStateRepository.count({ where: { isAdmin: true } });
     if (adminCount > 0) return;
 
     const [firstUser] = await this.userStateRepository.find({
@@ -219,10 +149,7 @@ export class UserService implements OnModuleInit {
 
   private issueSession(userId: string): string {
     const token = `${crypto.randomUUID()}.${crypto.randomUUID().replace(/-/g, '')}`;
-    this.authSessions.set(token, {
-      userId,
-      expiresAt: Date.now() + SESSION_TTL_MS,
-    });
+    this.authSessions.set(token, { userId, expiresAt: Date.now() + SESSION_TTL_MS });
     return token;
   }
 
@@ -235,9 +162,7 @@ export class UserService implements OnModuleInit {
     return token;
   }
 
-  private async getAuthenticatedUser(
-    authorization?: string,
-  ): Promise<UserStateEntity> {
+  private async getAuthenticatedUser(authorization?: string): Promise<UserStateEntity> {
     const token = this.parseBearerToken(authorization);
     const session = this.authSessions.get(token);
     if (!session) throw new UnauthorizedException('Invalid session');
@@ -247,9 +172,7 @@ export class UserService implements OnModuleInit {
       throw new UnauthorizedException('Session expired');
     }
 
-    const user = await this.userStateRepository.findOne({
-      where: { id: session.userId },
-    });
+    const user = await this.userStateRepository.findOne({ where: { id: session.userId } });
     if (!user) {
       this.authSessions.delete(token);
       throw new UnauthorizedException('Session is no longer valid');
@@ -258,9 +181,7 @@ export class UserService implements OnModuleInit {
     return user;
   }
 
-  private async assertAdminSession(
-    authorization?: string,
-  ): Promise<UserStateEntity> {
+  private async assertAdminSession(authorization?: string): Promise<UserStateEntity> {
     const user = await this.getAuthenticatedUser(authorization);
     if (!user.isAdmin) {
       throw new ForbiddenException('Admin privileges required');
@@ -274,10 +195,10 @@ export class UserService implements OnModuleInit {
   ): Partial<GameState> {
     const { name: _legacyName, ...stateWithoutName } = state;
     const resolvedName = String(
-      stateWithoutName.username ||
-        stateWithoutName.currentUser ||
-        usernameFallback ||
-        'Player',
+      stateWithoutName.username
+      || stateWithoutName.currentUser
+      || usernameFallback
+      || 'Player',
     );
     // Rebuild a complete shape from defaults + saved fields so omitted keys still exist at runtime.
     return {
@@ -303,13 +224,8 @@ export class UserService implements OnModuleInit {
     return persistedState;
   }
 
-  private toGameSnapshot(
-    entity: UserStateEntity,
-    authToken?: string,
-  ): Partial<GameState> & { id: string } {
-    const resolvedName = String(
-      entity.username || (entity.state as any)?.currentUser || 'Player',
-    );
+  private toGameSnapshot(entity: UserStateEntity, authToken?: string): Partial<GameState> & { id: string } {
+    const resolvedName = String(entity.username || (entity.state as any)?.currentUser || 'Player');
     const snapshot: Partial<GameState> & { id: string } = {
       ...(entity.state || {}),
       username: entity.username,
@@ -325,13 +241,8 @@ export class UserService implements OnModuleInit {
     return snapshot;
   }
 
-  private toHydratedGameSnapshot(
-    entity: UserStateEntity,
-  ): Partial<GameState> & { id: string } {
-    const hydratedState = this.buildHydratedState(
-      entity.state || {},
-      entity.username,
-    );
+  private toHydratedGameSnapshot(entity: UserStateEntity): Partial<GameState> & { id: string } {
+    const hydratedState = this.buildHydratedState(entity.state || {}, entity.username);
     return {
       ...hydratedState,
       username: entity.username,
@@ -341,16 +252,11 @@ export class UserService implements OnModuleInit {
     };
   }
 
-  private async normalizeLegacyFinancialState(
-    entity: UserStateEntity,
-  ): Promise<UserStateEntity> {
+  private async normalizeLegacyFinancialState(entity: UserStateEntity): Promise<UserStateEntity> {
     const currentState = { ...(entity.state || {}) } as Record<string, any>;
     let changed = false;
 
-    const normalizeMoney = (
-      key: 'check' | 'savings' | 'debt',
-      options?: { absolute?: boolean; min?: number },
-    ) => {
+    const normalizeMoney = (key: 'check' | 'savings' | 'debt', options?: { absolute?: boolean; min?: number }) => {
       const raw = Number(currentState[key] ?? 0);
       let next = Number.isFinite(raw) ? raw : 0;
       if (options?.absolute) next = Math.abs(next);
@@ -382,24 +288,11 @@ export class UserService implements OnModuleInit {
     return this.userStateRepository.save(entity);
   }
 
-  private toAdminUserSummary(
-    entity: UserStateEntity,
-    isPrimaryAdminLocked = false,
-  ) {
+  private toAdminUserSummary(entity: UserStateEntity, isPrimaryAdminLocked = false) {
     const state = entity.state || {};
-    const credentials = Array.isArray((state as any).credentials)
-      ? (state as any).credentials
-      : [];
-    const educationPriority = [
-      'PhD',
-      'Masters Degree',
-      'Bachelors Degree',
-      'Trade Cert',
-      'HS Diploma',
-    ];
-    const educationLevel =
-      educationPriority.find((label) => credentials.includes(label)) ||
-      'No Degree';
+    const credentials = Array.isArray((state as any).credentials) ? (state as any).credentials : [];
+    const educationPriority = ['PhD', 'Masters Degree', 'Bachelors Degree', 'Trade Cert', 'HS Diploma'];
+    const educationLevel = educationPriority.find((label) => credentials.includes(label)) || 'No Degree';
     const checking = Number(state.check || 0);
     const savings = Number(state.savings || 0);
     const debt = Number(state.debt || 0);
@@ -410,16 +303,13 @@ export class UserService implements OnModuleInit {
           const prices = (state as any).marketPrices || {};
           const price = Number(prices[ticker] || 0);
           if (!Number.isFinite(shares) || !Number.isFinite(price)) return sum;
-          return sum + shares * price;
+          return sum + (shares * price);
         }, 0)
       : 0;
-    const netWorth =
-      Math.round((checking + savings + stockValue - debt) * 100) / 100;
+    const netWorth = Math.round((checking + savings + stockValue - debt) * 100) / 100;
     const pandemicHistoryMonths = (() => {
       const monthKeys = new Set<string>();
-      const logs = Array.isArray((state as any).logs)
-        ? (state as any).logs
-        : [];
+      const logs = Array.isArray((state as any).logs) ? (state as any).logs : [];
       for (const entry of logs) {
         if (!this.hasPandemicKeyword(entry?.msg)) continue;
         const date = String(entry?.date || '').trim();
@@ -430,10 +320,9 @@ export class UserService implements OnModuleInit {
         ? (state as any).eventHistory
         : [];
       for (const event of eventHistory) {
-        const looksPandemic =
-          this.hasPandemicKeyword(event?.title) ||
-          this.hasPandemicKeyword(event?.desc) ||
-          this.hasPandemicKeyword(event?.message);
+        const looksPandemic = this.hasPandemicKeyword(event?.title)
+          || this.hasPandemicKeyword(event?.desc)
+          || this.hasPandemicKeyword(event?.message);
         if (!looksPandemic) continue;
         const month = Number(event?.month || 0);
         const year = Number(event?.year || 0);
@@ -441,10 +330,7 @@ export class UserService implements OnModuleInit {
       }
 
       const activeHistoricalEvent = (state as any).historicalEconomicEvent;
-      const activeMonthsRemaining = Math.max(
-        0,
-        Number(activeHistoricalEvent?.monthsRemaining || 0),
-      );
+      const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
       if (activeMonthsRemaining > 0) {
         const month = Number((state as any).month || 0);
         const year = Number((state as any).year || 0);
@@ -454,13 +340,8 @@ export class UserService implements OnModuleInit {
       return monthKeys.size;
     })();
     const activeHistoricalEvent = (state as any).historicalEconomicEvent;
-    const activeMonthsRemaining = Math.max(
-      0,
-      Number(activeHistoricalEvent?.monthsRemaining || 0),
-    );
-    const isPandemicHistoricalEvent =
-      activeMonthsRemaining > 0 ||
-      this.isPandemicHistoricalEvent(activeHistoricalEvent);
+    const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
+    const isPandemicHistoricalEvent = activeMonthsRemaining > 0 || this.isPandemicHistoricalEvent(activeHistoricalEvent);
 
     return {
       id: entity.id,
@@ -483,31 +364,18 @@ export class UserService implements OnModuleInit {
         jobBase: Number((state as any).job?.base || 0),
         educationLevel,
         credentialsCount: credentials.length,
-        activeEducation: (state as any).activeEdu
-          ? String((state as any).activeEdu)
-          : null,
+        activeEducation: (state as any).activeEdu ? String((state as any).activeEdu) : null,
         transitLevel: Number((state as any).transit?.level || 0),
         creditScore: Number((state as any).credit || 0),
         happiness: Number((state as any).happiness || 0),
         netWorth,
         pandemicHistoryMonths,
         isPandemicHistoricalEvent,
-        historicalEventId: String(
-          (state as any).historicalEconomicEvent?.id || '',
-        ),
-        historicalEventEra: String(
-          (state as any).historicalEconomicEvent?.era || '',
-        ),
-        historicalEventTitle: String(
-          (state as any).historicalEconomicEvent?.title || '',
-        ),
-        historicalEventMonthsRemaining: Math.max(
-          0,
-          Number((state as any).historicalEconomicEvent?.monthsRemaining || 0),
-        ),
-        historicalEventResetNextMonth: Boolean(
-          (state as any).historicalEventResetNextMonth,
-        ),
+        historicalEventId: String((state as any).historicalEconomicEvent?.id || ''),
+        historicalEventEra: String((state as any).historicalEconomicEvent?.era || ''),
+        historicalEventTitle: String((state as any).historicalEconomicEvent?.title || ''),
+        historicalEventMonthsRemaining: Math.max(0, Number((state as any).historicalEconomicEvent?.monthsRemaining || 0)),
+        historicalEventResetNextMonth: Boolean((state as any).historicalEventResetNextMonth),
       },
       updatedAt: entity.updatedAt,
     };
@@ -523,19 +391,13 @@ export class UserService implements OnModuleInit {
     const trimmedUsername = String(username || '').trim();
     if (!trimmedUsername) throw new BadRequestException('Username is required');
     if (!USERNAME_CREATE_REGEX.test(trimmedUsername)) {
-      throw new BadRequestException(
-        'Username is invalid. Use letters and numbers only (A-Z, a-z, 0-9), with no spaces or special characters',
-      );
+      throw new BadRequestException('Username is invalid. Use letters and numbers only (A-Z, a-z, 0-9), with no spaces or special characters');
     }
     if (!password || !PASSWORD_COMPLEXITY_REGEX.test(password)) {
-      throw new BadRequestException(
-        'Password must be at least 8 characters and include 1 number and 1 symbol',
-      );
+      throw new BadRequestException('Password must be at least 8 characters and include 1 number and 1 symbol');
     }
 
-    const existing = await this.userStateRepository.findOne({
-      where: { username: trimmedUsername },
-    });
+    const existing = await this.userStateRepository.findOne({ where: { username: trimmedUsername } });
     if (existing) throw new ConflictException('User already exists');
 
     const existingUsersCount = await this.userStateRepository.count();
@@ -564,9 +426,7 @@ export class UserService implements OnModuleInit {
     if (!trimmedUsername) throw new BadRequestException('Username is required');
     if (!password) throw new BadRequestException('Password is required');
 
-    const user = await this.userStateRepository.findOne({
-      where: { username: trimmedUsername },
-    });
+    const user = await this.userStateRepository.findOne({ where: { username: trimmedUsername } });
     if (!user) {
       throw new UnauthorizedException('Invalid username or password');
     }
@@ -592,9 +452,7 @@ export class UserService implements OnModuleInit {
   /**
    * Get user by id
    */
-  async getUserById(
-    id: string,
-  ): Promise<(Partial<GameState> & { id: string }) | null> {
+  async getUserById(id: string): Promise<(Partial<GameState> & { id: string }) | null> {
     const user = await this.userStateRepository.findOne({ where: { id } });
     if (!user) return null;
     const normalizedUser = await this.normalizeLegacyFinancialState(user);
@@ -611,10 +469,7 @@ export class UserService implements OnModuleInit {
     const user = await this.userStateRepository.findOne({ where: { id } });
     if (!user) return null;
 
-    const { _append, ...directUpdates } = (updateData || {}) as Record<
-      string,
-      any
-    >;
+    const { _append, ...directUpdates } = (updateData || {}) as Record<string, any>;
     const currentState = {
       ...(user.state || {}),
     } as Record<string, any>;
@@ -642,16 +497,12 @@ export class UserService implements OnModuleInit {
   /**
    * Advance one month in the game
    */
-  async processMonth(
-    id: string,
-  ): Promise<(Partial<GameState> & { id: string }) | null> {
+  async processMonth(id: string): Promise<(Partial<GameState> & { id: string }) | null> {
     const user = await this.userStateRepository.findOne({ where: { id } });
     if (!user) return null;
 
     const hydratedUser = this.toHydratedGameSnapshot(user);
-    const newState = await this.gameService.processMonth(
-      hydratedUser as Partial<GameState>,
-    );
+    const newState = await this.gameService.processMonth(hydratedUser as Partial<GameState>);
     return this.updateUser(id, newState);
   }
 
@@ -677,33 +528,21 @@ export class UserService implements OnModuleInit {
    * List all users
    */
   async listAllUsers(): Promise<Array<Partial<GameState> & { id: string }>> {
-    const users = await this.userStateRepository.find({
-      order: { updatedAt: 'DESC' },
-    });
-    const normalizedUsers = await Promise.all(
-      users.map((user) => this.normalizeLegacyFinancialState(user)),
-    );
+    const users = await this.userStateRepository.find({ order: { updatedAt: 'DESC' } });
+    const normalizedUsers = await Promise.all(users.map((user) => this.normalizeLegacyFinancialState(user)));
     return normalizedUsers.map((user) => this.toGameSnapshot(user));
   }
 
-  async listUsersForAdmin(
-    authorization?: string,
-  ): Promise<Array<ReturnType<UserService['toAdminUserSummary']>>> {
+  async listUsersForAdmin(authorization?: string): Promise<Array<ReturnType<UserService['toAdminUserSummary']>>> {
     await this.assertAdminSession(authorization);
-    const users = await this.userStateRepository.find({
-      order: { createdAt: 'ASC' },
-    });
-    const normalizedUsers = await Promise.all(
-      users.map((user) => this.normalizeLegacyFinancialState(user)),
-    );
+    const users = await this.userStateRepository.find({ order: { createdAt: 'ASC' } });
+    const normalizedUsers = await Promise.all(users.map((user) => this.normalizeLegacyFinancialState(user)));
     const [firstUser] = await this.userStateRepository.find({
       order: { createdAt: 'ASC' },
       take: 1,
     });
     const firstUserId = firstUser?.id || null;
-    return normalizedUsers.map((user) =>
-      this.toAdminUserSummary(user, user.id === firstUserId),
-    );
+    return normalizedUsers.map((user) => this.toAdminUserSummary(user, user.id === firstUserId));
   }
 
   async adminUpdateUser(
@@ -752,12 +591,9 @@ export class UserService implements OnModuleInit {
     await this.assertAdminSession(authorization);
 
     const normalizedTargetId = String(targetUserId || '').trim();
-    if (!normalizedTargetId)
-      throw new BadRequestException('Target user id is required');
+    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
 
-    const user = await this.userStateRepository.findOne({
-      where: { id: normalizedTargetId },
-    });
+    const user = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
     if (!user) throw new BadRequestException('Target user not found');
 
     const [firstUser] = await this.userStateRepository.find({
@@ -769,33 +605,26 @@ export class UserService implements OnModuleInit {
     const nextState = { ...(user.state || {}) } as Record<string, any>;
     if (changes.checking !== undefined) {
       const checking = Number(changes.checking);
-      if (!Number.isFinite(checking))
-        throw new BadRequestException('Invalid checking value');
+      if (!Number.isFinite(checking)) throw new BadRequestException('Invalid checking value');
       nextState.check = checking;
     }
     if (changes.savings !== undefined) {
       const savings = Number(changes.savings);
-      if (!Number.isFinite(savings))
-        throw new BadRequestException('Invalid savings value');
+      if (!Number.isFinite(savings)) throw new BadRequestException('Invalid savings value');
       nextState.savings = savings;
     }
     if (changes.debt !== undefined) {
       const debt = Number(changes.debt);
-      if (!Number.isFinite(debt) || debt < 0)
-        throw new BadRequestException('Invalid debt value');
+      if (!Number.isFinite(debt) || debt < 0) throw new BadRequestException('Invalid debt value');
       nextState.debt = debt;
     }
     if (changes.isAdmin !== undefined) {
       const nextIsAdmin = Boolean(changes.isAdmin);
       if (user.id === firstUserId && !nextIsAdmin) {
-        throw new ForbiddenException(
-          'The first user in the database must remain an admin',
-        );
+        throw new ForbiddenException('The first user in the database must remain an admin');
       }
       if (user.isAdmin && !nextIsAdmin) {
-        const adminCount = await this.userStateRepository.count({
-          where: { isAdmin: true },
-        });
+        const adminCount = await this.userStateRepository.count({ where: { isAdmin: true } });
         if (adminCount <= 1) {
           throw new ForbiddenException('Cannot remove the last admin');
         }
@@ -807,9 +636,7 @@ export class UserService implements OnModuleInit {
       const username = String(changes.username || '').trim();
       if (!username) throw new BadRequestException('Username is required');
 
-      const usernameOwner = await this.userStateRepository.findOne({
-        where: { username },
-      });
+      const usernameOwner = await this.userStateRepository.findOne({ where: { username } });
       if (usernameOwner && usernameOwner.id !== user.id) {
         throw new ConflictException('Username is already taken');
       }
@@ -820,9 +647,7 @@ export class UserService implements OnModuleInit {
     if (changes.password !== undefined) {
       const password = String(changes.password || '');
       if (!PASSWORD_COMPLEXITY_REGEX.test(password)) {
-        throw new BadRequestException(
-          'Password must be at least 8 characters and include 1 number and 1 symbol',
-        );
+        throw new BadRequestException('Password must be at least 8 characters and include 1 number and 1 symbol');
       }
       user.passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
     }
@@ -830,30 +655,21 @@ export class UserService implements OnModuleInit {
     if (changes.jobTitle !== undefined) {
       const requestedTitle = String(changes.jobTitle || '').trim();
       if (!requestedTitle) {
-        throw new BadRequestException(
-          'Job title is required when assigning a job',
-        );
+        throw new BadRequestException('Job title is required when assigning a job');
       }
-      const selectedJob = jobBoard.find(
-        (job: any) => String(job?.title || '') === requestedTitle,
-      );
+      const selectedJob = jobBoard.find((job: any) => String(job?.title || '') === requestedTitle);
       if (!selectedJob) {
         throw new BadRequestException('Invalid job title');
       }
 
       const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
       const year = Math.max(1, Number(nextState.year || 2026));
-      const priorJob =
-        nextState.job && typeof nextState.job === 'object'
-          ? nextState.job
-          : null;
+      const priorJob = nextState.job && typeof nextState.job === 'object' ? nextState.job : null;
       const priorTitle = String(priorJob?.title || '').trim();
       const priorTenure = Math.max(0, Number(nextState.tenure || 0));
 
       if (priorTitle && priorTitle !== requestedTitle) {
-        const careerHistory = Array.isArray(nextState.careerHistory)
-          ? [...nextState.careerHistory]
-          : [];
+        const careerHistory = Array.isArray(nextState.careerHistory) ? [...nextState.careerHistory] : [];
         careerHistory.unshift({
           title: priorTitle,
           months: priorTenure,
@@ -887,14 +703,9 @@ export class UserService implements OnModuleInit {
     }
 
     if (changes.economyOverrides !== undefined) {
-      nextState.economyOverrides = this.normalizeEconomyOverrides(
-        changes.economyOverrides,
-      );
+      nextState.economyOverrides = this.normalizeEconomyOverrides(changes.economyOverrides);
       if (changes.economyApplyMonths !== undefined) {
-        nextState.economyOverrideMonthsRemaining = Math.max(
-          0,
-          Math.floor(Number(changes.economyApplyMonths || 0)),
-        );
+        nextState.economyOverrideMonthsRemaining = Math.max(0, Math.floor(Number(changes.economyApplyMonths || 0)));
       }
       const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
       const year = Math.max(1, Number(nextState.year || 2026));
@@ -902,35 +713,24 @@ export class UserService implements OnModuleInit {
       const months = Number(nextState.economyOverrideMonthsRemaining || 0);
       logs.push({
         date: `${month}/${year}`,
-        msg:
-          months > 0
-            ? `📈 Admin economy controls applied for ${months} month${months === 1 ? '' : 's'}.`
-            : '📈 Admin economy controls saved (persistent until changed).',
+        msg: months > 0
+          ? `📈 Admin economy controls applied for ${months} month${months === 1 ? '' : 's'}.`
+          : '📈 Admin economy controls saved (persistent until changed).',
       });
       nextState.logs = logs;
     } else if (changes.economyApplyMonths !== undefined) {
-      nextState.economyOverrideMonthsRemaining = Math.max(
-        0,
-        Math.floor(Number(changes.economyApplyMonths || 0)),
-      );
+      nextState.economyOverrideMonthsRemaining = Math.max(0, Math.floor(Number(changes.economyApplyMonths || 0)));
     }
 
     if (changes.historicalEconomicEvent !== undefined) {
-      nextState.historicalEconomicEvent = this.normalizeHistoricalEconomicEvent(
-        changes.historicalEconomicEvent,
-      );
+      nextState.historicalEconomicEvent = this.normalizeHistoricalEconomicEvent(changes.historicalEconomicEvent);
       nextState.historicalEventResetNextMonth = false;
       const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
       const year = Math.max(1, Number(nextState.year || 2026));
       const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
       if (nextState.historicalEconomicEvent) {
-        const eventTitle = String(
-          nextState.historicalEconomicEvent.title || 'Historical Event',
-        );
-        const months = Math.max(
-          0,
-          Number(nextState.historicalEconomicEvent.monthsRemaining || 0),
-        );
+        const eventTitle = String(nextState.historicalEconomicEvent.title || 'Historical Event');
+        const months = Math.max(0, Number(nextState.historicalEconomicEvent.monthsRemaining || 0));
         logs.push({
           date: `${month}/${year}`,
           msg: `📚 Admin activated historical scenario: ${eventTitle} (${months} month${months === 1 ? '' : 's'})`,
@@ -945,9 +745,7 @@ export class UserService implements OnModuleInit {
     }
 
     if (changes.historicalEventResetNextMonth !== undefined) {
-      nextState.historicalEventResetNextMonth = Boolean(
-        changes.historicalEventResetNextMonth,
-      );
+      nextState.historicalEventResetNextMonth = Boolean(changes.historicalEventResetNextMonth);
       const month = Math.max(1, Math.min(12, Number(nextState.month || 1)));
       const year = Math.max(1, Number(nextState.year || 2026));
       const logs = Array.isArray(nextState.logs) ? [...nextState.logs] : [];
@@ -966,25 +764,17 @@ export class UserService implements OnModuleInit {
     return this.toAdminUserSummary(saved);
   }
 
-  async adminDeleteUser(
-    authorization: string | undefined,
-    targetUserId: string,
-  ): Promise<boolean> {
+  async adminDeleteUser(authorization: string | undefined, targetUserId: string): Promise<boolean> {
     const actingUser = await this.assertAdminSession(authorization);
 
     const normalizedTargetId = String(targetUserId || '').trim();
-    if (!normalizedTargetId)
-      throw new BadRequestException('Target user id is required');
+    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
 
     if (actingUser.id === normalizedTargetId) {
-      throw new ForbiddenException(
-        'Admin users cannot delete their own account',
-      );
+      throw new ForbiddenException('Admin users cannot delete their own account');
     }
 
-    const user = await this.userStateRepository.findOne({
-      where: { id: normalizedTargetId },
-    });
+    const user = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
     if (!user) return false;
 
     const [firstUser] = await this.userStateRepository.find({
@@ -992,22 +782,16 @@ export class UserService implements OnModuleInit {
       take: 1,
     });
     if (firstUser?.id === user.id) {
-      throw new ForbiddenException(
-        'The first user in the database cannot be removed',
-      );
+      throw new ForbiddenException('The first user in the database cannot be removed');
     }
     if (user.isAdmin) {
-      const adminCount = await this.userStateRepository.count({
-        where: { isAdmin: true },
-      });
+      const adminCount = await this.userStateRepository.count({ where: { isAdmin: true } });
       if (adminCount <= 1) {
         throw new ForbiddenException('Cannot remove the last admin');
       }
     }
 
-    const result = await this.userStateRepository.delete({
-      id: normalizedTargetId,
-    });
+    const result = await this.userStateRepository.delete({ id: normalizedTargetId });
     return Number(result.affected || 0) > 0;
   }
 
@@ -1019,54 +803,33 @@ export class UserService implements OnModuleInit {
     const actingUser = await this.assertAdminSession(authorization);
 
     const normalizedTargetId = String(targetUserId || '').trim();
-    if (!normalizedTargetId)
-      throw new BadRequestException('Target user id is required');
-    if (normalizedTargetId === actingUser.id)
-      throw new BadRequestException('Cannot gift yourself');
+    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
+    if (normalizedTargetId === actingUser.id) throw new BadRequestException('Cannot gift yourself');
 
     const amount = Number(payload?.amount || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException('Gift amount must be a positive number');
     }
 
-    const targetUser = await this.userStateRepository.findOne({
-      where: { id: normalizedTargetId },
-    });
+    const targetUser = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
     if (!targetUser) throw new BadRequestException('Target user not found');
 
     const senderState = { ...(actingUser.state || {}) } as Record<string, any>;
-    const recipientState = { ...(targetUser.state || {}) } as Record<
-      string,
-      any
-    >;
+    const recipientState = { ...(targetUser.state || {}) } as Record<string, any>;
 
-    const senderLedger = Array.isArray(senderState.ledger)
-      ? senderState.ledger
-      : [];
-    const allChecksComplete =
-      senderLedger.length > 0 &&
-      senderLedger.every((entry: any) => Boolean(entry?.done));
+    const senderLedger = Array.isArray(senderState.ledger) ? senderState.ledger : [];
+    const allChecksComplete = senderLedger.length > 0 && senderLedger.every((entry: any) => Boolean(entry?.done));
     if (!allChecksComplete) {
-      throw new ForbiddenException(
-        'Complete all ledger checks before gifting players money',
-      );
+      throw new ForbiddenException('Complete all ledger checks before gifting players money');
     }
 
     const senderChecking = Number(senderState.check || 0);
     if (!Number.isFinite(senderChecking) || senderChecking - amount < 0) {
-      throw new BadRequestException(
-        'Insufficient checking balance to send this gift',
-      );
+      throw new BadRequestException('Insufficient checking balance to send this gift');
     }
 
-    const month = Math.max(
-      1,
-      Math.min(12, Number(senderState.month || recipientState.month || 1)),
-    );
-    const year = Math.max(
-      1,
-      Number(senderState.year || recipientState.year || 2026),
-    );
+    const month = Math.max(1, Math.min(12, Number(senderState.month || recipientState.month || 1)));
+    const year = Math.max(1, Number(senderState.year || recipientState.year || 2026));
     const templateId = String(payload?.templateId || '').trim();
     const templateMessage = ADMIN_GIFT_TEMPLATES[templateId];
     if (!templateMessage) {
@@ -1074,18 +837,14 @@ export class UserService implements OnModuleInit {
     }
 
     senderState.check = Math.round((senderChecking - amount) * 100) / 100;
-    const senderLogs = Array.isArray(senderState.logs)
-      ? [...senderState.logs]
-      : [];
+    const senderLogs = Array.isArray(senderState.logs) ? [...senderState.logs] : [];
     senderLogs.push({
       date: `${month}/${year}`,
       msg: `🎁 You sent $${amount.toFixed(2)} to ${targetUser.username} (${templateMessage}).`,
     });
     senderState.logs = senderLogs;
 
-    const pendingGifts = Array.isArray(recipientState.pendingAdminGifts)
-      ? [...recipientState.pendingAdminGifts]
-      : [];
+    const pendingGifts = Array.isArray(recipientState.pendingAdminGifts) ? [...recipientState.pendingAdminGifts] : [];
     pendingGifts.push({
       amount: Math.round(amount * 100) / 100,
       fromAdminId: actingUser.id,
@@ -1098,9 +857,7 @@ export class UserService implements OnModuleInit {
     });
     recipientState.pendingAdminGifts = pendingGifts;
 
-    const recipientLogs = Array.isArray(recipientState.logs)
-      ? [...recipientState.logs]
-      : [];
+    const recipientLogs = Array.isArray(recipientState.logs) ? [...recipientState.logs] : [];
     recipientLogs.push({
       date: `${month}/${year}`,
       msg: `📨 Admin support gift queued for next month from ${actingUser.username}: +$${amount.toFixed(2)} (${templateMessage}).`,

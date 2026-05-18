@@ -5,9 +5,7 @@ import jobBoard from '../../data/jobBoard.constants';
 @Injectable()
 export class JobService {
   private normalizeCredential(value: any): string {
-    return String(value || '')
-      .trim()
-      .toLowerCase();
+    return String(value || '').trim().toLowerCase();
   }
   private WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
     'Tech Startup Founder': 250000,
@@ -15,12 +13,8 @@ export class JobService {
     Billionaire: 50000000,
   };
 
-  private academyCredentialSet = new Set(
-    academyCourses.map((course) => String(course?.n || '').trim()),
-  );
-  private jobTitleSet = new Set(
-    jobBoard.map((job) => String(job?.title || '').trim()),
-  );
+  private academyCredentialSet = new Set(academyCourses.map((course) => String(course?.n || '').trim()));
+  private jobTitleSet = new Set(jobBoard.map((job) => String(job?.title || '').trim()));
 
   private normalizeEconomyOverrides(raw: any): {
     recessionSeverity: number;
@@ -29,21 +23,11 @@ export class JobService {
   } {
     // jobAvailability is always 100, not event/admin modifiable
     if (!raw || typeof raw !== 'object') {
-      return {
-        recessionSeverity: 0,
-        inflationPressure: 0,
-        jobAvailability: 100,
-      };
+      return { recessionSeverity: 0, inflationPressure: 0, jobAvailability: 100 };
     }
     return {
-      recessionSeverity: Math.max(
-        0,
-        Math.min(100, Math.round(Number(raw?.recessionSeverity || 0))),
-      ),
-      inflationPressure: Math.max(
-        0,
-        Math.min(100, Math.round(Number(raw?.inflationPressure || 0))),
-      ),
+      recessionSeverity: Math.max(0, Math.min(100, Math.round(Number(raw?.recessionSeverity || 0)))),
+      inflationPressure: Math.max(0, Math.min(100, Math.round(Number(raw?.inflationPressure || 0)))),
       jobAvailability: 100,
     };
   }
@@ -56,7 +40,7 @@ export class JobService {
     'SEAL Training': 'Special Forces',
     'Civil Engineering': 'Construction Management',
     'OSHA 10/30': 'OSHA 10/30 Safety Cards',
-    Welding: 'Welder',
+    'Welding': 'Welder',
     'Master Electrician': 'Electrician',
     'Master HVAC': 'HVAC',
     Plumbing: 'Plumbing Design',
@@ -99,7 +83,7 @@ export class JobService {
     'Business Analysis': 'Project Management',
     'Financial Analyst': 'Financial Analysis',
     'Medical Research': 'Medical Laboratory Scientist',
-    Psychology: 'Mental Health Counselor',
+    'Psychology': 'Mental Health Counselor',
     'Artificial Intelligence': 'Data Science',
   };
 
@@ -107,39 +91,18 @@ export class JobService {
 
   private explicitExperienceRequirement(jobTitle: string): any {
     const ladders: Record<string, { roles: string[]; minMonths: number }> = {
-      Pilot: {
-        roles: ['Air Traffic Controller', 'Military Pilot'],
-        minMonths: 24,
-      },
+      'Pilot': { roles: ['Air Traffic Controller', 'Military Pilot'], minMonths: 24 },
       'Airline Pilot': { roles: ['Pilot', 'Military Pilot'], minMonths: 36 },
-      'Military Pilot': {
-        roles: ['Air Force Airman', 'Navy Seaman'],
-        minMonths: 18,
-      },
-      Surgeon: { roles: ['Physician', 'Registered Nurse'], minMonths: 36 },
-      Physician: {
-        roles: ['Registered Nurse', 'Medical Assistant'],
-        minMonths: 36,
-      },
-      Lawyer: { roles: ['Paralegal', 'Court Clerk'], minMonths: 24 },
+      'Military Pilot': { roles: ['Air Force Airman', 'Navy Seaman'], minMonths: 18 },
+      'Surgeon': { roles: ['Physician', 'Registered Nurse'], minMonths: 36 },
+      'Physician': { roles: ['Registered Nurse', 'Medical Assistant'], minMonths: 36 },
+      'Lawyer': { roles: ['Paralegal', 'Court Clerk'], minMonths: 24 },
       'Corporate Lawyer': { roles: ['Lawyer'], minMonths: 48 },
-      'Software Architect': {
-        roles: ['Software Dev', 'Software Tester'],
-        minMonths: 24,
-      },
+      'Software Architect': { roles: ['Software Dev', 'Software Tester'], minMonths: 24 },
       'Data Scientist': { roles: ['Data Analyst'], minMonths: 18 },
-      'AI Researcher': {
-        roles: ['Data Scientist', 'Research Scientist'],
-        minMonths: 18,
-      },
-      'Investment Banker': {
-        roles: ['Financial Analyst', 'Accountant'],
-        minMonths: 18,
-      },
-      'University Professor': {
-        roles: ['Lab Researcher', 'Research Scientist'],
-        minMonths: 36,
-      },
+      'AI Researcher': { roles: ['Data Scientist', 'Research Scientist'], minMonths: 18 },
+      'Investment Banker': { roles: ['Financial Analyst', 'Accountant'], minMonths: 18 },
+      'University Professor': { roles: ['Lab Researcher', 'Research Scientist'], minMonths: 36 },
     };
     return ladders[jobTitle] || null;
   }
@@ -151,13 +114,7 @@ export class JobService {
   private roleFamilyKeywords(title: string): string[] {
     const t = title.toLowerCase();
     if (this.hasAnyKeyword(t, ['pilot', 'air']))
-      return [
-        'pilot',
-        'air traffic controller',
-        'military pilot',
-        'airman',
-        'seaman',
-      ];
+      return ['pilot', 'air traffic controller', 'military pilot', 'airman', 'seaman'];
     if (this.hasAnyKeyword(t, ['doctor', 'surgeon', 'nurse', 'physician']))
       return ['physician', 'nurse', 'medical assistant', 'surgeon'];
     if (this.hasAnyKeyword(t, ['lawyer', 'court', 'legal']))
@@ -165,12 +122,7 @@ export class JobService {
     if (this.hasAnyKeyword(t, ['software', 'data', 'ai', 'architect']))
       return ['software', 'data', 'ai', 'architect', 'developer', 'scientist'];
     if (this.hasAnyKeyword(t, ['finance', 'bank', 'account', 'advisor']))
-      return [
-        'accountant',
-        'financial analyst',
-        'investment banker',
-        'finance',
-      ];
+      return ['accountant', 'financial analyst', 'investment banker', 'finance'];
     if (this.hasAnyKeyword(t, ['engineer', 'architect']))
       return ['engineer', 'architect', 'construction'];
     return [];
@@ -197,25 +149,12 @@ export class JobService {
     const rawReq = String(job?.req || '').trim();
     const rawCertReq = String(job?.certReq || '').trim();
 
-    const aliasedReq = rawReq
-      ? (this.REQUIREMENT_ALIASES[rawReq] ?? rawReq)
-      : '';
-    const aliasedCertReq = rawCertReq
-      ? (this.CERT_ALIASES[rawCertReq] ?? rawCertReq)
-      : '';
+    const aliasedReq = rawReq ? (this.REQUIREMENT_ALIASES[rawReq] ?? rawReq) : '';
+    const aliasedCertReq = rawCertReq ? (this.CERT_ALIASES[rawCertReq] ?? rawCertReq) : '';
 
-    const resolvedReq =
-      aliasedReq && this.academyCredentialSet.has(aliasedReq)
-        ? aliasedReq
-        : null;
-    const roleReqFromReq =
-      aliasedReq && !resolvedReq && this.jobTitleSet.has(aliasedReq)
-        ? aliasedReq
-        : null;
-    const resolvedCertReq =
-      aliasedCertReq && this.academyCredentialSet.has(aliasedCertReq)
-        ? aliasedCertReq
-        : null;
+    const resolvedReq = aliasedReq && this.academyCredentialSet.has(aliasedReq) ? aliasedReq : null;
+    const roleReqFromReq = aliasedReq && !resolvedReq && this.jobTitleSet.has(aliasedReq) ? aliasedReq : null;
+    const resolvedCertReq = aliasedCertReq && this.academyCredentialSet.has(aliasedCertReq) ? aliasedCertReq : null;
 
     return {
       resolvedReq,
@@ -227,9 +166,7 @@ export class JobService {
   getRoleExperienceMonths(state: any, roleTitle: string): number {
     let months = 0;
     if (state.job?.title === roleTitle) months += state.tenure || 0;
-    const history = Array.isArray(state.careerHistory)
-      ? state.careerHistory
-      : [];
+    const history = Array.isArray(state.careerHistory) ? state.careerHistory : [];
     for (const role of history) {
       if (role?.title === roleTitle) {
         months += Number(role?.months || 0);
@@ -240,8 +177,7 @@ export class JobService {
 
   private titleSeed(title: string): number {
     let h = 0;
-    for (let i = 0; i < title.length; i += 1)
-      h = (h * 31 + title.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < title.length; i += 1) h = (h * 31 + title.charCodeAt(i)) >>> 0;
     return h;
   }
 
@@ -250,7 +186,7 @@ export class JobService {
     return portfolio.reduce((sum: number, holding: any) => {
       const shares = Number(holding?.shares || 0);
       const avgCost = Number(holding?.avgCost || 0);
-      return sum + shares * avgCost;
+      return sum + (shares * avgCost);
     }, 0);
   }
 
@@ -265,9 +201,7 @@ export class JobService {
   }
 
   private estimateRealEstateEquity(state: any): number {
-    const properties = Array.isArray(state?.investmentProperties)
-      ? state.investmentProperties
-      : [];
+    const properties = Array.isArray(state?.investmentProperties) ? state.investmentProperties : [];
     return properties.reduce((sum: number, property: any) => {
       const value = Number(property?.propertyValue || 0);
       const loan = Number(property?.loanBalance || 0);
@@ -306,16 +240,13 @@ export class JobService {
     if (!targetTitle) return -1;
 
     const sameTrack = jobBoard
-      .filter(
-        (candidate: any) =>
-          String(candidate?.cat || '').trim() === targetCat &&
-          String(candidate?.subcat || '').trim() === targetSubcat,
+      .filter((candidate: any) =>
+        String(candidate?.cat || '').trim() === targetCat
+        && String(candidate?.subcat || '').trim() === targetSubcat,
       )
       .sort((a: any, b: any) => Number(a?.base || 0) - Number(b?.base || 0));
 
-    return sameTrack.findIndex(
-      (candidate: any) => String(candidate?.title || '').trim() === targetTitle,
-    );
+    return sameTrack.findIndex((candidate: any) => String(candidate?.title || '').trim() === targetTitle);
   }
 
   private inferTrackExperienceMonths(job: any): number {
@@ -336,67 +267,36 @@ export class JobService {
       Number(job?.capacity || 0),
       Number(inferredCapacity || 1),
     );
-    const demandMultiplier = Math.max(
-      0.35,
-      Math.min(
-        1.9,
-        1 * // jobAvailability is always 100, so this is 1
-          (1 - economy.recessionSeverity * 0.004) *
-          (1 - economy.inflationPressure * 0.0015),
-      ),
-    );
-    const dynamicCapacity = Math.max(
-      1,
-      Math.round(baseCapacity * demandMultiplier),
-    );
+    const demandMultiplier = Math.max(0.35, Math.min(1.9,
+      (1) // jobAvailability is always 100, so this is 1
+      * (1 - economy.recessionSeverity * 0.004)
+      * (1 - economy.inflationPressure * 0.0015),
+    ));
+    const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier));
     const cityUsers = Math.max(1, Number(state?.cityUserCount || 1));
 
-    const storedCapacity = Math.max(
-      1,
-      Number(slot?.capacity || 0),
-      dynamicCapacity,
-    );
+    const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity);
     const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68);
-    const occupiedRatio =
-      storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75;
-    const salaryPressure = Math.max(
-      0,
-      Math.min(0.2, (Number(job.base || 0) - 4000) / 40000),
-    );
+    const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75;
+    const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000));
     const month = Number(state?.month || 1);
     const year = Number(state?.year || 2026);
     const monthlyPulseSeed = this.titleSeed(`${job.title}-${month}-${year}`);
     const monthlyPulse = ((monthlyPulseSeed % 9) - 4) / 100;
     const cityCompetitionPressure = (() => {
       const extraUsers = Math.max(0, cityUsers - 1);
-      if ((job.cat || 'Pro') === 'Entry')
-        return Math.min(0.05, extraUsers * 0.01);
+      if ((job.cat || 'Pro') === 'Entry') return Math.min(0.05, extraUsers * 0.01);
       return Math.min(0.28, 0.03 + extraUsers * 0.025);
     })();
-    const macroPressure = Math.max(
-      0,
-      Math.min(
-        0.35,
-        economy.recessionSeverity * 0.003 + economy.inflationPressure * 0.0018,
-        // jobAvailability is always 100, so this term is always 0
-        // - (economy.jobAvailability - 100) * 0.0015
-      ),
-    );
-    const marketPressure = Math.max(
-      0,
-      Math.min(
-        0.45,
-        salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure,
-      ),
-    );
-    const pressuredRatio = Math.max(
-      0.6,
-      Math.min(0.98, occupiedRatio + marketPressure),
-    );
-    const dynamicOccupied = Math.min(
-      dynamicCapacity,
-      Math.max(0, Math.round(dynamicCapacity * pressuredRatio)),
-    );
+    const macroPressure = Math.max(0, Math.min(0.35,
+      economy.recessionSeverity * 0.003
+      + economy.inflationPressure * 0.0018
+      // jobAvailability is always 100, so this term is always 0
+      // - (economy.jobAvailability - 100) * 0.0015
+    ));
+    const marketPressure = Math.max(0, Math.min(0.45, salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure));
+    const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure));
+    const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * pressuredRatio)));
 
     return Math.max(0, dynamicCapacity - dynamicOccupied);
   }
@@ -407,65 +307,38 @@ export class JobService {
     const resolvedCertReq = normalized.resolvedCertReq;
     const roleReqFromReq = normalized.roleReqFromReq;
 
-    const credentials = Array.isArray(state?.credentials)
-      ? state.credentials
-      : [];
+    const credentials = Array.isArray(state?.credentials) ? state.credentials : [];
     const normalizedCredentials = new Set(
-      credentials
-        .map((value: any) => this.normalizeCredential(value))
-        .filter(Boolean),
+      credentials.map((value: any) => this.normalizeCredential(value)).filter(Boolean),
     );
-    const educationMet =
-      !resolvedReq ||
-      normalizedCredentials.has(this.normalizeCredential(resolvedReq));
-    const certificationMet =
-      !resolvedCertReq ||
-      normalizedCredentials.has(this.normalizeCredential(resolvedCertReq));
+    const educationMet = !resolvedReq || normalizedCredentials.has(this.normalizeCredential(resolvedReq));
+    const certificationMet = !resolvedCertReq || normalizedCredentials.has(this.normalizeCredential(resolvedCertReq));
     const transitMet = state.transit.level >= job.tReq;
     const netWorth = this.computeNetWorth(state);
-    const wealthRequirement = Number(
-      this.WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0,
-    );
+    const wealthRequirement = Number(this.WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0);
     const wealthMet = wealthRequirement <= 0 || netWorth >= wealthRequirement;
     const openings = this.getJobOpenings(state, job);
     const capacityMet = openings > 0;
 
     let experienceMet = true;
     let experienceDetail = '';
-    if (
-      job.expReq &&
-      Array.isArray(job.expReq.roles) &&
-      job.expReq.roles.length > 0
-    ) {
+    if (job.expReq && Array.isArray(job.expReq.roles) && job.expReq.roles.length > 0) {
       const reqMonths = job.expReq.minMonths || 0;
-      const actualMonths = job.expReq.roles.reduce(
-        (max: number, role: string) => {
-          return Math.max(max, this.getRoleExperienceMonths(state, role));
-        },
-        0,
-      );
+      const actualMonths = job.expReq.roles.reduce((max: number, role: string) => {
+        return Math.max(max, this.getRoleExperienceMonths(state, role));
+      }, 0);
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months`;
     } else if (roleReqFromReq) {
-      const explicit = this.explicitExperienceRequirement(
-        String(job?.title || ''),
-      );
-      const reqMonths = Number(
-        explicit?.minMonths || this.inferTrackExperienceMonths(job),
-      );
+      const explicit = this.explicitExperienceRequirement(String(job?.title || ''));
+      const reqMonths = Number(explicit?.minMonths || this.inferTrackExperienceMonths(job));
       const actualMonths = this.getRoleExperienceMonths(state, roleReqFromReq);
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months in ${roleReqFromReq}`;
     }
 
     return {
-      canApply:
-        educationMet &&
-        certificationMet &&
-        transitMet &&
-        experienceMet &&
-        capacityMet &&
-        wealthMet,
+      canApply: educationMet && certificationMet && transitMet && experienceMet && capacityMet && wealthMet,
       educationMet,
       certificationMet,
       transitMet,
@@ -484,16 +357,10 @@ export class JobService {
   initializeJobMarket(jobs: any[]): Record<string, any> {
     const market: Record<string, any> = {};
     for (const job of jobs) {
-      const capacity = Math.max(
-        1,
-        Number(job?.capacity ?? this.inferBaseCapacity(job)),
-      );
+      const capacity = Math.max(1, Number(job?.capacity ?? this.inferBaseCapacity(job)));
       market[job.title] = {
         capacity,
-        occupied: Math.min(
-          capacity - 1,
-          Math.max(0, Math.floor(capacity * 0.68)),
-        ),
+        occupied: Math.min(capacity - 1, Math.max(0, Math.floor(capacity * 0.68))),
       };
     }
     return market;

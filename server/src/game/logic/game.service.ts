@@ -29,11 +29,10 @@ export class GameService {
   getInitialState(): Partial<GameState> {
     const defaultJob = { title: 'Odd Jobs', base: 600, tReq: 1, odds: 1 };
     const defaultCity = cityData[3]; // Chicago
-    const entertainmentDefaults =
-      this.entertainmentService.comfortableEntertainmentDefaults(
-        defaultJob,
-        defaultCity,
-      );
+    const entertainmentDefaults = this.entertainmentService.comfortableEntertainmentDefaults(
+      defaultJob,
+      defaultCity,
+    );
 
     return {
       check: 1200.0,
@@ -95,8 +94,7 @@ export class GameService {
       vehicleHistory: [],
       house: { model: null, level: 0, value: 0 },
       inventory: [],
-      realEstateMarket:
-        this.realEstateService.initializeRealEstateMarket().market,
+      realEstateMarket: this.realEstateService.initializeRealEstateMarket().market,
       realEstateMarketMeta: this.realEstateService.defaultRealEstateMeta(),
       investmentProperties: [],
       pendingRealEstateDeals: [],
@@ -155,9 +153,7 @@ export class GameService {
     );
 
     // Calculate interest on savings
-    const savingsInterest = this.creditService.calculateSavingsInterest(
-      state.savings || 0,
-    );
+    const savingsInterest = this.creditService.calculateSavingsInterest(state.savings || 0);
     const debtInterest = this.creditService.calculateDebtInterest(
       state.debt || 0,
       this.creditService.calculateDynamicAPR(state.credit || 600),

@@ -11,4 +11,4 @@ export type GameValues = {
   // Financial rates (annual)
   loanAPR: number; // Annual percentage rate for loans (decimal)
   hysaAPR: number; // Annual percentage yield for savings (decimal)
-};
+}

@@ -7,12 +7,7 @@ import { UserModule } from './users/user.module';
 import { GameModule } from './game/game.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    DatabaseModule,
-    UserModule,
-    GameModule,
-  ],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, UserModule, GameModule],
   controllers: [AppController],
   providers: [AppService],
 })

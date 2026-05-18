@@ -18,18 +18,21 @@ describe('AppController (e2e)', () => {
   });
 
   afterEach(async () => {
-    const dataSource = app.get(DataSource, { strict: false });
-    if (dataSource?.isInitialized) {
-      await dataSource.destroy();
-    }
+  const dataSource = app.get(DataSource, { strict: false })
+  if (dataSource?.isInitialized) {
+    await dataSource.destroy()
+  }
     await app.close();
   });
 
   it('/ (GET)', () => {
-    return request(app.getHttpServer()).get('/').expect(200).expect({
-      message: 'Hello World!!',
-      routes: [],
-    });
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect({
+        message: 'Hello World!!',
+        routes: [],
+      });
   });
 
   it('/game/stocks/advance (POST)', async () => {
@@ -86,18 +89,11 @@ describe('AppController (e2e)', () => {
     expect(typeof response.body.registeredUsers).toBe('number');
     expect(response.body.marketCapsByTicker).toBeDefined();
     expect(response.body.floatSharesByTicker).toBeDefined();
-    expect(Number(response.body.marketCapsByTicker.AAPL || 0)).toBeGreaterThan(
-      0,
-    );
-    expect(Number(response.body.floatSharesByTicker.AAPL || 0)).toBeGreaterThan(
-      0,
-    );
+    expect(Number(response.body.marketCapsByTicker.AAPL || 0)).toBeGreaterThan(0);
+    expect(Number(response.body.floatSharesByTicker.AAPL || 0)).toBeGreaterThan(0);
     expect(response.body.economyOverrides?.nextMonthStockShock).toBe(0);
 
-    const last =
-      response.body.marketPriceHistory[
-        response.body.marketPriceHistory.length - 1
-      ];
+    const last = response.body.marketPriceHistory[response.body.marketPriceHistory.length - 1];
     expect(last.month).toBe(1);
     expect(last.year).toBe(2027);
   });
