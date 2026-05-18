@@ -6,6 +6,28 @@ import jobBoard from '../../data/jobBoard.constants';
 export class ApplicationService {
   constructor(private readonly jobService: JobService) {}
 
+  private isDecisionDue(decisionMonth: number, decisionYear: number, currentMonth: number, currentYear: number): boolean {
+    if (decisionYear < currentYear) return true;
+    if (decisionYear > currentYear) return false;
+    return decisionMonth <= currentMonth;
+  }
+
+  getJobEligibilityMap(state: any, jobTitles?: string[]): { eligibilities: Record<string, any> } {
+    const requestedTitles = Array.isArray(jobTitles)
+      ? Array.from(new Set(jobTitles.map((title: any) => String(title || '').trim()).filter(Boolean)))
+      : [];
+    const jobs = (requestedTitles.length > 0 ? requestedTitles : jobBoard.map((job: any) => String(job?.title || '').trim()))
+      .map((title) => jobBoard.find((job: any) => String(job?.title || '').trim() === title))
+      .filter(Boolean);
+
+    const eligibilities = jobs.reduce((acc: Record<string, any>, job: any) => {
+      acc[job.title] = this.jobService.getJobEligibility(state, job);
+      return acc;
+    }, {});
+
+    return { eligibilities };
+  }
+
   private scoreApplication(state: any, job: any): number {
     let score = 50;
     const eligibility = this.jobService.getJobEligibility(state, job);
@@ -139,6 +161,42 @@ export class ApplicationService {
     return { applications, logs, logEntries, applied: true };
   }
 
+  unapplyForJob(state: any, jobTitle: string): {
+    applications: any[];
+    logs: any[];
+    logEntries: any[];
+    unapplied: boolean;
+    reason?: string;
+  } {
+    const title = String(jobTitle || '').trim();
+    const applications = Array.isArray(state?.applications)
+      ? state.applications.map((app: any) => ({ ...app }))
+      : [];
+    const logs = Array.isArray(state?.logs) ? [...state.logs] : [];
+    const logEntries: any[] = [];
+
+    if (!title) {
+      return { applications, logs, logEntries, unapplied: false, reason: 'invalid-job' };
+    }
+
+    const pendingIndex = applications.findIndex(
+      (app: any) => app?.job?.title === title && String(app?.status || '') === 'pending',
+    );
+
+    if (pendingIndex < 0) {
+      const entry = { date: `${state?.month || 0}/${state?.year || 0}`, msg: `Unapply skipped for ${title}: no pending application found` };
+      logs.push(entry);
+      logEntries.push(entry);
+      return { applications, logs, logEntries, unapplied: false, reason: 'not-pending' };
+    }
+
+    applications.splice(pendingIndex, 1);
+    const entry = { date: `${state?.month || 0}/${state?.year || 0}`, msg: `Application withdrawn for ${title}` };
+    logs.push(entry);
+    logEntries.push(entry);
+    return { applications, logs, logEntries, unapplied: true };
+  }
+
   evaluateApplications(state: any): {
     applications: any[];
     applicationResults: any[];
@@ -159,7 +217,7 @@ export class ApplicationService {
       const isPending = String(app?.status || '') === 'pending';
       const decisionMonth = Number(app?.decisionMonth || 0);
       const decisionYear = Number(app?.decisionYear || 0);
-      if (!isPending || decisionMonth !== month || decisionYear !== year) continue;
+      if (!isPending || !this.isDecisionDue(decisionMonth, decisionYear, month, year)) continue;
 
       const eligibility = this.jobService.getJobEligibility(state, app.job);
       if (!eligibility?.canApply) {
@@ -201,7 +259,7 @@ export class ApplicationService {
         const decisionMonth = Number(app?.decisionMonth || 0);
         const decisionYear = Number(app?.decisionYear || 0);
         const status = String(app?.status || '');
-        return decisionMonth === month && decisionYear === year && status !== 'pending';
+        return this.isDecisionDue(decisionMonth, decisionYear, month, year) && status !== 'pending';
       })
       .map((app: any) => ({
         id: app.id,

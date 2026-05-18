@@ -1,6 +1,6 @@
 import { useGame } from '../context/GameContext'
 import type { Job } from '@server/types/models.types'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { resolveDomainKey, domainBadgeStyle } from '../constants/domainColors.constants'
 
 type ScoreBreakdown = {
@@ -73,37 +73,13 @@ type ProgressTrack = {
   jobs: Job[]
 }
 
-const WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
-  'Tech Startup Founder': 250000,
-  Millionaire: 500000,
-  Billionaire: 50000000,
+type CareerNavigationRequest = {
+  view: CareerView
+  token: number
 }
 
-function estimateNetWorth(state: any) {
-  const checking = Number(state?.check || 0)
-  const savings = Number(state?.savings || 0)
-  const debt = Math.abs(Number(state?.debt || 0))
-  const portfolio = (Array.isArray(state?.portfolio) ? state.portfolio : []).reduce((sum: number, holding: any) => {
-    const shares = Number(holding?.shares || 0)
-    const avgCost = Number(holding?.avgCost || 0)
-    return sum + shares * avgCost
-  }, 0)
-  const vehicleAssets = (Array.isArray(state?.garage) ? state.garage : []).reduce((sum: number, vehicle: any) => {
-    const currentValue = Number(vehicle?.currentValue || 0)
-    if (currentValue > 0) return sum + currentValue
-    const purchasePrice = Number(vehicle?.purchasePrice || 0)
-    return purchasePrice > 0 ? sum + purchasePrice * 0.7 : sum
-  }, 0)
-  const realEstateEquity = (Array.isArray(state?.investmentProperties) ? state.investmentProperties : []).reduce((sum: number, property: any) => {
-    const value = Number(property?.propertyValue || 0)
-    const loan = Number(property?.loanBalance || 0)
-    return sum + Math.max(0, value - loan)
-  }, 0)
-  return Math.round((checking + savings + portfolio + vehicleAssets + realEstateEquity - debt) * 100) / 100
-}
-
-export default function Careers() {
-  const { state, applyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
+export default function Careers({ navigationRequest }: { navigationRequest?: CareerNavigationRequest | null }) {
+  const { state, applyForJob, unapplyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
   const [view, setView] = useState<CareerView>('all')
   const [goalJobTitle, setGoalJobTitle] = useState<string>('')
@@ -124,28 +100,46 @@ export default function Careers() {
   const [showNegotiationPracticeMode, setShowNegotiationPracticeMode] = useState(false)
   const [applyingJobTitle, setApplyingJobTitle] = useState<string | null>(null)
   const [applyFeedback, setApplyFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const netWorth = useMemo(() => estimateNetWorth(state), [state.check, state.savings, state.debt, state.portfolio, state.garage, state.investmentProperties])
+
+  useEffect(() => {
+    if (!navigationRequest?.view) return
+    setView(navigationRequest.view)
+  }, [navigationRequest?.token, navigationRequest?.view])
+
+  const netWorth = useMemo(() => {
+    const fallbackJob: Job = {
+      title: state?.job?.title || 'Current Job',
+      base: Number(state?.job?.base || 0),
+      tReq: Number(state?.job?.tReq || 1),
+      odds: Number(state?.job?.odds || 1),
+      req: state?.job?.req,
+      certReq: state?.job?.certReq,
+    }
+    const eligibility = getJobEligibility(state, fallbackJob)
+    return Number(eligibility?.netWorth || 0)
+  }, [getJobEligibility, state])
 
   const handleApplyJob = async (job: Job) => {
+    const hasApplied = state.applications.some((a: any) => a.job.title === job.title && a.status === 'pending')
     setApplyingJobTitle(job.title)
-    const result = await applyForJob(job)
+    const result = hasApplied ? await unapplyForJob(job) : await applyForJob(job)
     setApplyingJobTitle(null)
 
     if (!result) {
-      setApplyFeedback({ type: 'error', message: `Application could not be submitted for ${job.title}. Please try again.` })
+      setApplyFeedback({ type: 'error', message: hasApplied ? `Application could not be withdrawn for ${job.title}. Please try again.` : `Application could not be submitted for ${job.title}. Please try again.` })
       return
     }
 
     if (result.ok) {
-      setApplyFeedback({ type: 'success', message: String(result.message || `Applied for ${job.title}`) })
+      setApplyFeedback({ type: 'success', message: String(result.message || (hasApplied ? `Application withdrawn for ${job.title}` : `Applied for ${job.title}`)) })
       return
     }
 
-    setApplyFeedback({ type: 'error', message: String(result.message || `Application blocked for ${job.title}`) })
+    setApplyFeedback({ type: 'error', message: String(result.message || (hasApplied ? `No pending application found for ${job.title}` : `Application blocked for ${job.title}`)) })
   }
 
   const isJobVisible = (job: Job) => {
-    const threshold = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
+    const threshold = Number(getJobEligibility(state, job)?.wealthRequirement || 0)
     return threshold <= 0 || netWorth >= threshold
   }
 
@@ -309,15 +303,17 @@ export default function Careers() {
   }, [jobBoard, sort, state.credentials, state.transit, state.job, state.city, netWorth])
 
   const wealthRecommendations = useMemo(() => {
-    return Object.entries(WEALTH_NET_WORTH_REQUIREMENTS)
-      .map(([title, minimum]) => ({
-        title,
-        minimum,
-        unlocked: netWorth >= minimum,
-        remaining: Math.max(0, minimum - netWorth),
+    return (jobBoard as Job[])
+      .map((job) => ({ title: job.title, minimum: Number(getJobEligibility(state, job)?.wealthRequirement || 0) }))
+      .filter((entry) => entry.minimum > 0)
+      .filter((entry, index, arr) => arr.findIndex((candidate) => candidate.title === entry.title) === index)
+      .map((entry) => ({
+        ...entry,
+        unlocked: netWorth >= entry.minimum,
+        remaining: Math.max(0, entry.minimum - netWorth),
       }))
       .sort((a, b) => a.minimum - b.minimum)
-  }, [netWorth])
+  }, [getJobEligibility, jobBoard, netWorth, state])
 
   const categoryOptions = useMemo(() => {
     return Array.from(new Set<string>(jobBoard.map((j: Job) => j.cat || 'General'))).sort((a, b) => a.localeCompare(b))
@@ -737,10 +733,10 @@ export default function Careers() {
                           <td className="text-right py-2 sm:py-3 px-2 sm:px-3">
                             <button
                               onClick={() => handleApplyJob(j)}
-                              disabled={!canApply || hasApplied || applyingJobTitle === j.title}
+                              disabled={(!hasApplied && !canApply) || applyingJobTitle === j.title}
                               className={`w-full sm:w-auto py-1 px-3 rounded text-xs font-bold ${
                                 hasApplied 
-                                  ? 'bg-amber-500 text-white cursor-not-allowed' 
+                                  ? 'bg-amber-500 text-white hover:bg-amber-600' 
                                   : canApply 
                                   ? 'bg-slate-900 text-white hover:bg-slate-800' 
                                   : 'bg-slate-300 text-slate-500 cursor-not-allowed'
@@ -880,8 +876,8 @@ export default function Careers() {
                     ) : (
                       <button
                         onClick={() => handleApplyJob(j)}
-                        disabled={!canApply || hasApplied || applyingJobTitle === j.title}
-                        className={`w-full py-2 ${hasApplied ? 'bg-amber-500 text-white cursor-not-allowed' : canApply ? 'bg-slate-900 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'} rounded-lg text-xs font-bold`}
+                        disabled={(!hasApplied && !canApply) || applyingJobTitle === j.title}
+                        className={`w-full py-2 ${hasApplied ? 'bg-amber-500 text-white hover:bg-amber-600' : canApply ? 'bg-slate-900 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'} rounded-lg text-xs font-bold`}
                       >
                         {hasApplied ? 'APPLIED' : applyingJobTitle === j.title ? 'APPLYING...' : 'APPLY'}
                       </button>

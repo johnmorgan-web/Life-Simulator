@@ -107,7 +107,9 @@ export class LedgerService {
     const chauffeurActive = Boolean(state?.luxuryServices?.chauffer)
       && this.vehicleService.garageHasChauffeurEligibleVehicle(Array.isArray(state?.garage) ? state.garage : []);
 
-    const job = state.pendingJob || state.job;
+    // Salary and statement costs should always reflect the active/current job.
+    // pendingJob is only a queued future transition and should not drive ledger pay.
+    const job = state.job || state.pendingJob;
 
     const deterministicHash = (key: string) => {
       const seedText = `${state.year}-${state.month}-${state.city?.name}-${job?.title}-${key}`;

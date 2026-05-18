@@ -115,9 +115,19 @@ export class GameController {
     return this.applicationService.evaluateApplications(body?.state || {});
   }
 
+  @Post('job-eligibility')
+  getJobEligibilityMap(@Body() body: { state: any; jobTitles?: string[] }) {
+    return this.applicationService.getJobEligibilityMap(body?.state || {}, body?.jobTitles || []);
+  }
+
   @Post('apply-job')
   applyForJob(@Body() body: { state: any; jobTitle: string }) {
     return this.applicationService.applyForJob(body?.state || {}, body?.jobTitle || '');
+  }
+
+  @Post('unapply-job')
+  unapplyForJob(@Body() body: { state: any; jobTitle: string }) {
+    return this.applicationService.unapplyForJob(body?.state || {}, body?.jobTitle || '');
   }
 
   @Post('real-estate/market')
