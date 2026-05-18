@@ -412,6 +412,11 @@ export default function Careers() {
               <p className={`text-sm mt-1 ${applyFeedback.type === 'success' ? 'text-emerald-800' : 'text-rose-800'}`}>
                 {applyFeedback.message}
               </p>
+              {applyFeedback.type === 'error' && (
+                <p className="text-xs mt-2 text-rose-700">
+                  Net worth formula: Check + Savings + Portfolio Cost Basis + Vehicle Assets + Real Estate Equity − Debt
+                </p>
+              )}
             </div>
             <button
               onClick={() => setApplyFeedback(null)}
