@@ -414,7 +414,7 @@ export default function Careers() {
               </p>
               {applyFeedback.type === 'error' && (
                 <p className="text-xs mt-2 text-rose-700">
-                  Net worth formula: Check + Savings + Portfolio Cost Basis + Vehicle Assets + Real Estate Equity − Debt
+                  Net worth formula: Check + Savings + Portfolio Cost Basis + Vehicle Assets + Real Estate Equity − Debt = <span className="font-semibold">${Math.round(netWorth).toLocaleString()}</span>
                 </p>
               )}
             </div>
