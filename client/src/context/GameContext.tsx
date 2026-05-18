@@ -512,15 +512,18 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		const slot = snapshot?.jobMarket?.[title]
 		const fallbackJob = jobBoard.find((job: Job) => job.title === title)
 		const fallbackCapacity = Math.max(1, Math.round(Number(fallbackJob?.capacity || inferBaseCapacity(fallbackJob))))
-		const normalizedSlot = slot && typeof slot === 'object'
-			? slot
-			: {
-				capacity: fallbackCapacity,
-				occupied: Math.floor(fallbackCapacity * 0.75),
-			}
+		const rawCapacity = Number(slot?.capacity)
+		const rawOccupied = Number(slot?.occupied)
+		const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0
+			? Math.round(rawCapacity)
+			: fallbackCapacity
+		const fallbackOccupied = Math.floor(normalizedCapacity * 0.68)
+		const normalizedOccupied = Number.isFinite(rawOccupied)
+			? Math.min(normalizedCapacity, Math.max(0, Math.round(rawOccupied)))
+			: fallbackOccupied
 		acc[title] = {
-			capacity: Number(normalizedSlot.capacity || 0),
-			occupied: Number(normalizedSlot.occupied || 0),
+			capacity: normalizedCapacity,
+			occupied: normalizedOccupied,
 		}
 		return acc
 	}, {})
@@ -911,11 +914,13 @@ function getJobOpenings(state: State, job: Job) {
 	const economy = normalizeEconomyOverrides(state?.economyOverrides)
 	const cityUserCounts = getUserCityCounts(state)
 	const cityUsers = Math.max(1, Number(cityUserCounts[state?.city?.name || ''] || 1))
+	const slotCapacityRaw = Number(slot?.capacity)
+	const slotOccupiedRaw = Number(slot?.occupied)
 
 	const inferredCapacity = inferBaseCapacity(job)
 	const baseCapacity = Math.max(
 		1,
-		Number(slot?.capacity || 0),
+		Number.isFinite(slotCapacityRaw) && slotCapacityRaw > 0 ? slotCapacityRaw : 0,
 		Number(job?.capacity || 0),
 		Number(inferredCapacity || 1),
 	)
@@ -926,8 +931,12 @@ function getJobOpenings(state: State, job: Job) {
 	))
 	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier))
 
-	const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity)
-	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68)
+	const storedCapacity = Math.max(1, Number.isFinite(slotCapacityRaw) && slotCapacityRaw > 0 ? slotCapacityRaw : 0, dynamicCapacity)
+	const fallbackOccupied = Math.floor(dynamicCapacity * 0.68)
+	const normalizedOccupied = Number.isFinite(slotOccupiedRaw)
+		? Math.max(0, Math.round(slotOccupiedRaw))
+		: fallbackOccupied
+	const storedOccupied = Math.min(storedCapacity, normalizedOccupied)
 	const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75
 	const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000))
 	const monthlyPulseSeed = titleSeed(`${job.title}-${state.month}-${state.year}`)

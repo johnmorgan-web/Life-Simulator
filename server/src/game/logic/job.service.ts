@@ -260,10 +260,12 @@ export class JobService {
   getJobOpenings(state: any, job: any): number {
     const slot = state.jobMarket?.[job.title];
     const economy = this.normalizeEconomyOverrides(state?.economyOverrides);
+    const slotCapacityRaw = Number(slot?.capacity);
+    const slotOccupiedRaw = Number(slot?.occupied);
     const inferredCapacity = this.inferBaseCapacity(job);
     const baseCapacity = Math.max(
       1,
-      Number(slot?.capacity || 0),
+      Number.isFinite(slotCapacityRaw) && slotCapacityRaw > 0 ? slotCapacityRaw : 0,
       Number(job?.capacity || 0),
       Number(inferredCapacity || 1),
     );
@@ -275,8 +277,16 @@ export class JobService {
     const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier));
     const cityUsers = Math.max(1, Number(state?.cityUserCount || 1));
 
-    const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity);
-    const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68);
+    const storedCapacity = Math.max(
+      1,
+      Number.isFinite(slotCapacityRaw) && slotCapacityRaw > 0 ? slotCapacityRaw : 0,
+      dynamicCapacity,
+    );
+    const fallbackOccupied = Math.floor(dynamicCapacity * 0.68);
+    const normalizedOccupied = Number.isFinite(slotOccupiedRaw)
+      ? Math.max(0, Math.round(slotOccupiedRaw))
+      : fallbackOccupied;
+    const storedOccupied = Math.min(storedCapacity, normalizedOccupied);
     const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75;
     const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000));
     const month = Number(state?.month || 1);
