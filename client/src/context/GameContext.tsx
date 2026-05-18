@@ -8,6 +8,7 @@ import { findHistoricalScenarioById } from '../constants/historicalEconomicEvent
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
+import { WEALTH_NET_WORTH_REQUIREMENTS } from '../constants/wealthRequirements.constants'
 import type { AcademyCourse, City, Job, LifeEvent, RewardPrizePools } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
@@ -111,6 +112,16 @@ type GameCatalogPayload = {
 }
 
 type AuthResult = { ok: true; data: any } | { ok: false; error: string }
+type ServerJobEligibilityMap = Record<string, any>
+type JobOpportunityNotification = {
+	id: string
+	title: string
+	openings: number
+	pay: number
+	currentPay: number
+	month: number
+	year: number
+}
 
 async function extractErrorMessage(response: Response, fallback: string) {
 	try {
@@ -495,6 +506,29 @@ async function applyForJobOnServer(state: any, jobTitle: string) {
 	return response.json()
 }
 
+async function unapplyForJobOnServer(state: any, jobTitle: string) {
+	const compactState = buildApplicationsRequestState(state, [jobTitle])
+
+	const response = await fetch(`${API_BASE_URL}/game/unapply-job`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: compactState, jobTitle }),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
+async function fetchJobEligibilityMapOnServer(state: any, jobTitles: string[]) {
+	const compactState = buildApplicationsRequestState(state, jobTitles)
+	const response = await fetch(`${API_BASE_URL}/game/job-eligibility`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: compactState, jobTitles }),
+	})
+	if (!response.ok) return null
+	return response.json()
+}
+
 function buildApplicationsRequestState(source: any, relevantJobTitles: string[] = []) {
 	const snapshot = source || {}
 	const cityUserCounts = getUserCityCounts(snapshot)
@@ -552,6 +586,28 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
 		jobMarket: compactJobMarket,
 		economyOverrides: normalizeEconomyOverrides(snapshot.economyOverrides),
+		check: Number(snapshot.check || 0),
+		savings: Number(snapshot.savings || 0),
+		debt: Number(snapshot.debt || 0),
+		portfolio: Array.isArray(snapshot.portfolio)
+			? snapshot.portfolio.map((h: any) => ({
+				ticker: String(h?.ticker || ''),
+				shares: Number(h?.shares || 0),
+				avgCost: Number(h?.avgCost || 0),
+			}))
+			: [],
+		garage: Array.isArray(snapshot.garage)
+			? snapshot.garage.map((v: any) => ({
+				currentValue: Number(v?.currentValue || 0),
+				purchasePrice: Number(v?.purchasePrice || 0),
+			}))
+			: [],
+		investmentProperties: Array.isArray(snapshot.investmentProperties)
+			? snapshot.investmentProperties.map((p: any) => ({
+				propertyValue: Number(p?.propertyValue || 0),
+				loanBalance: Number(p?.loanBalance || 0),
+			}))
+			: [],
 	}
 }
 
@@ -862,12 +918,6 @@ function getRoleExperienceMonths(state: State, roleTitle: string) {
 	return months
 }
 
-const WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
-	'Tech Startup Founder': 250000,
-	Millionaire: 500000,
-	Billionaire: 50000000,
-}
-
 function estimatePortfolioCostBasis(state: State) {
 	const portfolio = Array.isArray(state?.portfolio) ? state.portfolio : []
 	return portfolio.reduce((sum: number, holding: any) => {
@@ -906,51 +956,7 @@ function computeNetWorthForEligibility(state: State) {
 	return round2(checking + savings + portfolio + vehicles + realEstateEquity - debt)
 }
 
-function getJobOpenings(state: State, job: Job) {
-	const slot = state.jobMarket?.[job.title]
-	const economy = normalizeEconomyOverrides(state?.economyOverrides)
-	const cityUserCounts = getUserCityCounts(state)
-	const cityUsers = Math.max(1, Number(cityUserCounts[state?.city?.name || ''] || 1))
-
-	const inferredCapacity = inferBaseCapacity(job)
-	const baseCapacity = Math.max(
-		1,
-		Number(slot?.capacity || 0),
-		Number(job?.capacity || 0),
-		Number(inferredCapacity || 1),
-	)
-	const demandMultiplier = Math.max(0.35, Math.min(1.9,
-		(1) // jobAvailability is always 100, so this is 1
-		* (1 - economy.recessionSeverity * 0.004)
-		* (1 - economy.inflationPressure * 0.0015)
-	))
-	const dynamicCapacity = Math.max(1, Math.round(baseCapacity * demandMultiplier))
-
-	const storedCapacity = Math.max(1, Number(slot?.capacity || 0), dynamicCapacity)
-	const storedOccupied = slot?.occupied ?? Math.floor(dynamicCapacity * 0.68)
-	const occupiedRatio = storedCapacity > 0 ? storedOccupied / storedCapacity : 0.75
-	const salaryPressure = Math.max(0, Math.min(0.2, (Number(job.base || 0) - 4000) / 40000))
-	const monthlyPulseSeed = titleSeed(`${job.title}-${state.month}-${state.year}`)
-	const monthlyPulse = ((monthlyPulseSeed % 9) - 4) / 100
-	const cityCompetitionPressure = (() => {
-		const extraUsers = Math.max(0, cityUsers - 1)
-		if ((job.cat || 'Pro') === 'Entry') return Math.min(0.05, extraUsers * 0.01)
-		return Math.min(0.28, 0.03 + extraUsers * 0.025)
-	})()
-	const macroPressure = Math.max(0, Math.min(0.35,
-		economy.recessionSeverity * 0.003
-		+ economy.inflationPressure * 0.0018
-		// jobAvailability is always 100, so this term is always 0
-		// - (economy.jobAvailability - 100) * 0.0015
-	))
-	const marketPressure = Math.max(0, Math.min(0.45, salaryPressure + monthlyPulse + cityCompetitionPressure + macroPressure))
-	const pressuredRatio = Math.max(0.6, Math.min(0.98, occupiedRatio + marketPressure))
-	const dynamicOccupied = Math.min(dynamicCapacity, Math.max(0, Math.round(dynamicCapacity * pressuredRatio)))
-
-	return Math.max(0, dynamicCapacity - dynamicOccupied)
-}
-
-function getJobEligibility(state: State, job: Job) {
+function getJobEligibility(state: State, job: Job, serverEligibility?: any) {
 	const credentials = Array.isArray(state?.credentials) ? state.credentials : []
 	const normalizedCredentials = new Set(credentials.map((value: any) => normalizeCredential(value)).filter(Boolean))
 	const educationMet = !job.req || normalizedCredentials.has(normalizeCredential(job.req))
@@ -959,8 +965,8 @@ function getJobEligibility(state: State, job: Job) {
 	const netWorth = computeNetWorthForEligibility(state)
 	const wealthRequirement = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0)
 	const wealthMet = wealthRequirement <= 0 || netWorth >= wealthRequirement
-	const openings = getJobOpenings(state, job)
-	const capacityMet = openings > 0
+	const openings = Math.max(0, Number(serverEligibility?.openings || 0))
+	const capacityMet = Boolean(serverEligibility?.capacityMet)
 
 	let experienceMet = true
 	let experienceDetail = ''
@@ -3511,7 +3517,10 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 	const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
 	const [peerSnapshots, setPeerSnapshots] = useState<any[]>([])
 	const [ledgerEventNotifications, setLedgerEventNotifications] = useState<any[]>([])
+	const [jobOpportunityNotifications, setJobOpportunityNotifications] = useState<JobOpportunityNotification[]>([])
+	const [serverJobEligibilityByTitle, setServerJobEligibilityByTitle] = useState<ServerJobEligibilityMap>({})
 	const seenLedgerEventKeysRef = useRef<Set<string>>(new Set())
+	const previousOpportunityJobKeysRef = useRef<Set<string>>(new Set())
 	const dirtyStateKeysRef = useRef<Set<string>>(new Set())
 	const trackedStateRef = useRef<any>(initialGameState)
 	const savedStateRef = useRef<any>(initialGameState)
@@ -3521,6 +3530,84 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 	useEffect(() => {
 		stateRef.current = state
 	}, [state])
+
+	useEffect(() => {
+		if (!Array.isArray(jobBoard) || jobBoard.length === 0) return
+		let cancelled = false
+		const loadJobEligibility = async () => {
+			const snapshot = stateRef.current || state
+			const jobTitles = jobBoard.map((job: Job) => String(job?.title || '').trim()).filter(Boolean)
+			const result = await fetchJobEligibilityMapOnServer(snapshot, jobTitles)
+			if (!cancelled && result?.eligibilities && typeof result.eligibilities === 'object') {
+				setServerJobEligibilityByTitle(result.eligibilities)
+			}
+		}
+		loadJobEligibility()
+		return () => {
+			cancelled = true
+		}
+	}, [
+		peerSnapshots,
+		state.month,
+		state.year,
+		state.city,
+		state.credentials,
+		state.transit,
+		state.job,
+		state.tenure,
+		state.careerHistory,
+		state.economyOverrides,
+		state.jobMarket,
+		state.check,
+		state.savings,
+		state.debt,
+		state.portfolio,
+		state.garage,
+		state.investmentProperties,
+	])
+
+	const getJobEligibilityForSnapshot = useCallback((snapshot: State, job: Job) => {
+		const serverEligibility = serverJobEligibilityByTitle[String(job?.title || '').trim()]
+		return getJobEligibility(snapshot, job, serverEligibility)
+	}, [serverJobEligibilityByTitle])
+
+	useEffect(() => {
+		const currentJobBase = Number(state.job?.base || 0)
+		const month = Number(state.month || 0)
+		const year = Number(state.year || 0)
+		const currentOpportunityKeys = new Set<string>()
+		const freshNotifications: JobOpportunityNotification[] = []
+
+		for (const job of Array.isArray(jobBoard) ? jobBoard : []) {
+			const title = String(job?.title || '').trim()
+			if (!title) continue
+			if (title === String(state.job?.title || '').trim()) continue
+			if (Number(job?.base || 0) <= currentJobBase) continue
+			if (Array.isArray(state.applications) && state.applications.some((app: any) => app?.job?.title === title && app?.status === 'pending')) continue
+
+			const eligibility = serverJobEligibilityByTitle[title]
+			if (!eligibility?.canApply || Number(eligibility?.openings || 0) <= 0) continue
+
+			const key = `${title}:${month}:${year}`
+			currentOpportunityKeys.add(key)
+			if (previousOpportunityJobKeysRef.current.has(key)) continue
+
+			freshNotifications.push({
+				id: key,
+				title,
+				openings: Math.max(0, Number(eligibility?.openings || 0)),
+				pay: Math.round(Number(job?.base || 0) * Number(state.city?.p || 1) * 0.8),
+				currentPay: Math.round(currentJobBase * Number(state.city?.p || 1) * 0.8),
+				month,
+				year,
+			})
+		}
+
+		previousOpportunityJobKeysRef.current = currentOpportunityKeys
+		if (freshNotifications.length > 0) {
+			setJobOpportunityNotifications((prev) => [...prev, ...freshNotifications])
+		}
+	}, [serverJobEligibilityByTitle, state.job?.title, state.job?.base, state.city?.p, state.month, state.year, state.applications])
 
 	useEffect(() => {
 		const previous = trackedStateRef.current || {}
@@ -3635,6 +3722,10 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		setLedgerEventNotifications((prev: any[]) => prev.slice(1))
 	}
 
+	function dequeueJobOpportunityNotification() {
+		setJobOpportunityNotifications((prev) => prev.slice(1))
+	}
+
 	function buildLedgerRequestState(source: any) {
 		const snapshot = source || {}
 		const month = Number(snapshot.month || 0)
@@ -3680,7 +3771,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				  }
 				: null,
 			job: snapshot.job,
-			pendingJob: snapshot.pendingJob,
 			workPenaltyPercent: snapshot.workPenaltyPercent,
 			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
 			luxuryServices: snapshot.luxuryServices || {},
@@ -4263,6 +4353,45 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		}
 	}
 
+	async function unapplyForJob(job: Job) {
+		const result = await unapplyForJobOnServer(state, job.title)
+		if (!result) {
+			return { ok: false, reason: 'network-error', message: 'Unable to withdraw application right now. Please try again.' }
+		}
+
+		const mergedLogs = Array.isArray(result.logEntries)
+			? [...(Array.isArray(state.logs) ? state.logs : []), ...result.logEntries]
+			: Array.isArray(result.logs)
+				? result.logs
+				: state.logs
+
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				applications: Array.isArray(result.applications) ? result.applications : state.applications,
+				logs: mergedLogs,
+			},
+		})
+
+		const latestLogMessage = Array.isArray(result.logEntries) && result.logEntries.length
+			? String(result.logEntries[result.logEntries.length - 1]?.msg || '')
+			: ''
+
+		if (result.unapplied) {
+			return {
+				ok: true,
+				reason: 'unapplied',
+				message: latestLogMessage || `Application withdrawn for ${job.title}`,
+			}
+		}
+
+		return {
+			ok: false,
+			reason: String(result.reason || 'not-pending'),
+			message: latestLogMessage || `No pending application found for ${job.title}`,
+		}
+	}
+
 	async function refreshRealEstateMarket() {
 		const snapshot = stateRef.current || state
 		const serverMarket = await fetchSharedRealEstateMarketFromServer(snapshot, false)
@@ -4352,7 +4481,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, rewardPrizePools, reloadCatalogs, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility, getJobOpenings, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, saveStatus, lastSavedAt }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, unapplyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, rewardPrizePools, reloadCatalogs, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility: getJobEligibilityForSnapshot, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, jobOpportunityNotifications, dequeueJobOpportunityNotification, saveStatus, lastSavedAt }}>
 			{children}
 		</GameContext.Provider>
 	)

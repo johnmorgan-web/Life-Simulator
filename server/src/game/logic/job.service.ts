@@ -1,17 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { academyCourses } from '../../data/academyCourses.constants';
 import jobBoard from '../../data/jobBoard.constants';
+import { WEALTH_NET_WORTH_REQUIREMENTS } from '../../types/wealthRequirements.constants';
 
 @Injectable()
 export class JobService {
+  private toFiniteNumber(value: any): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   private normalizeCredential(value: any): string {
     return String(value || '').trim().toLowerCase();
   }
-  private WEALTH_NET_WORTH_REQUIREMENTS: Record<string, number> = {
-    'Tech Startup Founder': 250000,
-    Millionaire: 500000,
-    Billionaire: 50000000,
-  };
 
   private academyCredentialSet = new Set(academyCourses.map((course) => String(course?.n || '').trim()));
   private jobTitleSet = new Set(jobBoard.map((job) => String(job?.title || '').trim()));
@@ -184,8 +185,8 @@ export class JobService {
   private estimatePortfolioCostBasis(state: any): number {
     const portfolio = Array.isArray(state?.portfolio) ? state.portfolio : [];
     return portfolio.reduce((sum: number, holding: any) => {
-      const shares = Number(holding?.shares || 0);
-      const avgCost = Number(holding?.avgCost || 0);
+      const shares = this.toFiniteNumber(holding?.shares);
+      const avgCost = this.toFiniteNumber(holding?.avgCost);
       return sum + (shares * avgCost);
     }, 0);
   }
@@ -193,9 +194,11 @@ export class JobService {
   private estimateVehicleAssets(state: any): number {
     const garage = Array.isArray(state?.garage) ? state.garage : [];
     return garage.reduce((sum: number, vehicle: any) => {
-      const currentValue = Number(vehicle?.currentValue || 0);
+      const currentValue = this.toFiniteNumber(
+        vehicle?.currentValue ?? vehicle?.marketValue ?? vehicle?.resaleValue,
+      );
       if (currentValue > 0) return sum + currentValue;
-      const purchasePrice = Number(vehicle?.purchasePrice || 0);
+      const purchasePrice = this.toFiniteNumber(vehicle?.purchasePrice ?? vehicle?.originalPrice);
       return purchasePrice > 0 ? sum + purchasePrice * 0.7 : sum;
     }, 0);
   }
@@ -203,19 +206,21 @@ export class JobService {
   private estimateRealEstateEquity(state: any): number {
     const properties = Array.isArray(state?.investmentProperties) ? state.investmentProperties : [];
     return properties.reduce((sum: number, property: any) => {
-      const value = Number(property?.propertyValue || 0);
-      const loan = Number(property?.loanBalance || 0);
+      const value = this.toFiniteNumber(
+        property?.propertyValue ?? property?.marketValue ?? property?.currentValue ?? property?.askingPrice,
+      );
+      const loan = this.toFiniteNumber(property?.loanBalance ?? property?.mortgageBalance ?? property?.loan);
       return sum + Math.max(0, value - loan);
     }, 0);
   }
 
   private computeNetWorth(state: any): number {
-    const checking = Number(state?.check || 0);
-    const savings = Number(state?.savings || 0);
+    const checking = this.toFiniteNumber(state?.check);
+    const savings = this.toFiniteNumber(state?.savings);
     const portfolio = this.estimatePortfolioCostBasis(state);
     const vehicles = this.estimateVehicleAssets(state);
     const realEstateEquity = this.estimateRealEstateEquity(state);
-    const debt = Math.abs(Number(state?.debt || 0));
+    const debt = Math.abs(this.toFiniteNumber(state?.debt));
     return checking + savings + portfolio + vehicles + realEstateEquity - debt;
   }
 
@@ -315,7 +320,7 @@ export class JobService {
     const certificationMet = !resolvedCertReq || normalizedCredentials.has(this.normalizeCredential(resolvedCertReq));
     const transitMet = state.transit.level >= job.tReq;
     const netWorth = this.computeNetWorth(state);
-    const wealthRequirement = Number(this.WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0);
+    const wealthRequirement = Number(WEALTH_NET_WORTH_REQUIREMENTS[job.title] || 0);
     const wealthMet = wealthRequirement <= 0 || netWorth >= wealthRequirement;
     const openings = this.getJobOpenings(state, job);
     const capacityMet = openings > 0;

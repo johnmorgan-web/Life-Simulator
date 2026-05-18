@@ -25,12 +25,17 @@ const MathLab = lazy(() => import('./tabs/MathLab'))
 
 declare const __APP_VERSION__: string
 
-function TabContent({ tab }: { tab: string }) {
+type CareerNavigationRequest = {
+  view: 'recommended' | 'all' | 'tree'
+  token: number
+}
+
+function TabContent({ tab, careerNavigationRequest }: { tab: string; careerNavigationRequest: CareerNavigationRequest | null }) {
   const { state, checkRow } = useGame()
   const format = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   if (tab === 'ledger') return <Ledger ledger={state.ledger} onCheck={checkRow} format={format} isAdmin={state.isAdmin} />
-  if (tab === 'careers') return <Careers />
+  if (tab === 'careers') return <Careers navigationRequest={careerNavigationRequest} />
   if (tab === 'ai-coach') return <AICoach />
   if (tab === 'academy') return <Academy />
   if (tab === 'transit') return <Transit />
@@ -172,8 +177,9 @@ function eventDialogCopy(event: any) {
 }
 
 function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
-  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses, ledgerEventNotifications, dequeueLedgerEventNotification } = useGame()
+  const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses, ledgerEventNotifications, dequeueLedgerEventNotification, jobOpportunityNotifications, dequeueJobOpportunityNotification } = useGame()
   const activeTheme = cosmeticThemes[state.activeTheme || 'default'] || cosmeticThemes.default
+  const [careerNavigationRequest, setCareerNavigationRequest] = useState<CareerNavigationRequest | null>(null)
   const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
@@ -183,6 +189,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const [paymentInputWarning, setPaymentInputWarning] = useState<string | null>(null)
   const [eventPopup, setEventPopup] = useState<any | null>(null)
   const [achievementToast, setAchievementToast] = useState<{ title: string; category: string } | null>(null)
+  const [jobOpportunityToast, setJobOpportunityToast] = useState<any | null>(null)
   const previousAchievementCountRef = useRef(Array.isArray(state.achievementHistory) ? state.achievementHistory.length : 0)
   
   // Calculate dynamic APR based on credit score
@@ -239,6 +246,19 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     const timeout = window.setTimeout(() => setAchievementToast(null), 4500)
     return () => window.clearTimeout(timeout)
   }, [achievementToast])
+
+  useEffect(() => {
+    const queued = Array.isArray(jobOpportunityNotifications) ? jobOpportunityNotifications : []
+    if (!queued.length || state.showSettlement || !!eventPopup || !!achievementToast || !!jobOpportunityToast) return
+    setJobOpportunityToast(queued[0])
+    dequeueJobOpportunityNotification()
+  }, [jobOpportunityNotifications, state.showSettlement, eventPopup, achievementToast, jobOpportunityToast, dequeueJobOpportunityNotification])
+
+  useEffect(() => {
+    if (!jobOpportunityToast) return
+    const timeout = window.setTimeout(() => setJobOpportunityToast(null), 6000)
+    return () => window.clearTimeout(timeout)
+  }, [jobOpportunityToast])
   
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
@@ -474,13 +494,43 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
                 <p className="text-xs text-slate-500 mt-1">Category: {achievementToast.category} • Reward spin added</p>
               </div>
             )}
+            {jobOpportunityToast && (
+              <div className="fixed top-[calc(env(safe-area-inset-top,0px)+5.75rem)] right-3 sm:top-24 sm:right-5 z-50 max-w-sm w-[calc(100vw-1.5rem)] sm:w-auto bg-white border border-sky-200 shadow-xl rounded-2xl px-4 py-3">
+                <p className="text-[10px] uppercase font-bold tracking-wide text-sky-600">Career Opportunity</p>
+                <p className="text-sm font-bold text-slate-900">{jobOpportunityToast.title}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {jobOpportunityToast.openings} opening{jobOpportunityToast.openings === 1 ? '' : 's'} available • ${Math.round(jobOpportunityToast.pay).toLocaleString()}/mo
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Higher than current pay by ${Math.max(0, Number(jobOpportunityToast.pay || 0) - Number(jobOpportunityToast.currentPay || 0)).toLocaleString()}/mo
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCareerNavigationRequest({ view: 'recommended', token: Date.now() })
+                      setTab('careers')
+                      setJobOpportunityToast(null)
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-sky-600 text-white text-xs font-bold hover:bg-sky-700"
+                  >
+                    View Careers
+                  </button>
+                  <button
+                    onClick={() => setJobOpportunityToast(null)}
+                    className="px-3 py-1.5 rounded-md bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             <Header state={state} onVerify={openSettlement} verifyEnabled={verifyEnabled} />
             <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:p-7 xl:p-9 max-w-[98vw] mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-7 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]">
               <Nav tab={tab} setTab={setTab} />
               <div 
                 className="md:col-span-10 overflow-y-visible md:overflow-y-auto overflow-x-hidden pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] md:pb-20 tab-panel md:min-h-[calc(100vh-130px)]">
                 <Suspense fallback={<div className="glass p-5 text-sm text-slate-600">Loading tab...</div>}>
-                  <TabContent tab={tab} />
+                  <TabContent tab={tab} careerNavigationRequest={careerNavigationRequest} />
                 </Suspense>
               </div>
             </main>
