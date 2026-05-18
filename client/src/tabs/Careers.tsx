@@ -125,8 +125,26 @@ export default function Careers() {
   const [applyingJobTitle, setApplyingJobTitle] = useState<string | null>(null)
   const [applyFeedback, setApplyFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const netWorth = useMemo(() => estimateNetWorth(state), [state.check, state.savings, state.debt, state.portfolio, state.garage, state.investmentProperties])
+  type PendingApplication = { job?: { title?: string }; status?: string }
+
+  const hasPendingApplication = (jobTitle: string) => {
+    const applications: PendingApplication[] = Array.isArray(state.applications) ? state.applications : []
+    return applications.some((a) => a.job?.title === jobTitle && a.status === 'pending')
+  }
 
   const handleApplyJob = async (job: Job) => {
+    if (hasPendingApplication(job.title)) {
+      const applications: PendingApplication[] = Array.isArray(state.applications) ? state.applications : []
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          applications: applications.filter((a) => !(a.job?.title === job.title && a.status === 'pending')),
+        },
+      })
+      setApplyFeedback({ type: 'success', message: `Application removed for ${job.title}` })
+      return
+    }
+
     setApplyingJobTitle(job.title)
     const result = await applyForJob(job)
     setApplyingJobTitle(null)
@@ -588,7 +606,7 @@ export default function Careers() {
                         { role: 'N/A', months: 0 }
                       )
                       const canApply = eligibility.canApply
-                      const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
+                      const hasApplied = hasPendingApplication(j.title)
                       const currentPay = (state.job?.base || 0) * state.city.p * 0.8
                       const jobPay = j.base * state.city.p * 0.8
                       const payIncrease = jobPay - currentPay
@@ -732,10 +750,10 @@ export default function Careers() {
                           <td className="text-right py-2 sm:py-3 px-2 sm:px-3">
                             <button
                               onClick={() => handleApplyJob(j)}
-                              disabled={!canApply || hasApplied || applyingJobTitle === j.title}
+                              disabled={(!canApply && !hasApplied) || applyingJobTitle === j.title}
                               className={`w-full sm:w-auto py-1 px-3 rounded text-xs font-bold ${
                                 hasApplied 
-                                  ? 'bg-amber-500 text-white cursor-not-allowed' 
+                                  ? 'bg-amber-500 text-white hover:bg-amber-600' 
                                   : canApply 
                                   ? 'bg-slate-900 text-white hover:bg-slate-800' 
                                   : 'bg-slate-300 text-slate-500 cursor-not-allowed'
@@ -839,7 +857,7 @@ export default function Careers() {
               const expMet = eligibility.experienceMet
               const wealthMet = eligibility.wealthMet
               const wealthRequirement = Number(eligibility.wealthRequirement || 0)
-              const hasApplied = state.applications.some((a: any) => a.job.title === j.title && a.status === 'pending')
+              const hasApplied = hasPendingApplication(j.title)
               const isCurrent = state.job?.title === j.title
               const canApply = eligibility.canApply
               const isLocked = !canApply && !isCurrent
@@ -875,8 +893,8 @@ export default function Careers() {
                     ) : (
                       <button
                         onClick={() => handleApplyJob(j)}
-                        disabled={!canApply || hasApplied || applyingJobTitle === j.title}
-                        className={`w-full py-2 ${hasApplied ? 'bg-amber-500 text-white cursor-not-allowed' : canApply ? 'bg-slate-900 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'} rounded-lg text-xs font-bold`}
+                        disabled={(!canApply && !hasApplied) || applyingJobTitle === j.title}
+                        className={`w-full py-2 ${hasApplied ? 'bg-amber-500 text-white hover:bg-amber-600' : canApply ? 'bg-slate-900 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'} rounded-lg text-xs font-bold`}
                       >
                         {hasApplied ? 'APPLIED' : applyingJobTitle === j.title ? 'APPLYING...' : 'APPLY'}
                       </button>
