@@ -3,6 +3,15 @@ import { useGame } from '../context/GameContext'
 import { stockMarketAssets, stockMarketGlossary, autoInvestProfiles } from '../constants/stockMarket.constants'
 
 type LearningLevel = 'elementary' | 'middle-school' | 'high-school' | 'adult'
+type HistoryRange = '6M' | '1Y' | '5Y' | '10Y' | 'ALL'
+
+const historyRangeOptions: Array<{ value: HistoryRange; label: string; months: number | null }> = [
+  { value: 'ALL', label: 'All Time', months: null },
+  { value: '10Y', label: '10 Year', months: 120 },
+  { value: '5Y', label: '5 Year', months: 60 },
+  { value: '1Y', label: '1 Year', months: 12 },
+  { value: '6M', label: '6 Month', months: 6 },
+]
 
 function roundShareQuantity(value: number) {
   return Math.round(value * 1000) / 1000
@@ -143,6 +152,7 @@ export default function StockMarket() {
   const { state, dispatch, saveGame, buildLedger } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
   const [focusedTicker, setFocusedTicker] = useState('SPY')
+  const [historyRange, setHistoryRange] = useState<HistoryRange>('6M')
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null)
 
   const marketPrices = state.marketPrices || {}
@@ -240,13 +250,20 @@ export default function StockMarket() {
     if (!hasCurrent) {
       normalized.push({ month: currentMonth, year: currentYear, prices: marketPrices })
     }
-    return normalized.slice(Math.max(0, normalized.length - 24))
+    return normalized
   }, [state.marketPriceHistory, state.month, state.year, marketPrices])
 
+  const visibleChartHistory = useMemo(() => {
+    const selectedRange = historyRangeOptions.find((option) => option.value === historyRange)
+    const months = selectedRange?.months
+    if (!months) return chartHistory
+    return chartHistory.slice(Math.max(0, chartHistory.length - months))
+  }, [chartHistory, historyRange])
+
   const chartData = useMemo(() => {
-    const labels = chartHistory.map((point: any) => monthShortLabel(point.month, point.year))
+    const labels = visibleChartHistory.map((point: any) => monthShortLabel(point.month, point.year))
     const series = stockMarketAssets.map((asset) => {
-      const points = chartHistory.map((point: any) => {
+      const points = visibleChartHistory.map((point: any) => {
         const fallback = Number(marketPrices[asset.ticker] || asset.basePrice)
         return Number(point?.prices?.[asset.ticker] || fallback)
       })
@@ -258,7 +275,7 @@ export default function StockMarket() {
     const maxValue = allValues.length ? Math.max(...allValues) : 1
     const span = Math.max(1, maxValue - minValue)
     return { labels, series, minValue, maxValue, span }
-  }, [chartHistory, marketPrices])
+  }, [visibleChartHistory, marketPrices])
 
   const focusedSeries = useMemo(
     () => chartData.series.find((line) => line.ticker === focusedTicker) || chartData.series[0],
@@ -486,9 +503,19 @@ export default function StockMarket() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <h3 className="font-bold text-lg">📉 Price Trend Graph</h3>
-            <p className="text-xs text-slate-500">Monthly history for all listed stocks (up to last 24 months).</p>
+            <p className="text-xs text-slate-500">Monthly history for all listed stocks (selectable range).</p>
           </div>
           <div className="flex items-center gap-2">
+            <label className="text-xs font-bold uppercase text-slate-500">Range</label>
+            <select
+              value={historyRange}
+              onChange={(e) => setHistoryRange(e.target.value as HistoryRange)}
+              className="p-2 border rounded text-sm"
+            >
+              {historyRangeOptions.map((option) => (
+                <option key={`range-${option.value}`} value={option.value}>{option.label}</option>
+              ))}
+            </select>
             <label className="text-xs font-bold uppercase text-slate-500">Focus</label>
             <select
               value={focusedTicker}
