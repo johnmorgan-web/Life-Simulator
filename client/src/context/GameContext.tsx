@@ -552,6 +552,23 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		applications: Array.isArray(snapshot.applications) ? snapshot.applications : [],
 		jobMarket: compactJobMarket,
 		economyOverrides: normalizeEconomyOverrides(snapshot.economyOverrides),
+		check: Number(snapshot.check || 0),
+		savings: Number(snapshot.savings || 0),
+		debt: Number(snapshot.debt || 0),
+		portfolio: Array.isArray(snapshot.portfolio)
+			? snapshot.portfolio.map((h: any) => ({
+				ticker: String(h?.ticker || ''),
+				shares: Number(h?.shares || 0),
+				avgCost: Number(h?.avgCost || 0),
+			}))
+			: [],
+		marketPrices: snapshot.marketPrices && typeof snapshot.marketPrices === 'object' ? snapshot.marketPrices : {},
+		investmentProperties: Array.isArray(snapshot.investmentProperties)
+			? snapshot.investmentProperties.map((p: any) => ({
+				propertyValue: Number(p?.propertyValue || 0),
+				loanBalance: Number(p?.loanBalance || 0),
+			}))
+			: [],
 	}
 }
 
@@ -899,11 +916,11 @@ function estimateRealEstateEquity(state: State) {
 function computeNetWorthForEligibility(state: State) {
 	const checking = Number(state?.check || 0)
 	const savings = Number(state?.savings || 0)
-	const portfolio = estimatePortfolioCostBasis(state)
-	const vehicles = estimateVehicleAssets(state)
+	const prices = normalizeMarketPrices(state?.marketPrices)
+	const portfolio = portfolioMarketValue(Array.isArray(state?.portfolio) ? state.portfolio : [], prices)
 	const realEstateEquity = estimateRealEstateEquity(state)
 	const debt = Math.abs(Number(state?.debt || 0))
-	return round2(checking + savings + portfolio + vehicles + realEstateEquity - debt)
+	return round2(checking + savings + portfolio + realEstateEquity - debt)
 }
 
 function getJobOpenings(state: State, job: Job) {

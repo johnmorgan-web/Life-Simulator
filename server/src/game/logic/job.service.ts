@@ -209,14 +209,24 @@ export class JobService {
     }, 0);
   }
 
+  private estimatePortfolioMarketValue(state: any): number {
+    const portfolio = Array.isArray(state?.portfolio) ? state.portfolio : [];
+    const marketPrices = (state?.marketPrices && typeof state.marketPrices === 'object') ? state.marketPrices : {};
+    return portfolio.reduce((sum: number, holding: any) => {
+      const shares = Number(holding?.shares || 0);
+      const price = Number(marketPrices[holding?.ticker] || 0);
+      const value = price > 0 ? shares * price : shares * Number(holding?.avgCost || 0);
+      return sum + value;
+    }, 0);
+  }
+
   private computeNetWorth(state: any): number {
     const checking = Number(state?.check || 0);
     const savings = Number(state?.savings || 0);
-    const portfolio = this.estimatePortfolioCostBasis(state);
-    const vehicles = this.estimateVehicleAssets(state);
+    const portfolio = this.estimatePortfolioMarketValue(state);
     const realEstateEquity = this.estimateRealEstateEquity(state);
     const debt = Math.abs(Number(state?.debt || 0));
-    return checking + savings + portfolio + vehicles + realEstateEquity - debt;
+    return checking + savings + portfolio + realEstateEquity - debt;
   }
 
   capacityForJob(job: any, rankInTrack: number): number {
