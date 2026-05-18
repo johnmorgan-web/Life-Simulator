@@ -2719,7 +2719,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 			const workRiskBase = 0.12
 			const debtRisk = newDebt > 0 ? 0.06 : 0
-			const lowHappinessRisk = nextHappiness < 45 ? 0.08 : nextHappiness < 60 ? 0.04 : 0
+			const lowHappinessRisk = nextHappiness < 30 ? 0.16 : nextHappiness < 45 ? 0.11 : nextHappiness < 60 ? 0.06 : 0
 			const trainerRelief = state.luxuryServices?.trainer ? 0.07 : 0
 			const missWorkRisk = Math.max(0.01, Math.min(0.35, workRiskBase + debtRisk + lowHappinessRisk - trainerRelief))
 
@@ -2727,7 +2727,8 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			const workRoll = mulberry32(workSeed)()
 			let nextWorkPenaltyPercent = 0
 			if (workRoll < missWorkRisk) {
-				nextWorkPenaltyPercent = round2(0.06 + mulberry32(workSeed ^ 0x9e3779b9)() * 0.12)
+				const unhappinessSeverityPenalty = nextHappiness < 30 ? 0.1 : nextHappiness < 45 ? 0.06 : nextHappiness < 60 ? 0.03 : 0
+				nextWorkPenaltyPercent = round2(Math.min(0.3, 0.06 + mulberry32(workSeed ^ 0x9e3779b9)() * 0.12 + unhappinessSeverityPenalty))
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Missed work this month. Next statement salary reduced by ${(nextWorkPenaltyPercent * 100).toFixed(1)}%` })
 			} else if (state.luxuryServices?.trainer) {
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: '💪 Personal trainer kept your consistency high this month.' })
