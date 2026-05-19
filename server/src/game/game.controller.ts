@@ -68,6 +68,27 @@ export class GameController {
     });
   }
 
+  private async withServerCityUserCount(rawState: any) {
+    const state = rawState && typeof rawState === 'object' ? { ...rawState } : {};
+    const cityName = String(state?.city?.name || '').trim();
+    if (!cityName) {
+      return {
+        ...state,
+        cityUserCount: 1,
+      };
+    }
+
+    const snapshots = await this.getLiveUserSnapshots();
+    const cityUsers = Array.isArray(snapshots)
+      ? snapshots.filter((snapshot: any) => String(snapshot?.city?.name || '').trim() === cityName).length
+      : 0;
+
+    return {
+      ...state,
+      cityUserCount: Math.max(1, cityUsers),
+    };
+  }
+
   @Get('life-events')
   getLifeEvents() {
     // Return deduped life events (if needed, but list is already unique)
@@ -111,23 +132,27 @@ export class GameController {
   }
 
   @Post('evaluate-applications')
-  evaluateApplications(@Body() body: { state: any }) {
-    return this.applicationService.evaluateApplications(body?.state || {});
+  async evaluateApplications(@Body() body: { state: any }) {
+    const state = await this.withServerCityUserCount(body?.state || {});
+    return this.applicationService.evaluateApplications(state);
   }
 
   @Post('job-eligibility')
-  getJobEligibilityMap(@Body() body: { state: any; jobTitles?: string[] }) {
-    return this.applicationService.getJobEligibilityMap(body?.state || {}, body?.jobTitles || []);
+  async getJobEligibilityMap(@Body() body: { state: any; jobTitles?: string[] }) {
+    const state = await this.withServerCityUserCount(body?.state || {});
+    return this.applicationService.getJobEligibilityMap(state, body?.jobTitles || []);
   }
 
   @Post('apply-job')
-  applyForJob(@Body() body: { state: any; jobTitle: string }) {
-    return this.applicationService.applyForJob(body?.state || {}, body?.jobTitle || '');
+  async applyForJob(@Body() body: { state: any; jobTitle: string }) {
+    const state = await this.withServerCityUserCount(body?.state || {});
+    return this.applicationService.applyForJob(state, body?.jobTitle || '');
   }
 
   @Post('unapply-job')
-  unapplyForJob(@Body() body: { state: any; jobTitle: string }) {
-    return this.applicationService.unapplyForJob(body?.state || {}, body?.jobTitle || '');
+  async unapplyForJob(@Body() body: { state: any; jobTitle: string }) {
+    const state = await this.withServerCityUserCount(body?.state || {});
+    return this.applicationService.unapplyForJob(state, body?.jobTitle || '');
   }
 
   @Post('real-estate/market')

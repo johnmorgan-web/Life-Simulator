@@ -254,23 +254,9 @@ export class ApplicationService {
       }
     }
 
-    const currentMonthResults = applications
-      .filter((app: any) => {
-        const decisionMonth = Number(app?.decisionMonth || 0);
-        const decisionYear = Number(app?.decisionYear || 0);
-        const status = String(app?.status || '');
-        return this.isDecisionDue(decisionMonth, decisionYear, month, year) && status !== 'pending';
-      })
-      .map((app: any) => ({
-        id: app.id,
-        status: app.status,
-        title: app?.job?.title,
-        job: app.job,
-      }));
-
     return {
       applications,
-      applicationResults: currentMonthResults.length ? currentMonthResults : results,
+      applicationResults: results,
       logs,
       logEntries,
     };

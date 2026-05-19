@@ -531,9 +531,7 @@ async function fetchJobEligibilityMapOnServer(state: any, jobTitles: string[]) {
 
 function buildApplicationsRequestState(source: any, relevantJobTitles: string[] = []) {
 	const snapshot = source || {}
-	const cityUserCounts = getUserCityCounts(snapshot)
 	const currentCityName = String(snapshot?.city?.name || '')
-	const cityUserCount = Math.max(1, Number(cityUserCounts[currentCityName] || 1))
 	const requestedTitles = Array.from(
 		new Set(
 			relevantJobTitles
@@ -567,7 +565,6 @@ function buildApplicationsRequestState(source: any, relevantJobTitles: string[] 
 		city: {
 			name: currentCityName,
 		},
-		cityUserCount,
 		credentials: Array.isArray(snapshot.credentials) ? snapshot.credentials : [],
 		transit: {
 			level: Number(snapshot?.transit?.level || 0),
