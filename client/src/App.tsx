@@ -495,7 +495,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
               </div>
             )}
             {jobOpportunityToast && (
-              <div className="fixed top-[calc(env(safe-area-inset-top,0px)+5.75rem)] right-3 sm:top-24 sm:right-5 z-50 max-w-sm w-[calc(100vw-1.5rem)] sm:w-auto bg-white border border-sky-200 shadow-xl rounded-2xl px-4 py-3">
+              <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-3 sm:bottom-5 sm:right-5 z-50 max-w-sm w-[calc(100vw-1.5rem)] sm:w-auto bg-white border border-sky-200 shadow-xl rounded-2xl px-4 py-3">
                 <p className="text-[10px] uppercase font-bold tracking-wide text-sky-600">Career Opportunity</p>
                 <p className="text-sm font-bold text-slate-900">{jobOpportunityToast.title}</p>
                 <p className="text-xs text-slate-500 mt-1">
