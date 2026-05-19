@@ -142,7 +142,7 @@ function generateRecommendation(asset: any, price: number, prevPrice: number, po
 export default function StockMarket() {
   const { state, dispatch, saveGame, buildLedger } = useGame()
   const [shareInputs, setShareInputs] = useState<Record<string, number>>({})
-  const [focusedTicker, setFocusedTicker] = useState('SPY')
+  const [focusedTicker, setFocusedTicker] = useState('')
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null)
 
   const marketPrices = state.marketPrices || {}
@@ -224,6 +224,17 @@ export default function StockMarket() {
       .slice(0, 5)
   }, [signalsByTicker])
 
+  const topIdea = topIdeas[0]
+
+  useEffect(() => {
+    const defaultTicker = topIdea?.asset?.ticker
+    if (!defaultTicker) return
+    const focusedStillValid = stockMarketAssets.some((asset) => asset.ticker === focusedTicker)
+    if (!focusedTicker || !focusedStillValid) {
+      setFocusedTicker(defaultTicker)
+    }
+  }, [focusedTicker, topIdea])
+
   const chartHistory = useMemo(() => {
     const history = Array.isArray(state.marketPriceHistory) ? state.marketPriceHistory : []
     const normalized = history
@@ -264,6 +275,8 @@ export default function StockMarket() {
     () => chartData.series.find((line) => line.ticker === focusedTicker) || chartData.series[0],
     [chartData.series, focusedTicker],
   )
+
+  const focusedSignal = signalsByTicker[focusedTicker]
 
   const hoveredTooltip = useMemo(() => {
     if (hoveredPointIndex === null) return null
@@ -490,15 +503,27 @@ export default function StockMarket() {
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs font-bold uppercase text-slate-500">Focus</label>
-            <select
-              value={focusedTicker}
-              onChange={(e) => setFocusedTicker(e.target.value)}
-              className="p-2 border rounded text-sm"
-            >
-              {stockMarketAssets.map((asset) => (
-                <option key={`focus-${asset.ticker}`} value={asset.ticker}>{asset.ticker}</option>
-              ))}
-            </select>
+            <div className="flex flex-col items-end gap-1">
+              <select
+                value={focusedTicker}
+                onChange={(e) => setFocusedTicker(e.target.value)}
+                className="p-2 border rounded text-sm"
+              >
+                {stockMarketAssets.map((asset) => (
+                  <option key={`focus-${asset.ticker}`} value={asset.ticker}>{asset.ticker}</option>
+                ))}
+              </select>
+              {focusedSignal?.recommendation && (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${recommendationClasses(focusedSignal.recommendation)}`}>
+                  {focusedTicker}: {focusedSignal.recommendation}
+                </span>
+              )}
+              {topIdea?.asset?.ticker && topIdea?.signal?.recommendation && (
+                <p className="text-[11px] text-slate-500">
+                  Default focus follows top idea: {topIdea.asset.ticker} ({topIdea.signal.recommendation})
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
