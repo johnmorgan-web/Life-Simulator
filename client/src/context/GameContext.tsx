@@ -8,13 +8,13 @@ import { findHistoricalScenarioById } from '../constants/historicalEconomicEvent
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
 import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
-import { WEALTH_NET_WORTH_REQUIREMENTS } from '../constants/wealthRequirements.constants'
+import { WEALTH_NET_WORTH_REQUIREMENTS } from '../constants/wealthRequirements.constants.ts'
 import type { AcademyCourse, City, Job, LifeEvent, RewardPrizePools } from '@server/types/models.types'
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')
-const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta'])
+const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta', 'realEstateMarketImpact'])
 const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username', 'isAdmin', 'authToken'])
 const APPEND_ONLY_STATE_KEYS = new Set([
 	'logs',
@@ -309,6 +309,7 @@ async function fetchSharedRealEstateMarketFromServer(stateSnapshot: any, advance
 	return {
 		market: data.market,
 		meta: data.meta,
+		listingResidentImpact: data.listingResidentImpact && typeof data.listingResidentImpact === 'object' ? data.listingResidentImpact : {},
 	}
 }
 
@@ -325,6 +326,7 @@ async function fetchNormalizedRealEstateStateFromServer(stateSnapshot: any) {
 	return {
 		realEstateMarket: data.realEstateMarket && typeof data.realEstateMarket === 'object' ? data.realEstateMarket : {},
 		realEstateMarketMeta: data.realEstateMarketMeta && typeof data.realEstateMarketMeta === 'object' ? data.realEstateMarketMeta : defaultRealEstateMeta(),
+		realEstateMarketImpact: data.listingResidentImpact && typeof data.listingResidentImpact === 'object' ? data.listingResidentImpact : {},
 		investmentProperties: Array.isArray(data.investmentProperties) ? data.investmentProperties : [],
 		pendingRealEstateDeals: Array.isArray(data.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
 		realEstateLastMonthIncome: Number(data.realEstateLastMonthIncome || 0),
@@ -353,27 +355,82 @@ async function fetchAdvancedStockStateFromServer(stateSnapshot: any) {
 	}
 }
 
+async function fetchMonopolyRentOverrideFromServer(stateSnapshot: any) {
+	const response = await fetch(`${API_BASE_URL}/game/real-estate/monopoly-charge`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ state: stateSnapshot || {} }),
+	})
+	if (!response.ok) return null
+	const data = await response.json()
+	if (!data || typeof data !== 'object') return null
+	return {
+		tenantCharge: Math.max(0, Number(data.tenantCharge || 0)),
+		tenantOwnerName: data.tenantOwnerName ? String(data.tenantOwnerName) : null,
+		tenantOwnerPropertyName: data.tenantOwnerPropertyName ? String(data.tenantOwnerPropertyName) : null,
+		tenantCityName: data.tenantCityName ? String(data.tenantCityName) : null,
+		ownerPayout: Math.max(0, Number(data.ownerPayout || 0)),
+		ownerTenantName: data.ownerTenantName ? String(data.ownerTenantName) : null,
+		ownerPropertyName: data.ownerPropertyName ? String(data.ownerPropertyName) : null,
+		ownerCityName: data.ownerCityName ? String(data.ownerCityName) : null,
+		ownerTenantAssignments: data.ownerTenantAssignments && typeof data.ownerTenantAssignments === 'object'
+			? data.ownerTenantAssignments
+			: null,
+	}
+}
+
 async function submitRealEstateOfferToServer(
 	stateSnapshot: any,
 	listing: any,
 	options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 },
 ) {
+	const snapshot = stateSnapshot || {}
+	const listingId = String(listing?.id || '').trim()
+	const cityName = String(listing?.cityName || '').trim()
+	if (!listingId || !cityName) return { ok: false, reason: 'invalid-listing' }
+	const compactState = {
+		currentUser: snapshot.currentUser || snapshot.username || null,
+		username: snapshot.username || snapshot.currentUser || null,
+		credit: Number(snapshot.credit || 0),
+		month: Number(snapshot.month || 1),
+		year: Number(snapshot.year || 2026),
+		pendingRealEstateDeals: Array.isArray(snapshot.pendingRealEstateDeals) ? snapshot.pendingRealEstateDeals : [],
+	}
 	const response = await fetch(`${API_BASE_URL}/game/real-estate/submit-offer`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {}, listing, options: options || {} }),
+		body: JSON.stringify({ state: compactState, listingId, cityName, options: options || {} }),
 	})
-	if (!response.ok) return null
+	if (!response.ok) {
+		let reason = `http-${response.status}`
+		try {
+			const body = await response.json()
+			if (typeof body?.reason === 'string' && body.reason.trim()) reason = body.reason.trim()
+		} catch {
+			// Ignore parse errors and keep status reason.
+		}
+		return { ok: false, reason }
+	}
 	const data = await response.json()
 	if (!data || typeof data !== 'object') return null
 	return data
 }
 
 async function sellInvestmentPropertyOnServer(stateSnapshot: any, propertyId: string) {
+	const snapshot = stateSnapshot || {}
+	const compactState = {
+		currentUser: snapshot.currentUser || snapshot.username || null,
+		username: snapshot.username || snapshot.currentUser || null,
+		month: Number(snapshot.month || 1),
+		year: Number(snapshot.year || 2026),
+		check: Number(snapshot.check || 0),
+		debt: Number(snapshot.debt || 0),
+		investmentProperties: Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties : [],
+	}
 	const response = await fetch(`${API_BASE_URL}/game/real-estate/sell-property`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {}, propertyId }),
+		body: JSON.stringify({ state: compactState, propertyId }),
 	})
 	if (!response.ok) return null
 	const data = await response.json()
@@ -1593,6 +1650,7 @@ function createInitialState(): State {
 	vehicleHistory: [] as any[], // Array of previously owned vehicles
 	realEstateMarket: {},
 	realEstateMarketMeta: defaultRealEstateMeta(),
+	realEstateMarketImpact: {},
 	investmentProperties: [] as any[],
 	pendingRealEstateDeals: [] as any[],
 	realEstateLastMonthIncome: 0,
@@ -1908,6 +1966,7 @@ async function normalizeLoadedUserState(data: any, fallbackState: any, currentUs
 	const realEstateState = await fetchNormalizedRealEstateStateFromServer(data) || {
 		realEstateMarket: data?.realEstateMarket && typeof data.realEstateMarket === 'object' ? data.realEstateMarket : {},
 		realEstateMarketMeta: data?.realEstateMarketMeta && typeof data.realEstateMarketMeta === 'object' ? data.realEstateMarketMeta : defaultRealEstateMeta(),
+		realEstateMarketImpact: data?.realEstateMarketImpact && typeof data.realEstateMarketImpact === 'object' ? data.realEstateMarketImpact : {},
 		investmentProperties: Array.isArray(data?.investmentProperties) ? data.investmentProperties : [],
 		pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals) ? data.pendingRealEstateDeals : [],
 		realEstateLastMonthIncome: Number(data?.realEstateLastMonthIncome || 0),
@@ -2173,6 +2232,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		}
 		case 'PROCESS_MONTH': {
 			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
+			const monopolyRentOverride = action.payload?.monopolyRentOverride && typeof action.payload.monopolyRentOverride === 'object'
+				? action.payload.monopolyRentOverride
+				: null
 			const requestedDebtPayment = Math.max(0, Number(payDebt || 0))
 			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
@@ -2758,10 +2820,16 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 			const survivingDeals: any[] = []
 			let mortgageClosingsThisMonth = 0
+			let realEstateApprovalsThisMonth = 0
 			for (const deal of pendingRealEstateDeals) {
 				const monthsInPipeline = Number(deal?.monthsInPipeline || 0) + 1
 				const approvalMonthsRequired = Math.max(1, Number(deal?.approvalMonthsRequired || 2))
 				if (monthsInPipeline < approvalMonthsRequired) {
+					survivingDeals.push({ ...deal, monthsInPipeline })
+					continue
+				}
+
+				if (realEstateApprovalsThisMonth >= 1) {
 					survivingDeals.push({ ...deal, monthsInPipeline })
 					continue
 				}
@@ -2828,6 +2896,8 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					purchaseMode,
 					rentPerUnit: Number(listing.askingRentPerUnit || 0),
 					marketRentPerUnit: Number(listing.askingRentPerUnit || 0),
+					targetSalaryBracket: listing.targetSalaryBracket || null,
+					targetSalaryRangeLabel: listing.targetSalaryRangeLabel || null,
 					amenities,
 					condition: Math.max(40, Math.min(100, Number(listing.condition || 75))),
 					maintenanceIntensity: 1,
@@ -2847,6 +2917,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					restockDelay
 				]
 				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏠 Closed on ${listing.templateName} in ${listing.cityName} for $${negotiatedPrice.toLocaleString()} (${purchaseMode === 'cash' ? 'cash purchase' : `${mortgageTermYears}-year mortgage`})` })
+				realEstateApprovalsThisMonth += 1
 			}
 			pendingRealEstateDeals = survivingDeals
 			if (mortgageClosingsThisMonth > 0) {
@@ -2864,6 +2935,17 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 			let realEstateIncome = 0
 			let realEstateExpenses = 0
+			let monopolyHousingChargeLastMonth = 0
+			let monopolyHousingChargeOwnerName: string | null = null
+			let monopolyHousingChargePropertyName: string | null = null
+			let monopolyHousingChargeCity: string | null = null
+			let monopolyHousingOwnerPayoutLastMonth = 0
+			let monopolyHousingOwnerTenantName: string | null = null
+			let monopolyHousingOwnerPropertyName: string | null = null
+			let monopolyHousingOwnerCity: string | null = null
+			let ownerTenantAssignments = state.ownerTenantAssignments && typeof state.ownerTenantAssignments === 'object'
+				? { ...state.ownerTenantAssignments }
+				: {}
 			const realEstatePropertyBreakdown: any[] = []
 			const propertyEvents: string[] = []
 			investmentProperties = investmentProperties.map((property: any) => {
@@ -2990,6 +3072,39 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				}
 			})
 
+			if (monopolyRentOverride) {
+				const ownerPayout = round2(Math.max(0, Number(monopolyRentOverride.ownerPayout || 0)))
+				if (ownerPayout > 0) {
+					resultingCheck = round2(resultingCheck + ownerPayout)
+					realEstateIncome = round2(realEstateIncome + ownerPayout)
+					monopolyHousingOwnerPayoutLastMonth = ownerPayout
+					monopolyHousingOwnerTenantName = monopolyRentOverride.ownerTenantName ? String(monopolyRentOverride.ownerTenantName) : null
+					monopolyHousingOwnerPropertyName = monopolyRentOverride.ownerPropertyName ? String(monopolyRentOverride.ownerPropertyName) : null
+					monopolyHousingOwnerCity = monopolyRentOverride.ownerCityName ? String(monopolyRentOverride.ownerCityName) : null
+					logs.push({
+						date: `${nextMonth}/${nextYear}`,
+						msg: `🏘️ Monopoly tenant payment received${monopolyHousingOwnerTenantName ? ` from ${monopolyHousingOwnerTenantName}` : ''}: +$${ownerPayout.toLocaleString()}${monopolyHousingOwnerPropertyName ? ` (${monopolyHousingOwnerPropertyName})` : ''}`,
+					})
+				}
+
+				const tenantCharge = round2(Math.max(0, Number(monopolyRentOverride.tenantCharge || 0)))
+				if (tenantCharge > 0) {
+					resultingCheck = round2(resultingCheck - tenantCharge)
+					monopolyHousingChargeLastMonth = tenantCharge
+					monopolyHousingChargeOwnerName = monopolyRentOverride.tenantOwnerName ? String(monopolyRentOverride.tenantOwnerName) : null
+					monopolyHousingChargePropertyName = monopolyRentOverride.tenantOwnerPropertyName ? String(monopolyRentOverride.tenantOwnerPropertyName) : null
+					monopolyHousingChargeCity = monopolyRentOverride.tenantCityName ? String(monopolyRentOverride.tenantCityName) : null
+					logs.push({
+						date: `${nextMonth}/${nextYear}`,
+						msg: `🏚️ Part of your housing payment was redirected to ${monopolyHousingChargeOwnerName || 'the property owner'}: -$${tenantCharge.toLocaleString()}${monopolyHousingChargePropertyName ? ` (${monopolyHousingChargePropertyName})` : ''}`,
+					})
+				}
+
+				if (monopolyRentOverride.ownerTenantAssignments && typeof monopolyRentOverride.ownerTenantAssignments === 'object') {
+					ownerTenantAssignments = { ...monopolyRentOverride.ownerTenantAssignments }
+				}
+			}
+
 			const realEstateNet = round2(realEstateIncome - realEstateExpenses)
 			if (investmentProperties.length > 0) {
 				resultingCheck = round2(resultingCheck + realEstateNet)
@@ -3025,7 +3140,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 						condition: Math.max(20, Math.min(100, Math.round(Number(foreclosed.condition || 60) - 6))),
 						ownershipCount: Math.max(0, Math.floor(Number(foreclosed.ownershipCount || 0))),
 						foreclosure: true,
-						listedByUser: null
+						listedByUser: null,
+						targetSalaryBracket: foreclosed.targetSalaryBracket || null,
+						targetSalaryRangeLabel: foreclosed.targetSalaryRangeLabel || null
 					}
 					realEstateMarket[foreclosed.cityName] = [...(realEstateMarket[foreclosed.cityName] || []), foreclosureListing]
 					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `⚠️ Foreclosure executed on ${foreclosed.templateName}. Relisted at $${foreclosurePrice.toLocaleString()}${deficiency > 0 ? ` with $${deficiency.toLocaleString()} deficiency debt.` : '.'}` })
@@ -3349,6 +3466,15 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				realEstateLastMonthIncome: realEstateIncome,
 				realEstateLastMonthExpenses: realEstateExpenses,
 				realEstateLastMonthPropertyBreakdown: realEstatePropertyBreakdown,
+				monopolyHousingChargeLastMonth,
+				monopolyHousingChargeOwnerName,
+				monopolyHousingChargePropertyName,
+				monopolyHousingChargeCity,
+				monopolyHousingOwnerPayoutLastMonth,
+				monopolyHousingOwnerTenantName,
+				monopolyHousingOwnerPropertyName,
+				monopolyHousingOwnerCity,
+				ownerTenantAssignments,
 				stockInvestedThisMonth: 0,
 				stockInvestedLastMonth,
 				totalGasPaid,
@@ -3771,6 +3897,14 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			job: snapshot.job,
 			workPenaltyPercent: snapshot.workPenaltyPercent,
 			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
+			monopolyHousingChargeLastMonth: Number(snapshot.monopolyHousingChargeLastMonth || 0),
+			monopolyHousingChargeOwnerName: snapshot.monopolyHousingChargeOwnerName || null,
+			monopolyHousingChargePropertyName: snapshot.monopolyHousingChargePropertyName || null,
+			monopolyHousingChargeCity: snapshot.monopolyHousingChargeCity || null,
+			monopolyHousingOwnerPayoutLastMonth: Number(snapshot.monopolyHousingOwnerPayoutLastMonth || 0),
+			monopolyHousingOwnerTenantName: snapshot.monopolyHousingOwnerTenantName || null,
+			monopolyHousingOwnerPropertyName: snapshot.monopolyHousingOwnerPropertyName || null,
+			monopolyHousingOwnerCity: snapshot.monopolyHousingOwnerCity || null,
 			luxuryServices: snapshot.luxuryServices || {},
 			transit: snapshot.transit
 				? {
@@ -3824,9 +3958,10 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		const runMonth = async () => {
 			const snapshot = stateRef.current || state
-			const [serverMarket, serverStock] = await Promise.all([
+				const [serverMarket, serverStock, monopolyRentOverride] = await Promise.all([
 				fetchSharedRealEstateMarketFromServer(snapshot, true),
 				fetchAdvancedStockStateFromServer(snapshot),
+					fetchMonopolyRentOverrideFromServer(snapshot),
 			])
 			if (!serverMarket) {
 				console.error('Failed to advance real-estate market on server. Month processing aborted.')
@@ -3842,6 +3977,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				payload: {
 					realEstateMarket: serverMarket.market,
 					realEstateMarketMeta: serverMarket.meta,
+						realEstateMarketImpact: serverMarket.listingResidentImpact || {},
 				},
 			})
 
@@ -3852,6 +3988,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					payDebt: safePayDebt,
 					skippedPayment,
 					stockMarketOverride: serverStock,
+						monopolyRentOverride,
 				},
 			})
 		}
@@ -4102,6 +4239,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			stockInvestedLastMonth: 0,
 			realEstateMarket: {},
 			realEstateMarketMeta: defaultRealEstateMeta(),
+			realEstateMarketImpact: {},
 			investmentProperties: [],
 			pendingRealEstateDeals: [],
 			realEstateLastMonthIncome: 0,
@@ -4128,6 +4266,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (seededSharedMarket) {
 			freshState.realEstateMarket = seededSharedMarket.realEstateMarket
 			freshState.realEstateMarketMeta = seededSharedMarket.realEstateMarketMeta
+			freshState.realEstateMarketImpact = seededSharedMarket.realEstateMarketImpact || {}
 			freshState.investmentProperties = seededSharedMarket.investmentProperties
 			freshState.pendingRealEstateDeals = seededSharedMarket.pendingRealEstateDeals
 			freshState.realEstateLastMonthIncome = seededSharedMarket.realEstateLastMonthIncome
@@ -4394,7 +4533,14 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		const snapshot = stateRef.current || state
 		const serverMarket = await fetchSharedRealEstateMarketFromServer(snapshot, false)
 		if (!serverMarket) return null
-		dispatch({ type: 'SET_STATE', payload: { realEstateMarket: serverMarket.market, realEstateMarketMeta: serverMarket.meta } })
+		dispatch({
+			type: 'SET_STATE',
+			payload: {
+				realEstateMarket: serverMarket.market,
+				realEstateMarketMeta: serverMarket.meta,
+				realEstateMarketImpact: serverMarket.listingResidentImpact || {},
+			},
+		})
 		return serverMarket.market
 	}
 
@@ -4408,6 +4554,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (serverResult.ok) {
 			const nextMarket = serverResult.market || {}
 			const nextMeta = serverResult.meta || defaultRealEstateMeta()
+			const nextImpact = serverResult.listingResidentImpact && typeof serverResult.listingResidentImpact === 'object'
+				? serverResult.listingResidentImpact
+				: (snapshot.realEstateMarketImpact || {})
 			const nextDeals = Array.isArray(serverResult.pendingRealEstateDeals) ? serverResult.pendingRealEstateDeals : []
 			const nextLogs = [
 				...(Array.isArray(snapshot.logs) ? snapshot.logs : []),
@@ -4419,6 +4568,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				payload: {
 					realEstateMarket: nextMarket,
 					realEstateMarketMeta: nextMeta,
+					realEstateMarketImpact: nextImpact,
 					pendingRealEstateDeals: nextDeals,
 					logs: nextLogs,
 				}
@@ -4429,11 +4579,15 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		if (serverResult.reason === 'listing-unavailable') {
 			if (serverResult.market && serverResult.meta) {
+				const nextImpact = serverResult.listingResidentImpact && typeof serverResult.listingResidentImpact === 'object'
+					? serverResult.listingResidentImpact
+					: (snapshot.realEstateMarketImpact || {})
 				dispatch({
 					type: 'SET_STATE',
 					payload: {
 						realEstateMarket: serverResult.market,
 						realEstateMarketMeta: serverResult.meta,
+						realEstateMarketImpact: nextImpact,
 					}
 				})
 			}
@@ -4452,6 +4606,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		const nextMarket = serverResult.market || {}
 		const nextMeta = serverResult.meta || defaultRealEstateMeta()
+		const nextImpact = serverResult.listingResidentImpact && typeof serverResult.listingResidentImpact === 'object'
+			? serverResult.listingResidentImpact
+			: (snapshot.realEstateMarketImpact || {})
 		const nextLogs = [
 			...(Array.isArray(snapshot.logs) ? snapshot.logs : []),
 			...(serverResult.logEntry ? [serverResult.logEntry] : []),
@@ -4465,6 +4622,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				investmentProperties: Array.isArray(serverResult.investmentProperties) ? serverResult.investmentProperties : (Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties : []),
 				realEstateMarket: nextMarket,
 				realEstateMarketMeta: nextMeta,
+				realEstateMarketImpact: nextImpact,
 				logs: nextLogs,
 			}
 		})

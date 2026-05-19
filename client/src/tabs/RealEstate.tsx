@@ -1,8 +1,52 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { amenityImpact, realEstateTemplates } from '../constants/realEstate.constants'
 
 type LearningLevel = 'elementary' | 'middle-school' | 'high-school' | 'adult'
+
+const REAL_ESTATE_PANEL_STORAGE_KEY = 'life-simulator.real-estate-panels'
+
+function loadRealEstatePanelState() {
+  if (typeof window === 'undefined') {
+    return {
+      isMarketOpen: true,
+      isCityDashboardOpen: true,
+      isListingsOpen: true,
+      isPendingApprovalsOpen: true,
+      isOwnedPropertiesOpen: true,
+    }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(REAL_ESTATE_PANEL_STORAGE_KEY)
+    if (!raw) {
+      return {
+        isMarketOpen: true,
+        isCityDashboardOpen: true,
+        isListingsOpen: true,
+        isPendingApprovalsOpen: true,
+        isOwnedPropertiesOpen: true,
+      }
+    }
+
+    const parsed = JSON.parse(raw)
+    return {
+      isMarketOpen: parsed?.isMarketOpen !== false,
+      isCityDashboardOpen: parsed?.isCityDashboardOpen !== false,
+      isListingsOpen: parsed?.isListingsOpen !== false,
+      isPendingApprovalsOpen: parsed?.isPendingApprovalsOpen !== false,
+      isOwnedPropertiesOpen: parsed?.isOwnedPropertiesOpen !== false,
+    }
+  } catch {
+    return {
+      isMarketOpen: true,
+      isCityDashboardOpen: true,
+      isListingsOpen: true,
+      isPendingApprovalsOpen: true,
+      isOwnedPropertiesOpen: true,
+    }
+  }
+}
 
 function currency(n: number) {
   return `$${Math.round(Number(n || 0)).toLocaleString()}`
@@ -326,6 +370,7 @@ function getMaintenanceEducation(learningLevel: LearningLevel, usePlainLanguage:
 
 export default function RealEstate() {
   const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts } = useGame()
+  const initialPanelState = loadRealEstatePanelState()
   const learningLevel: LearningLevel = state.learningLevel || state.realEstateLearningLevel || state.marketLearningLevel || 'adult'
   const usePlainLanguage = Boolean(state.usePlainLanguage ?? state.realEstateUsePlainLanguage ?? state.marketUsePlainLanguage)
   const [selectedCity, setSelectedCity] = useState(state.city?.name || cityData?.[0]?.name || '')
@@ -334,14 +379,23 @@ export default function RealEstate() {
   const [mortgageTermYears, setMortgageTermYears] = useState<15 | 30>(30)
   const [calculatorAssumptionsByListing, setCalculatorAssumptionsByListing] = useState<Record<string, { occupancyRate: number; condition: number }>>({})
   const [projectionModal, setProjectionModal] = useState<{ propertyId: string; amenity: string } | null>(null)
+  const [submittingListingId, setSubmittingListingId] = useState<string | null>(null)
+  const [offerNotice, setOfferNotice] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null)
+  const [isMarketOpen, setIsMarketOpen] = useState(initialPanelState.isMarketOpen)
+  const [isCityDashboardOpen, setIsCityDashboardOpen] = useState(initialPanelState.isCityDashboardOpen)
+  const [isListingsOpen, setIsListingsOpen] = useState(initialPanelState.isListingsOpen)
+  const [isPendingApprovalsOpen, setIsPendingApprovalsOpen] = useState(initialPanelState.isPendingApprovalsOpen)
+  const [isOwnedPropertiesOpen, setIsOwnedPropertiesOpen] = useState(initialPanelState.isOwnedPropertiesOpen)
 
   const market = (state.realEstateMarket || {}) as Record<string, any[]>
   const marketMeta = (state.realEstateMarketMeta || {}) as any
+  const marketImpact = (state.realEstateMarketImpact || {}) as Record<string, any>
   const cityListings = Array.isArray(market[selectedCity]) ? market[selectedCity] : []
   const deals = Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals : []
   const properties = Array.isArray(state.investmentProperties) ? state.investmentProperties : []
   const cityRestockTimers = Array.isArray(marketMeta?.pendingListingTimersByCity?.[selectedCity]) ? marketMeta.pendingListingTimersByCity[selectedCity] : []
   const nextListingMonths = cityRestockTimers.length ? Math.min(...cityRestockTimers.map((n: number) => Number(n || 0)).filter((n: number) => n > 0)) : null
+  const isRemoteInvestmentCity = String(state?.city?.name || '') !== String(selectedCity || '')
 
   const selectedCityInsights = useMemo(() => {
     const city = (Array.isArray(cityData) ? cityData : []).find((c: any) => c.name === selectedCity)
@@ -458,10 +512,32 @@ export default function RealEstate() {
   }
 
   const submitOffer = async (listing: any) => {
-    const result = await submitRealEstateOffer(listing, { downPaymentPct, purchaseMode, mortgageTermYears })
-    if (!result?.ok && result?.reason === 'listing-unavailable') {
-      await refreshRealEstateMarket()
-      alert('This listing was just taken by another user. Market has been refreshed.')
+    const listingId = String(listing?.id || '')
+    if (!listingId || submittingListingId === listingId) return
+
+    setSubmittingListingId(listingId)
+    setOfferNotice(null)
+    try {
+      const result = await submitRealEstateOffer(listing, { downPaymentPct, purchaseMode, mortgageTermYears })
+      if (result?.ok) {
+        setOfferNotice({ type: 'success', message: `Offer submitted for ${listing?.templateName || 'listing'}. Check Pending Approvals for status.` })
+        return
+      }
+
+      if (result?.reason === 'listing-unavailable') {
+        await refreshRealEstateMarket()
+        setOfferNotice({ type: 'info', message: 'That listing was already taken. Market data has been refreshed.' })
+        return
+      }
+
+      if (result?.reason === 'network-error') {
+        setOfferNotice({ type: 'error', message: 'Unable to submit offer right now. Please try again.' })
+        return
+      }
+
+      setOfferNotice({ type: 'error', message: `Offer was not submitted (${String(result?.reason || 'unknown error')}).` })
+    } finally {
+      setSubmittingListingId(null)
     }
   }
 
@@ -551,141 +627,222 @@ export default function RealEstate() {
     return Math.round(price * downPaymentPct + price * 0.025)
   }
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    window.localStorage.setItem(
+      REAL_ESTATE_PANEL_STORAGE_KEY,
+      JSON.stringify({
+        isMarketOpen,
+        isCityDashboardOpen,
+        isListingsOpen,
+        isPendingApprovalsOpen,
+        isOwnedPropertiesOpen,
+      }),
+    )
+  }, [isMarketOpen, isCityDashboardOpen, isListingsOpen, isPendingApprovalsOpen, isOwnedPropertiesOpen])
+
   return (
     <div className="space-y-6">
       <div className="glass p-4">
-        <h3 className="font-bold text-lg">Real Estate Market</h3>
-        <p className="text-xs text-slate-600 mt-1">{selectedCity} currently has {selectedCityInsights.usersInCity} active user{selectedCityInsights.usersInCity === 1 ? '' : 's'} with {selectedCityInsights.pressureLabel.toLowerCase()} supply pressure ({selectedCityInsights.pressureMultiplier.toFixed(2)}x demand).</p>
-        <div className="flex flex-wrap gap-3 mt-3">
-          <label className="text-sm text-slate-700 flex items-center gap-2">
-            {vocabulary.learningLevelLabel}
-            <select
-              value={learningLevel}
-              onChange={(e) => dispatch({
-                type: 'SET_STATE',
-                payload: {
-                  learningLevel: e.target.value,
-                  marketLearningLevel: e.target.value,
-                  realEstateLearningLevel: e.target.value,
-                },
-              })}
-              className="px-2 py-1 rounded border border-slate-300 bg-white"
-            >
-              <option value="elementary">Elementary</option>
-              <option value="middle-school">Middle School</option>
-              <option value="high-school">High School</option>
-              <option value="adult">Adult</option>
-            </select>
-          </label>
-          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={usePlainLanguage}
-              onChange={(e) => dispatch({
-                type: 'SET_STATE',
-                payload: {
-                  usePlainLanguage: e.target.checked,
-                  marketUsePlainLanguage: e.target.checked,
-                  realEstateUsePlainLanguage: e.target.checked,
-                },
-              })}
-            />
-            {vocabulary.plainLanguageLabel}
-          </label>
-          <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => { void refreshRealEstateMarket() }}>{vocabulary.refreshMarketLabel}</button>
-          <select
-            value={selectedCity}
-            onChange={(e) => setSelectedCity(e.target.value)}
-            className="px-3 py-2 rounded border border-slate-300 bg-white"
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-bold text-lg">Real Estate Market</h3>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => setIsMarketOpen((open) => !open)}
           >
-            {(Array.isArray(cityData) ? cityData : []).map((city: any) => (
-              <option key={city.name} value={city.name}>{city.icon} {city.name}</option>
-            ))}
-          </select>
-          <label className="text-sm text-slate-700 flex items-center gap-2">
-            {vocabulary.buyModeLabel}
-            <select value={purchaseMode} onChange={(e) => setPurchaseMode(e.target.value === 'cash' ? 'cash' : 'mortgage')} className="px-2 py-1 rounded border border-slate-300 bg-white">
-              <option value="mortgage">{vocabulary.mortgageOptionLabel}</option>
-              <option value="cash">{vocabulary.cashOptionLabel}</option>
-            </select>
-          </label>
-          {purchaseMode === 'mortgage' ? (
-            <label className="text-sm text-slate-700 flex items-center gap-2">
-              {vocabulary.termLabel}
-              <select value={String(mortgageTermYears)} onChange={(e) => setMortgageTermYears(Number(e.target.value) === 15 ? 15 : 30)} className="px-2 py-1 rounded border border-slate-300 bg-white">
-                <option value="15">15 years</option>
-                <option value="30">30 years</option>
-              </select>
-            </label>
-          ) : null}
-          {purchaseMode === 'mortgage' ? (
-            <label className="text-sm text-slate-700 flex items-center gap-2">
-            {vocabulary.downPaymentLabel}
-            <select
-              value={String(downPaymentPct)}
-              onChange={(e) => setDownPaymentPct(Number(e.target.value))}
-              className="px-2 py-1 rounded border border-slate-300 bg-white"
-            >
-              <option value="0.2">20%</option>
-              <option value="0.25">25%</option>
-              <option value="0.3">30%</option>
-              <option value="0.4">40%</option>
-            </select>
-          </label>
-          ) : null}
+            {isMarketOpen ? 'Collapse' : 'Expand'}
+          </button>
         </div>
+        {isMarketOpen ? (
+          <>
+            <p className="text-xs text-slate-600 mt-1">{selectedCity} currently has {selectedCityInsights.usersInCity} active user{selectedCityInsights.usersInCity === 1 ? '' : 's'} with {selectedCityInsights.pressureLabel.toLowerCase()} supply pressure ({selectedCityInsights.pressureMultiplier.toFixed(2)}x demand).</p>
+            {offerNotice ? (
+              <p className={`text-xs mt-2 px-2 py-1 rounded border inline-block ${offerNotice.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : offerNotice.type === 'info' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
+                {offerNotice.message}
+              </p>
+            ) : null}
+            {isRemoteInvestmentCity ? (
+              <p className="text-xs mt-2 px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200 inline-block">
+                Remote investment enabled: you can purchase listings in {selectedCity} even if you currently live in {String(state?.city?.name || 'another city')}.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-3 mt-3">
+              <label className="text-sm text-slate-700 flex items-center gap-2">
+                {vocabulary.learningLevelLabel}
+                <select
+                  value={learningLevel}
+                  onChange={(e) => dispatch({
+                    type: 'SET_STATE',
+                    payload: {
+                      learningLevel: e.target.value,
+                      marketLearningLevel: e.target.value,
+                      realEstateLearningLevel: e.target.value,
+                    },
+                  })}
+                  className="px-2 py-1 rounded border border-slate-300 bg-white"
+                >
+                  <option value="elementary">Elementary</option>
+                  <option value="middle-school">Middle School</option>
+                  <option value="high-school">High School</option>
+                  <option value="adult">Adult</option>
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={usePlainLanguage}
+                  onChange={(e) => dispatch({
+                    type: 'SET_STATE',
+                    payload: {
+                      usePlainLanguage: e.target.checked,
+                      marketUsePlainLanguage: e.target.checked,
+                      realEstateUsePlainLanguage: e.target.checked,
+                    },
+                  })}
+                />
+                {vocabulary.plainLanguageLabel}
+              </label>
+              <button className="px-3 py-2 rounded bg-slate-800 text-white text-sm" onClick={() => { void refreshRealEstateMarket() }}>{vocabulary.refreshMarketLabel}</button>
+              <select
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                className="px-3 py-2 rounded border border-slate-300 bg-white"
+              >
+                {(Array.isArray(cityData) ? cityData : []).map((city: any) => (
+                  <option key={city.name} value={city.name}>{city.icon} {city.name}</option>
+                ))}
+              </select>
+              <label className="text-sm text-slate-700 flex items-center gap-2">
+                {vocabulary.buyModeLabel}
+                <select value={purchaseMode} onChange={(e) => setPurchaseMode(e.target.value === 'cash' ? 'cash' : 'mortgage')} className="px-2 py-1 rounded border border-slate-300 bg-white">
+                  <option value="mortgage">{vocabulary.mortgageOptionLabel}</option>
+                  <option value="cash">{vocabulary.cashOptionLabel}</option>
+                </select>
+              </label>
+              {purchaseMode === 'mortgage' ? (
+                <label className="text-sm text-slate-700 flex items-center gap-2">
+                  {vocabulary.termLabel}
+                  <select value={String(mortgageTermYears)} onChange={(e) => setMortgageTermYears(Number(e.target.value) === 15 ? 15 : 30)} className="px-2 py-1 rounded border border-slate-300 bg-white">
+                    <option value="15">15 years</option>
+                    <option value="30">30 years</option>
+                  </select>
+                </label>
+              ) : null}
+              {purchaseMode === 'mortgage' ? (
+                <label className="text-sm text-slate-700 flex items-center gap-2">
+                {vocabulary.downPaymentLabel}
+                <select
+                  value={String(downPaymentPct)}
+                  onChange={(e) => setDownPaymentPct(Number(e.target.value))}
+                  className="px-2 py-1 rounded border border-slate-300 bg-white"
+                >
+                  <option value="0.2">20%</option>
+                  <option value="0.25">25%</option>
+                  <option value="0.3">30%</option>
+                  <option value="0.4">40%</option>
+                </select>
+              </label>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="glass p-4">
-        <h4 className="font-bold">City Dashboard</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
-          {cityDashboard.map((row: any) => (
-            <div key={`city-dash-${row.cityName}`} className="bg-slate-50 rounded p-3 text-sm">
-              <p className="font-semibold">{row.icon} {row.cityName}</p>
-              <p className="text-slate-600">Users in city: <span className="font-bold">{row.usersInCity}</span></p>
-              <p className="text-slate-600">Supply pressure: <span className="font-bold">{row.supplyPressure.label}</span> <span className="text-xs">({row.supplyPressure.multiplier.toFixed(2)}x)</span></p>
-              <p className="text-slate-600">Listings: <span className="font-bold">{row.listingCount}</span></p>
-              <p className="text-slate-600">Median Ask: <span className="font-bold">{currency(row.medianAsking)}</span></p>
-              <p className="text-slate-600">Median Rent/Unit: <span className="font-bold">{currency(row.medianRent)}</span></p>
-              <p className="text-slate-600">Your holdings: <span className="font-bold">{row.ownedProperties}</span></p>
-              <p className="text-slate-600">Your occupancy: <span className="font-bold">{row.occupancyRate.toFixed(0)}%</span></p>
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-bold">City Dashboard</h4>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => setIsCityDashboardOpen((open) => !open)}
+          >
+            {isCityDashboardOpen ? 'Collapse' : 'Expand'}
+          </button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {cityListings.length === 0 ? (
-          <div className="glass p-4 lg:col-span-2">
-            <p className="font-bold text-slate-800">No Active Listings In {selectedCity}</p>
-            <p className="text-sm text-slate-600 mt-1">
-              {nextListingMonths
-                ? `All available properties are currently taken. The next likely listing should appear in about ${nextListingMonths} month${nextListingMonths === 1 ? '' : 's'}.`
-                : 'All available properties are currently taken. New listings usually return to market around six months after purchases or when more users move into the city.'}
-            </p>
+        {isCityDashboardOpen ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
+            {cityDashboard.map((row: any) => (
+              <div key={`city-dash-${row.cityName}`} className="bg-slate-50 rounded p-3 text-sm">
+                <p className="font-semibold">{row.icon} {row.cityName}</p>
+                <p className="text-slate-600">Users in city: <span className="font-bold">{row.usersInCity}</span></p>
+                <p className="text-slate-600">Supply pressure: <span className="font-bold">{row.supplyPressure.label}</span> <span className="text-xs">({row.supplyPressure.multiplier.toFixed(2)}x)</span></p>
+                <p className="text-slate-600">Listings: <span className="font-bold">{row.listingCount}</span></p>
+                <p className="text-slate-600">Median Ask: <span className="font-bold">{currency(row.medianAsking)}</span></p>
+                <p className="text-slate-600">Median Rent/Unit: <span className="font-bold">{currency(row.medianRent)}</span></p>
+                <p className="text-slate-600">Your holdings: <span className="font-bold">{row.ownedProperties}</span></p>
+                <p className="text-slate-600">Your occupancy: <span className="font-bold">{row.occupancyRate.toFixed(0)}%</span></p>
+              </div>
+            ))}
           </div>
         ) : null}
-        {cityListings.slice(0, 12).map((listing: any) => {
+      </div>
+
+      <div className="glass p-4 overflow-visible">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-bold">Available Listings</h4>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => setIsListingsOpen((open) => !open)}
+          >
+            {isListingsOpen ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+        {isListingsOpen ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-visible mt-3">
+          {cityListings.length === 0 ? (
+            <div className="bg-slate-50 rounded p-4 lg:col-span-2">
+              <p className="font-bold text-slate-800">No Active Listings In {selectedCity}</p>
+              <p className="text-sm text-slate-600 mt-1">
+                {nextListingMonths
+                  ? `All available properties are currently taken. The next likely listing should appear in about ${nextListingMonths} month${nextListingMonths === 1 ? '' : 's'}.`
+                  : 'All available properties are currently taken. New listings usually return to market around six months after purchases or when more users move into the city.'}
+              </p>
+            </div>
+          ) : null}
+          {cityListings.slice(0, 12).map((listing: any) => {
           const gross = Number(listing.units || 1) * Number(listing.askingRentPerUnit || 0) * 12
           const capRate = listing.askingPrice > 0 ? ((gross * 0.65) / Number(listing.askingPrice || 1)) * 100 : 0
           const listingId = String(listing.id || '')
+          const isSubmittingOffer = submittingListingId === listingId
+          const listingImpact = marketImpact[listingId] || null
           const assumptions = getListingAssumptions(listingId)
           const projection = listingPreOfferProjection(listing, assumptions.occupancyRate, assumptions.condition)
           return (
-            <div key={listing.id} className="glass p-4">
+            <div key={listing.id} className="glass p-4 overflow-visible">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-bold text-slate-800">{listing.templateName}</p>
                   <p className="text-xs text-slate-500">{listing.assetClass || 'Residential'} • {listing.units} units • DOM {listing.dom} • Condition {listing.condition}%</p>
+                  <p className="text-xs text-slate-500">Target renter salary: {String(listing.targetSalaryRangeLabel || '$3,000+/mo')}</p>
                   <p className="text-xs text-slate-500">Owned since inception: {Math.max(0, Number(listing.ownershipCount || 0))} time{Math.max(0, Number(listing.ownershipCount || 0)) === 1 ? '' : 's'}</p>
                 </div>
                 <button
-                  className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm font-bold"
+                  className={`px-3 py-1.5 rounded text-white text-sm font-bold ${isSubmittingOffer ? 'bg-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                   onClick={() => { void submitOffer(listing) }}
+                  disabled={isSubmittingOffer}
                 >
-                  Make Offer
+                  {isSubmittingOffer ? 'Submitting...' : 'Make Offer'}
                 </button>
               </div>
+              {listingImpact ? (
+                <div className={`mt-2 rounded border px-2 py-1 text-xs ${listingImpact.level === 'high' ? 'bg-rose-50 border-rose-200 text-rose-800' : listingImpact.level === 'medium' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+                  <p className="font-semibold">Resident impact: {String(listingImpact.label || 'Unknown')}</p>
+                  <p>
+                    Est. rent burden {Math.round(Number(listingImpact.rentShare || 0) * 100)}% and mortgage burden {Math.round(Number(listingImpact.mortgageShare || 0) * 100)}% of median local monthly income
+                    {Number(listingImpact.medianMonthlyIncome || 0) > 0 ? ` ($${Math.round(Number(listingImpact.medianMonthlyIncome || 0)).toLocaleString()})` : ''}.
+                  </p>
+                  <p>
+                    Avg city salary: {Number(listingImpact.averageMonthlyIncome || 0) > 0 ? `$${Math.round(Number(listingImpact.averageMonthlyIncome || 0)).toLocaleString()}/mo` : 'N/A'}.
+                    Charge-eligible users: {Math.round(Number(listingImpact.chargeEligibleRate || 0) * 100)}%
+                    {Number(listingImpact.residentCount || 0) > 0
+                      ? ` (${Number(listingImpact.chargeEligibleResidents || 0)}/${Number(listingImpact.residentCount || 0)})`
+                      : ''}.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
                 <div>
                   <p className="text-[10px] uppercase text-slate-500">{vocabulary.askingLabel}</p>
@@ -759,27 +916,52 @@ export default function RealEstate() {
               {listing.foreclosure ? <p className="text-[11px] font-bold text-rose-700 mt-1">{vocabulary.foreclosureLabel}</p> : null}
             </div>
           )
-        })}
+          })}
+        </div>
+        ) : null}
       </div>
 
       <div className="glass p-4">
-        <h4 className="font-bold">Pending Approvals</h4>
-        {deals.length === 0 ? <p className="text-sm text-slate-500 mt-2">No active offers.</p> : (
-          <div className="space-y-2 mt-2">
-            {deals.map((deal: any) => (
-              <div key={deal.id} className="bg-slate-50 rounded p-3 text-sm">
-                <p className="font-semibold">{deal?.listing?.templateName} - {deal?.listing?.cityName}</p>
-                <p className="text-slate-600">Pipeline: {deal.monthsInPipeline}/{deal.approvalMonthsRequired} months • Down: {Math.round(Number(deal.downPaymentPct || 0) * 100)}%</p>
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-bold">Pending Approvals</h4>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => setIsPendingApprovalsOpen((open) => !open)}
+          >
+            {isPendingApprovalsOpen ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+        {isPendingApprovalsOpen ? (
+          <>
+            <p className="text-xs text-slate-600 mt-1">Only one real-estate offer can close per month. Additional matured offers remain in pipeline for a future month.</p>
+            {deals.length === 0 ? <p className="text-sm text-slate-500 mt-2">No active offers.</p> : (
+              <div className="space-y-2 mt-2">
+                {deals.map((deal: any) => (
+                  <div key={deal.id} className="bg-slate-50 rounded p-3 text-sm">
+                    <p className="font-semibold">{deal?.listing?.templateName} - {deal?.listing?.cityName}</p>
+                    <p className="text-slate-600">Pipeline: {deal.monthsInPipeline}/{deal.approvalMonthsRequired} months • Down: {Math.round(Number(deal.downPaymentPct || 0) * 100)}%</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
+          </>
+        ) : null}
       </div>
 
       <div className="glass p-4">
-        <h4 className="font-bold">Owned Properties</h4>
-        {properties.length === 0 ? <p className="text-sm text-slate-500 mt-2">No investment properties yet.</p> : (
-          <div className="space-y-3 mt-2">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-bold">Owned Properties</h4>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => setIsOwnedPropertiesOpen((open) => !open)}
+          >
+            {isOwnedPropertiesOpen ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+        {isOwnedPropertiesOpen ? (properties.length === 0 ? <p className="text-sm text-slate-500 mt-2">No investment properties yet.</p> : (
+          <div className="space-y-3 mt-2 overflow-visible">
             {properties.map((property: any) => {
               const template = realEstateTemplates.find((t) => t.id === property.templateId)
               const openAmenities = (template?.amenityOptions || [])
@@ -798,7 +980,7 @@ export default function RealEstate() {
               const highOccLowCond = scenarioProjection(property, 0.95, 45)
               const highOccHighCond = scenarioProjection(property, 0.95, 90)
               return (
-                <div key={property.id} className="bg-slate-50 rounded p-3">
+                <div key={property.id} className="bg-slate-50 rounded p-3 relative overflow-visible z-0 hover:z-20">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-semibold">{property.templateName} - {property.cityName}</p>
                     <p className={`font-bold ${Number(property.lastNetCashflow || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -810,6 +992,9 @@ export default function RealEstate() {
                   </p>
                   <p className="text-xs text-slate-600 mt-1">
                     Financing: {property.purchaseMode === 'cash' ? 'Cash Purchase' : `${property.mortgageTermMonths ? Math.round(property.mortgageTermMonths / 12) : 30}Y Mortgage`} • Income: {property.incomeLabel || 'Monthly Rent'}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Target renter salary bracket: {String(property.targetSalaryRangeLabel || '$3,000+/mo')}
                   </p>
                   <p className="text-xs text-slate-600 mt-1">
                     Ownership count: {Math.max(1, Number(property.ownershipCount || 1))} total owner{Math.max(1, Number(property.ownershipCount || 1)) === 1 ? '' : 's'}
@@ -883,7 +1068,7 @@ export default function RealEstate() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2 mt-3 relative overflow-visible z-30">
                     <span className="tooltip-anchor">
                       <button
                         className="px-2 py-1 text-xs rounded bg-slate-200"
@@ -891,7 +1076,7 @@ export default function RealEstate() {
                       >
                         Lean Maintenance
                       </button>
-                      <span className="tooltip-bubble">{maintenanceEducation.leanTooltip}<span className="tooltip-caret" /></span>
+                      <span className="tooltip-bubble tooltip-bubble-left">{maintenanceEducation.leanTooltip}<span className="tooltip-caret" /></span>
                     </span>
                     <span className="tooltip-anchor">
                       <button
@@ -988,7 +1173,7 @@ export default function RealEstate() {
               )
             })}
           </div>
-        )}
+        )) : null}
       </div>
 
       {/* Amenity Projection Modal */}

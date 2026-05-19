@@ -246,11 +246,17 @@ button:disabled {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
+	z-index: 1;
+}
+
+.tooltip-anchor:hover,
+.tooltip-anchor:focus-within {
+	z-index: 240;
 }
 
 .tooltip-bubble {
 	position: absolute;
-	z-index: 80;
+	z-index: 260;
 	left: 50%;
 	bottom: calc(100% + 8px);
 	transform: translateX(-50%) translateY(4px);
@@ -289,6 +295,21 @@ button:disabled {
 	opacity: 1;
 	visibility: visible;
 	transform: translateX(-50%) translateY(0);
+}
+
+.tooltip-bubble-left {
+	left: 0;
+	transform: translateX(0) translateY(4px);
+}
+
+.tooltip-bubble-left .tooltip-caret {
+	left: 16px;
+	transform: translateX(0);
+}
+
+.tooltip-anchor:hover .tooltip-bubble-left,
+.tooltip-anchor:focus-within .tooltip-bubble-left {
+	transform: translateX(0) translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
