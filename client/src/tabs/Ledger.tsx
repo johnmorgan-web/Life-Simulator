@@ -24,6 +24,8 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
       .slice(0, 4)
   }
 
+  const isOwnerDirectedRentDetail = (detail: string) => detail.startsWith("This month's rent payment is going to property owner ")
+
   const giftTemplates = useMemo(() => ([
     { id: 'job', label: 'Congrats: New Job' },
     { id: 'graduation', label: 'Congrats: Graduation' },
@@ -154,7 +156,12 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
             {txDetails(tx).length > 0 ? (
               <ul className="list-disc ml-5 mb-2 space-y-0.5 text-[11px] text-slate-500">
                 {txDetails(tx).map((detail: string) => (
-                  <li key={`${tx.id}-${detail}`}>{detail}</li>
+                  <li
+                    key={`${tx.id}-${detail}`}
+                    className={isOwnerDirectedRentDetail(detail) ? 'text-[13px] font-bold text-rose-700 list-none ml-[-1.1rem]' : ''}
+                  >
+                    {isOwnerDirectedRentDetail(detail) ? `❤️ ${detail}` : detail}
+                  </li>
                 ))}
               </ul>
             ) : null}
@@ -208,7 +215,12 @@ export default function Ledger({ ledger, onCheck, format, isAdmin }: any) {
                 {txDetails(tx).length > 0 ? (
                   <ul className="list-disc ml-5 mt-1 space-y-0.5 text-[11px] font-medium text-slate-500">
                     {txDetails(tx).map((detail: string) => (
-                      <li key={`${tx.id}-${detail}`}>{detail}</li>
+                      <li
+                        key={`${tx.id}-${detail}`}
+                        className={isOwnerDirectedRentDetail(detail) ? 'text-[13px] font-bold text-rose-700 list-none ml-[-1.1rem]' : ''}
+                      >
+                        {isOwnerDirectedRentDetail(detail) ? `❤️ ${detail}` : detail}
+                      </li>
                     ))}
                   </ul>
                 ) : null}

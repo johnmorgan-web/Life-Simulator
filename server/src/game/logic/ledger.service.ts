@@ -100,6 +100,87 @@ export class LedgerService {
     private entertainmentService: EntertainmentService,
   ) {}
 
+  private describeRentalSituation(monthlyNetSalary: number, rotationIndex = 0): { building: string; spaceLine: string } {
+    const salary = Math.max(0, Number(monthlyNetSalary || 0));
+    const pickLine = (options: string[]) => options[Math.max(0, rotationIndex % options.length)] || options[0] || '';
+
+    if (salary < 3000) {
+      return {
+        building: 'Self-Storage Facility (80 Units)',
+        spaceLine: pickLine([
+          'Space check: about 90 square feet. It is a compact setup with just enough room for you, a snack shelf, and a chair that acts like it pays rent too.',
+          'Space check: about 90 square feet. If you spin around too fast, you have basically completed a full house tour.',
+          'Space check: about 90 square feet. Your bed and your snack zone are such close neighbors they should probably share a mailbox.',
+          'Space check: about 90 square feet. It is small, tidy, and only one dramatic backpack drop away from feeling full.',
+          'Space check: about 90 square feet. You can reach half your important stuff without even standing up, which is honestly elite efficiency.',
+        ]),
+      };
+    }
+
+    if (salary < 4000) {
+      return {
+        building: 'RV Park (40 Pads)',
+        spaceLine: pickLine([
+          'Space check: about 220 square feet inside. You can stretch out a little, but your socks may still wander into the kitchen before you do.',
+          'Space check: about 220 square feet inside. It feels like a rolling clubhouse where every step has an opinion.',
+          'Space check: about 220 square feet inside. Cozy is the theme, and the furniture definitely knows each other by name.',
+          'Space check: about 220 square feet inside. You have enough room to relax, but not enough room to forget where the fridge is.',
+          'Space check: about 220 square feet inside. It is snug, clever, and one open cabinet away from a head bonk adventure.',
+        ]),
+      };
+    }
+
+    if (salary < 6000) {
+      return {
+        building: 'Single Condo',
+        spaceLine: pickLine([
+          'Space check: about 650 square feet. There is enough room for a couch, a bed, and exactly one dramatic superhero landing at a time.',
+          'Space check: about 650 square feet. This is the kind of place where your living room can finally stop borrowing space from your imagination.',
+          'Space check: about 650 square feet. You can host a friend, a pizza, and a movie night without needing traffic control.',
+          'Space check: about 650 square feet. It feels properly grown-up, but still small enough to vacuum without needing a strategy meeting.',
+          'Space check: about 650 square feet. There is room to breathe, decorate, and pretend your laundry pile is modern art.',
+        ]),
+      };
+    }
+
+    if (salary < 10000) {
+      return {
+        building: 'Garden 12-Unit',
+        spaceLine: pickLine([
+          'Space check: about 950 square feet. Big enough for real breathing room, plus a quick sprint to the kitchen that absolutely counts as cardio.',
+          'Space check: about 950 square feet. You have enough space for actual zones now, like relaxing here and pretending to be productive over there.',
+          'Space check: about 950 square feet. This place has enough room for a full couch, a table, and at least one unnecessary but joyful plant.',
+          'Space check: about 950 square feet. It feels roomy enough that losing your phone becomes a tiny mystery instead of an immediate event.',
+          'Space check: about 950 square feet. There is enough elbow room here that your leftovers can have their own shelf with confidence.',
+        ]),
+      };
+    }
+
+    if (salary < 15000) {
+      return {
+        building: 'Office Building (20 Suites)',
+        spaceLine: pickLine([
+          'Space check: about 1,400 square feet. There is enough room to misplace your backpack, start a search mission, and rediscover it like buried treasure.',
+          'Space check: about 1,400 square feet. This place is spacious enough that walking to the other side can feel like a very tiny field trip.',
+          'Space check: about 1,400 square feet. You officially have enough room to own furniture just because it looks impressive.',
+          'Space check: about 1,400 square feet. There is so much space here that your snack break could happen in a completely different corner of the map.',
+          'Space check: about 1,400 square feet. At this size, even your echo sounds organized and well prepared.',
+        ]),
+      };
+    }
+
+    return {
+      building: 'Distribution Warehouse',
+      spaceLine: pickLine([
+        'Space check: about 3,200 square feet. If you say hello in here, the echo might reply with a full speech before your friend answers.',
+        'Space check: about 3,200 square feet. This is less apartment and more indoor kingdom with suspiciously excellent acoustics.',
+        'Space check: about 3,200 square feet. You could probably do laps in here and accidentally invent a new sport.',
+        'Space check: about 3,200 square feet. There is enough room for giant dreams, giant furniture, and at least one chair nobody is allowed to sit in.',
+        'Space check: about 3,200 square feet. If you drop a sock in one corner, it may begin a whole new life before you find it again.',
+      ]),
+    };
+  }
+
   buildLedger(state: any, paySave = 0, payDebt = 0): any[] {
     const fix = (n: number) => this.utils.fix(n);
     const ledger: any[] = [];
@@ -168,6 +249,15 @@ export class LedgerService {
     const realEstatePropertyBreakdown = Array.isArray(state.realEstateLastMonthPropertyBreakdown)
       ? state.realEstateLastMonthPropertyBreakdown
       : [];
+    const ownerContributionTenantName = String(state.monopolyHousingOwnerTenantName || '').trim();
+    const ownerContributionPropertyName = String(state.monopolyHousingOwnerPropertyName || '').trim();
+    const ownerContributionCity = String(state.monopolyHousingOwnerCity || '').trim();
+    const ownerContributionPayout = Math.max(0, Number(state.monopolyHousingOwnerPayoutLastMonth || 0));
+    const ownerContributionDetails = ownerContributionTenantName && ownerContributionPayout > 0
+      ? [
+          `Contributing renter this month: ${ownerContributionTenantName}${ownerContributionPropertyName ? ` toward ${ownerContributionPropertyName}` : ''}${ownerContributionCity ? ` (${ownerContributionCity})` : ''}.`,
+        ]
+      : [];
 
     if (realEstateIncome > 0) {
       if (state.luxuryServices?.housekeeper) {
@@ -179,12 +269,15 @@ export class LedgerService {
           type: 'inc',
           bal,
           done: false,
-          details: realEstatePropertyBreakdown
-            .filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
-            .map(
-              (entry: any) =>
-                `${entry.propertyName} (${entry.cityName}): $${Math.round(Number(entry.grossIncome || 0)).toLocaleString()}`,
-            ),
+          details: [
+            ...ownerContributionDetails,
+            ...realEstatePropertyBreakdown
+              .filter((entry: any) => Number(entry?.grossIncome || 0) > 0)
+              .map(
+                (entry: any) =>
+                  `${entry.propertyName} (${entry.cityName}): $${Math.round(Number(entry.grossIncome || 0)).toLocaleString()}`,
+              ),
+          ],
         });
       } else {
         const incomeRows = realEstatePropertyBreakdown.filter(
@@ -201,6 +294,12 @@ export class LedgerService {
               type: 'inc',
               bal,
               done: false,
+              details:
+                ownerContributionDetails.length > 0
+                && String(entry?.propertyName || '').trim() === ownerContributionPropertyName
+                && String(entry?.cityName || '').trim() === ownerContributionCity
+                  ? ownerContributionDetails
+                  : undefined,
             });
           }
         } else {
@@ -212,6 +311,7 @@ export class LedgerService {
             type: 'inc',
             bal,
             done: false,
+            details: ownerContributionDetails,
           });
         }
       }
@@ -234,6 +334,16 @@ export class LedgerService {
       fix(netSalary * gameValues.rentPercentOfSalary * (state.city?.r || 1)),
       'rent',
     );
+    const rentalSituation = this.describeRentalSituation(netSalary, deterministicHash('rental-situation-rotation'));
+    const housingDetails = [
+      `Current rental building: ${rentalSituation.building}.`,
+      rentalSituation.spaceLine,
+      ...rotatingDetails('housing', 'housing-rent', 1),
+    ];
+    const housingOwnerName = String(state?.monopolyHousingChargeOwnerName || '').trim();
+    if (housingOwnerName) {
+      housingDetails.unshift(`This month's rent payment is going to property owner ${housingOwnerName}.`);
+    }
     bal = fix(bal - rent);
     ledger.push({
       id: id++,
@@ -242,8 +352,38 @@ export class LedgerService {
       type: 'out',
       bal,
       done: false,
-      details: rotatingDetails('housing', 'housing-rent'),
+      details: housingDetails,
     });
+
+    const monopolyCharge = Math.max(0, Number(state?.monopolyHousingChargeLastMonth || 0));
+    if (monopolyCharge > 0) {
+      const ownerName = String(state?.monopolyHousingChargeOwnerName || 'Property Owner').trim() || 'Property Owner';
+      const propertyName = String(state?.monopolyHousingChargePropertyName || '').trim();
+      const cityName = String(state?.monopolyHousingChargeCity || '').trim();
+      const suffix = propertyName
+        ? ` for ${propertyName}${cityName ? ` (${cityName})` : ''}`
+        : cityName
+          ? ` in ${cityName}`
+          : '';
+      bal = fix(bal - monopolyCharge);
+      ledger.push({
+        id: id++,
+        desc: `Owner-Directed Rent Transfer: ${ownerName}${suffix}`,
+        amt: monopolyCharge,
+        type: 'out',
+        bal,
+        done: false,
+        details: [
+          `Owner receiving this payment: ${ownerName}.`,
+          `Part of your housing payment this month was redirected to ${ownerName}.`,
+          propertyName
+            ? `Owner-linked property: ${propertyName}${cityName ? ` (${cityName})` : ''}`
+            : cityName
+              ? `Owner-linked housing market: ${cityName}`
+              : 'Owner-linked housing charge applied this month.',
+        ],
+      });
+    }
 
     const mortgagePayment = Math.max(
       0,

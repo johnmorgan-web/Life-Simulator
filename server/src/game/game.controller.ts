@@ -168,6 +168,11 @@ export class GameController {
     return {
       market: synced.market,
       meta: synced.meta,
+      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
+        synced.market,
+        userSnapshots,
+        body?.state || null,
+      ),
     };
   }
 
@@ -221,11 +226,26 @@ export class GameController {
   async normalizeRealEstateState(@Body() body: { state?: any }) {
     const stateSnapshot = body?.state || {};
     const userSnapshots = await this.getLiveUserSnapshots();
-    return this.realEstateService.normalizeRealEstateStateFromShared(
+    const normalized = this.realEstateService.normalizeRealEstateStateFromShared(
       stateSnapshot,
       userSnapshots,
       stateSnapshot,
     );
+    return {
+      ...normalized,
+      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
+        normalized.realEstateMarket,
+        userSnapshots,
+        stateSnapshot,
+      ),
+    };
+  }
+
+  @Post('real-estate/monopoly-charge')
+  async evaluateMonopolyCharge(@Body() body: { state?: any }) {
+    const stateSnapshot = body?.state || {};
+    const userSnapshots = await this.getLiveUserSnapshots();
+    return this.realEstateService.evaluateMonopolyRentForMonth(stateSnapshot, userSnapshots);
   }
 
   @Post('real-estate/submit-offer')
@@ -233,13 +253,15 @@ export class GameController {
     @Body()
     body: {
       state: any;
-      listing: any;
+      listingId?: string;
+      cityName?: string;
       options?: { downPaymentPct?: number; purchaseMode?: 'cash' | 'mortgage'; mortgageTermYears?: 15 | 30 };
     },
   ) {
-    const listing = body?.listing;
+    const listingId = String(body?.listingId || '').trim();
+    const cityName = String(body?.cityName || '').trim();
     const liveState = body?.state || {};
-    if (!listing?.id || !listing?.cityName) {
+    if (!listingId || !cityName) {
       return { ok: false, reason: 'invalid-listing' };
     }
 
@@ -247,19 +269,25 @@ export class GameController {
     const shared = this.realEstateService.syncSharedRealEstateMarket(userSnapshots, liveState, false);
     const market = shared.market;
     const meta = shared.meta;
-    const cityListings = Array.isArray(market[listing.cityName]) ? market[listing.cityName] : [];
-    const stillAvailable = cityListings.some((entry: any) => entry.id === listing.id);
-    if (!stillAvailable) {
+    const listingResidentImpact = this.realEstateService.buildListingResidentImpact(
+      market,
+      userSnapshots,
+      liveState,
+    );
+    const cityListings = Array.isArray(market[cityName]) ? market[cityName] : [];
+    const listing = cityListings.find((entry: any) => String(entry?.id || '') === listingId);
+    if (!listing) {
       return {
         ok: false,
         reason: 'listing-unavailable',
         market,
         meta,
+        listingResidentImpact,
       };
     }
 
-    const nextCityListings = cityListings.filter((entry: any) => entry.id !== listing.id);
-    const nextMarket = { ...market, [listing.cityName]: nextCityListings };
+    const nextCityListings = cityListings.filter((entry: any) => String(entry?.id || '') !== listingId);
+    const nextMarket = { ...market, [cityName]: nextCityListings };
     const nextMeta = meta;
     this.realEstateService.setSharedRealEstateMarket(nextMarket, nextMeta);
 
@@ -270,6 +298,25 @@ export class GameController {
     const mortgageTermYears = body?.options?.mortgageTermYears === 15 ? 15 : 30;
 
     const existingDeals = Array.isArray(liveState.pendingRealEstateDeals) ? liveState.pendingRealEstateDeals : [];
+    const hasActivePendingDeal = existingDeals.some((deal: any) => {
+      const monthsInPipeline = Number(deal?.monthsInPipeline || 0);
+      const approvalMonthsRequired = Math.max(1, Number(deal?.approvalMonthsRequired || 1));
+      return monthsInPipeline < approvalMonthsRequired;
+    });
+    if (hasActivePendingDeal) {
+      return {
+        ok: false,
+        reason: 'pending-offer-exists',
+        market,
+        meta,
+        listingResidentImpact: this.realEstateService.buildListingResidentImpact(
+          market,
+          userSnapshots,
+          liveState,
+        ),
+      };
+    }
+
     const nextDeals = [
       ...existingDeals,
       {
@@ -294,6 +341,11 @@ export class GameController {
       ok: true,
       market: nextMarket,
       meta: nextMeta,
+      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
+        nextMarket,
+        userSnapshots,
+        liveState,
+      ),
       pendingRealEstateDeals: nextDeals,
       logEntry,
     };
@@ -353,6 +405,8 @@ export class GameController {
       ownershipCount: Math.max(0, Math.floor(Number(property.ownershipCount || 0))),
       foreclosure: false,
       listedByUser: liveState.currentUser || null,
+      targetSalaryBracket: property.targetSalaryBracket || null,
+      targetSalaryRangeLabel: property.targetSalaryRangeLabel || null,
     };
 
     const cityName = String(property.cityName || '');
@@ -376,6 +430,11 @@ export class GameController {
       investmentProperties: nextProperties,
       market: nextMarket,
       meta,
+      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
+        nextMarket,
+        userSnapshots,
+        liveState,
+      ),
       logEntry,
     };
   }
