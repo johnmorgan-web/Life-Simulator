@@ -2274,11 +2274,17 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					vehicleCosts += calculateMonthlyMaintenanceCost(g, state.month, state.year)
 				}
 
-				// Decrement months remaining if financing
+				// Decrement months remaining if financing/leasing
 				if (g.monthsRemaining > 0) {
 					updatedGarage[i] = { ...updatedGarage[i], monthsRemaining: g.monthsRemaining - 1 }
 					if (g.monthsRemaining - 1 === 0) {
-						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🚗 Vehicle loan paid off! ${g.vehicleName}` })
+						if (g.condition === 'lease') {
+							// Lease term ended — return the vehicle, do not transfer ownership
+							logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🚗 Lease ended. ${g.vehicleName} has been returned to the dealership.` })
+							updatedGarage[i] = null as any
+						} else {
+							logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🚗 Vehicle loan paid off! ${g.vehicleName}` })
+						}
 					}
 				}
 
