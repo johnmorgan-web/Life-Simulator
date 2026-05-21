@@ -355,30 +355,6 @@ async function fetchAdvancedStockStateFromServer(stateSnapshot: any) {
 	}
 }
 
-async function fetchMonopolyRentOverrideFromServer(stateSnapshot: any) {
-	const response = await fetch(`${API_BASE_URL}/game/real-estate/monopoly-charge`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ state: stateSnapshot || {} }),
-	})
-	if (!response.ok) return null
-	const data = await response.json()
-	if (!data || typeof data !== 'object') return null
-	return {
-		tenantCharge: Math.max(0, Number(data.tenantCharge || 0)),
-		tenantOwnerName: data.tenantOwnerName ? String(data.tenantOwnerName) : null,
-		tenantOwnerPropertyName: data.tenantOwnerPropertyName ? String(data.tenantOwnerPropertyName) : null,
-		tenantCityName: data.tenantCityName ? String(data.tenantCityName) : null,
-		ownerPayout: Math.max(0, Number(data.ownerPayout || 0)),
-		ownerTenantName: data.ownerTenantName ? String(data.ownerTenantName) : null,
-		ownerPropertyName: data.ownerPropertyName ? String(data.ownerPropertyName) : null,
-		ownerCityName: data.ownerCityName ? String(data.ownerCityName) : null,
-		ownerTenantAssignments: data.ownerTenantAssignments && typeof data.ownerTenantAssignments === 'object'
-			? data.ownerTenantAssignments
-			: null,
-	}
-}
-
 async function submitRealEstateOfferToServer(
 	stateSnapshot: any,
 	listing: any,
@@ -2232,9 +2208,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		}
 		case 'PROCESS_MONTH': {
 			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
-			const monopolyRentOverride = action.payload?.monopolyRentOverride && typeof action.payload.monopolyRentOverride === 'object'
-				? action.payload.monopolyRentOverride
-				: null
 			const requestedDebtPayment = Math.max(0, Number(payDebt || 0))
 			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
@@ -2847,10 +2820,16 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				const approvalRoll = mulberry32(hashString(`${deal.id}-${nextMonth}-${nextYear}-${credit}`))()
 
 				if (approvalRoll > approvalChance) {
-					if (deal?.listing?.cityName) {
-						realEstateMarket[deal.listing.cityName] = [...(realEstateMarket[deal.listing.cityName] || []), deal.listing]
+					const retryCount = Number(deal?.retryCount || 0) + 1
+					if (retryCount <= 2) {
+						survivingDeals.push({ ...deal, monthsInPipeline, retryCount })
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏦 Underwriting requested additional documentation for ${deal?.listing?.templateName || 'Listing'} in ${deal?.listing?.cityName || ''} — review ${retryCount} of 3` })
+					} else {
+						if (deal?.listing?.cityName) {
+							realEstateMarket[deal.listing.cityName] = [...(realEstateMarket[deal.listing.cityName] || []), deal.listing]
+						}
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏦 Property offer permanently declined after 3 reviews: ${deal?.listing?.templateName || 'Listing'} in ${deal?.listing?.cityName || ''} — listing returned to market` })
 					}
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏦 Property offer declined by underwriting: ${deal?.listing?.templateName || 'Listing'}` })
 					continue
 				}
 
@@ -2864,10 +2843,16 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				const closingCosts = round2(negotiatedPrice * (purchaseMode === 'cash' ? 0.015 : 0.025))
 				const cashToClose = round2(downPayment + closingCosts)
 				if (resultingCheck < cashToClose) {
-					if (listing?.cityName) {
-						realEstateMarket[listing.cityName] = [...(realEstateMarket[listing.cityName] || []), listing]
+					const cashRetryCount = Number(deal?.cashRetryCount || 0) + 1
+					if (cashRetryCount <= 1) {
+						survivingDeals.push({ ...deal, monthsInPipeline, cashRetryCount })
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏚️ Closing delayed for ${listing?.templateName || 'Property'}: need $${cashToClose.toLocaleString()} cash-to-close (have $${Math.round(resultingCheck).toLocaleString()}) — will retry next month` })
+					} else {
+						if (listing?.cityName) {
+							realEstateMarket[listing.cityName] = [...(realEstateMarket[listing.cityName] || []), listing]
+						}
+						logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏚️ Deal canceled (insufficient cash after retry): ${listing?.templateName || 'Property'} needed $${cashToClose.toLocaleString()}` })
 					}
-					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏚️ Deal canceled at closing (insufficient cash): needed $${cashToClose.toLocaleString()}` })
 					continue
 				}
 
@@ -2941,17 +2926,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 			let realEstateIncome = 0
 			let realEstateExpenses = 0
-			let monopolyHousingChargeLastMonth = 0
-			let monopolyHousingChargeOwnerName: string | null = null
-			let monopolyHousingChargePropertyName: string | null = null
-			let monopolyHousingChargeCity: string | null = null
-			let monopolyHousingOwnerPayoutLastMonth = 0
-			let monopolyHousingOwnerTenantName: string | null = null
-			let monopolyHousingOwnerPropertyName: string | null = null
-			let monopolyHousingOwnerCity: string | null = null
-			let ownerTenantAssignments = state.ownerTenantAssignments && typeof state.ownerTenantAssignments === 'object'
-				? { ...state.ownerTenantAssignments }
-				: {}
 			const realEstatePropertyBreakdown: any[] = []
 			const propertyEvents: string[] = []
 			investmentProperties = investmentProperties.map((property: any) => {
@@ -3077,39 +3051,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					lastNetCashflow: netCashflow
 				}
 			})
-
-			if (monopolyRentOverride) {
-				const ownerPayout = round2(Math.max(0, Number(monopolyRentOverride.ownerPayout || 0)))
-				if (ownerPayout > 0) {
-					resultingCheck = round2(resultingCheck + ownerPayout)
-					realEstateIncome = round2(realEstateIncome + ownerPayout)
-					monopolyHousingOwnerPayoutLastMonth = ownerPayout
-					monopolyHousingOwnerTenantName = monopolyRentOverride.ownerTenantName ? String(monopolyRentOverride.ownerTenantName) : null
-					monopolyHousingOwnerPropertyName = monopolyRentOverride.ownerPropertyName ? String(monopolyRentOverride.ownerPropertyName) : null
-					monopolyHousingOwnerCity = monopolyRentOverride.ownerCityName ? String(monopolyRentOverride.ownerCityName) : null
-					logs.push({
-						date: `${nextMonth}/${nextYear}`,
-						msg: `🏘️ Monopoly tenant payment received${monopolyHousingOwnerTenantName ? ` from ${monopolyHousingOwnerTenantName}` : ''}: +$${ownerPayout.toLocaleString()}${monopolyHousingOwnerPropertyName ? ` (${monopolyHousingOwnerPropertyName})` : ''}`,
-					})
-				}
-
-				const tenantCharge = round2(Math.max(0, Number(monopolyRentOverride.tenantCharge || 0)))
-				if (tenantCharge > 0) {
-					resultingCheck = round2(resultingCheck - tenantCharge)
-					monopolyHousingChargeLastMonth = tenantCharge
-					monopolyHousingChargeOwnerName = monopolyRentOverride.tenantOwnerName ? String(monopolyRentOverride.tenantOwnerName) : null
-					monopolyHousingChargePropertyName = monopolyRentOverride.tenantOwnerPropertyName ? String(monopolyRentOverride.tenantOwnerPropertyName) : null
-					monopolyHousingChargeCity = monopolyRentOverride.tenantCityName ? String(monopolyRentOverride.tenantCityName) : null
-					logs.push({
-						date: `${nextMonth}/${nextYear}`,
-						msg: `🏚️ Part of your housing payment was redirected to ${monopolyHousingChargeOwnerName || 'the property owner'}: -$${tenantCharge.toLocaleString()}${monopolyHousingChargePropertyName ? ` (${monopolyHousingChargePropertyName})` : ''}`,
-					})
-				}
-
-				if (monopolyRentOverride.ownerTenantAssignments && typeof monopolyRentOverride.ownerTenantAssignments === 'object') {
-					ownerTenantAssignments = { ...monopolyRentOverride.ownerTenantAssignments }
-				}
-			}
 
 			const realEstateNet = round2(realEstateIncome - realEstateExpenses)
 			if (investmentProperties.length > 0) {
@@ -3472,15 +3413,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				realEstateLastMonthIncome: realEstateIncome,
 				realEstateLastMonthExpenses: realEstateExpenses,
 				realEstateLastMonthPropertyBreakdown: realEstatePropertyBreakdown,
-				monopolyHousingChargeLastMonth,
-				monopolyHousingChargeOwnerName,
-				monopolyHousingChargePropertyName,
-				monopolyHousingChargeCity,
-				monopolyHousingOwnerPayoutLastMonth,
-				monopolyHousingOwnerTenantName,
-				monopolyHousingOwnerPropertyName,
-				monopolyHousingOwnerCity,
-				ownerTenantAssignments,
 				stockInvestedThisMonth: 0,
 				stockInvestedLastMonth,
 				totalGasPaid,
@@ -3903,6 +3835,8 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			job: snapshot.job,
 			workPenaltyPercent: snapshot.workPenaltyPercent,
 			realEstateLastMonthIncome: snapshot.realEstateLastMonthIncome,
+			realEstateLastMonthExpenses: snapshot.realEstateLastMonthExpenses,
+			realEstateLastMonthPropertyBreakdown: Array.isArray(snapshot.realEstateLastMonthPropertyBreakdown) ? snapshot.realEstateLastMonthPropertyBreakdown : [],
 			monopolyHousingChargeLastMonth: Number(snapshot.monopolyHousingChargeLastMonth || 0),
 			monopolyHousingChargeOwnerName: snapshot.monopolyHousingChargeOwnerName || null,
 			monopolyHousingChargePropertyName: snapshot.monopolyHousingChargePropertyName || null,
@@ -3964,10 +3898,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		const runMonth = async () => {
 			const snapshot = stateRef.current || state
-				const [serverMarket, serverStock, monopolyRentOverride] = await Promise.all([
+			const [serverMarket, serverStock] = await Promise.all([
 				fetchSharedRealEstateMarketFromServer(snapshot, true),
 				fetchAdvancedStockStateFromServer(snapshot),
-					fetchMonopolyRentOverrideFromServer(snapshot),
 			])
 			if (!serverMarket) {
 				console.error('Failed to advance real-estate market on server. Month processing aborted.')
@@ -3994,7 +3927,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					payDebt: safePayDebt,
 					skippedPayment,
 					stockMarketOverride: serverStock,
-						monopolyRentOverride,
 				},
 			})
 		}
