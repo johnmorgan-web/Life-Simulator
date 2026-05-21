@@ -389,7 +389,6 @@ export default function RealEstate() {
 
   const market = (state.realEstateMarket || {}) as Record<string, any[]>
   const marketMeta = (state.realEstateMarketMeta || {}) as any
-  const marketImpact = (state.realEstateMarketImpact || {}) as Record<string, any>
   const cityListings = Array.isArray(market[selectedCity]) ? market[selectedCity] : []
   const deals = Array.isArray(state.pendingRealEstateDeals) ? state.pendingRealEstateDeals : []
   const properties = Array.isArray(state.investmentProperties) ? state.investmentProperties : []
@@ -807,7 +806,7 @@ export default function RealEstate() {
           const capRate = listing.askingPrice > 0 ? ((gross * 0.65) / Number(listing.askingPrice || 1)) * 100 : 0
           const listingId = String(listing.id || '')
           const isSubmittingOffer = submittingListingId === listingId
-          const listingImpact = marketImpact[listingId] || null
+            const hasPendingOffer = deals.some((d: any) => String(d?.listing?.id || '') === listingId)
           const assumptions = getListingAssumptions(listingId)
           const projection = listingPreOfferProjection(listing, assumptions.occupancyRate, assumptions.condition)
           return (
@@ -820,29 +819,13 @@ export default function RealEstate() {
                   <p className="text-xs text-slate-500">Owned since inception: {Math.max(0, Number(listing.ownershipCount || 0))} time{Math.max(0, Number(listing.ownershipCount || 0)) === 1 ? '' : 's'}</p>
                 </div>
                 <button
-                  className={`px-3 py-1.5 rounded text-white text-sm font-bold ${isSubmittingOffer ? 'bg-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
-                  onClick={() => { void submitOffer(listing) }}
-                  disabled={isSubmittingOffer}
+                  className={`px-3 py-1.5 rounded text-white text-sm font-bold ${isSubmittingOffer ? "bg-slate-500 cursor-not-allowed" : hasPendingOffer ? "bg-amber-500 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                  onClick={() => { if (!hasPendingOffer) void submitOffer(listing) }}
+                  disabled={isSubmittingOffer || hasPendingOffer}
                 >
-                  {isSubmittingOffer ? 'Submitting...' : 'Make Offer'}
+                  {isSubmittingOffer ? "Submitting..." : hasPendingOffer ? "Offer Pending ✓" : "Make Offer"}
                 </button>
               </div>
-              {listingImpact ? (
-                <div className={`mt-2 rounded border px-2 py-1 text-xs ${listingImpact.level === 'high' ? 'bg-rose-50 border-rose-200 text-rose-800' : listingImpact.level === 'medium' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
-                  <p className="font-semibold">Resident impact: {String(listingImpact.label || 'Unknown')}</p>
-                  <p>
-                    Est. rent burden {Math.round(Number(listingImpact.rentShare || 0) * 100)}% and mortgage burden {Math.round(Number(listingImpact.mortgageShare || 0) * 100)}% of median local monthly income
-                    {Number(listingImpact.medianMonthlyIncome || 0) > 0 ? ` ($${Math.round(Number(listingImpact.medianMonthlyIncome || 0)).toLocaleString()})` : ''}.
-                  </p>
-                  <p>
-                    Avg city salary: {Number(listingImpact.averageMonthlyIncome || 0) > 0 ? `$${Math.round(Number(listingImpact.averageMonthlyIncome || 0)).toLocaleString()}/mo` : 'N/A'}.
-                    Charge-eligible users: {Math.round(Number(listingImpact.chargeEligibleRate || 0) * 100)}%
-                    {Number(listingImpact.residentCount || 0) > 0
-                      ? ` (${Number(listingImpact.chargeEligibleResidents || 0)}/${Number(listingImpact.residentCount || 0)})`
-                      : ''}.
-                  </p>
-                </div>
-              ) : null}
               <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
                 <div>
                   <p className="text-[10px] uppercase text-slate-500">{vocabulary.askingLabel}</p>
@@ -937,12 +920,24 @@ export default function RealEstate() {
             <p className="text-xs text-slate-600 mt-1">Only one real-estate offer can close per month. Additional matured offers remain in pipeline for a future month.</p>
             {deals.length === 0 ? <p className="text-sm text-slate-500 mt-2">No active offers.</p> : (
               <div className="space-y-2 mt-2">
-                {deals.map((deal: any) => (
+                {deals.map((deal: any) => {
+                  const inReview = Number(deal.monthsInPipeline || 0) >= Number(deal.approvalMonthsRequired || 2)
+                  const retryCount = Number(deal.retryCount || 0)
+                  const cashRetryCount = Number(deal.cashRetryCount || 0)
+                  const statusLabel = cashRetryCount > 0
+                    ? '🏚️ Closing delayed — awaiting sufficient funds'
+                    : inReview
+                      ? retryCount > 0
+                        ? `🏦 Under underwriting review (attempt ${retryCount + 1} of 3)`
+                        : '🏦 In underwriting review'
+                      : `📋 In pipeline (${deal.monthsInPipeline}/${deal.approvalMonthsRequired} months)`
+                  return (
                   <div key={deal.id} className="bg-slate-50 rounded p-3 text-sm">
-                    <p className="font-semibold">{deal?.listing?.templateName} - {deal?.listing?.cityName}</p>
-                    <p className="text-slate-600">Pipeline: {deal.monthsInPipeline}/{deal.approvalMonthsRequired} months • Down: {Math.round(Number(deal.downPaymentPct || 0) * 100)}%</p>
+                    <p className="font-semibold">{deal?.listing?.templateName} — {deal?.listing?.cityName}</p>
+                    <p className="text-slate-600">{statusLabel} • Down: {Math.round(Number(deal.downPaymentPct || 0) * 100)}% • {deal.purchaseMode === 'cash' ? 'Cash purchase' : `${deal.mortgageTermYears || 30}-yr mortgage`}</p>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </>
@@ -952,6 +947,7 @@ export default function RealEstate() {
       <div className="glass p-4">
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-bold">Owned Properties</h4>
+                    <h4 className="font-bold">Owned Properties {properties.length > 0 ? <span className="ml-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">{properties.length}</span> : null}</h4>
           <button
             type="button"
             className="px-3 py-1.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"

@@ -168,11 +168,6 @@ export class GameController {
     return {
       market: synced.market,
       meta: synced.meta,
-      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
-        synced.market,
-        userSnapshots,
-        body?.state || null,
-      ),
     };
   }
 
@@ -233,19 +228,7 @@ export class GameController {
     );
     return {
       ...normalized,
-      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
-        normalized.realEstateMarket,
-        userSnapshots,
-        stateSnapshot,
-      ),
     };
-  }
-
-  @Post('real-estate/monopoly-charge')
-  async evaluateMonopolyCharge(@Body() body: { state?: any }) {
-    const stateSnapshot = body?.state || {};
-    const userSnapshots = await this.getLiveUserSnapshots();
-    return this.realEstateService.evaluateMonopolyRentForMonth(stateSnapshot, userSnapshots);
   }
 
   @Post('real-estate/submit-offer')
@@ -269,11 +252,6 @@ export class GameController {
     const shared = this.realEstateService.syncSharedRealEstateMarket(userSnapshots, liveState, false);
     const market = shared.market;
     const meta = shared.meta;
-    const listingResidentImpact = this.realEstateService.buildListingResidentImpact(
-      market,
-      userSnapshots,
-      liveState,
-    );
     const cityListings = Array.isArray(market[cityName]) ? market[cityName] : [];
     const listing = cityListings.find((entry: any) => String(entry?.id || '') === listingId);
     if (!listing) {
@@ -282,7 +260,6 @@ export class GameController {
         reason: 'listing-unavailable',
         market,
         meta,
-        listingResidentImpact,
       };
     }
 
@@ -309,11 +286,6 @@ export class GameController {
         reason: 'pending-offer-exists',
         market,
         meta,
-        listingResidentImpact: this.realEstateService.buildListingResidentImpact(
-          market,
-          userSnapshots,
-          liveState,
-        ),
       };
     }
 
@@ -341,11 +313,6 @@ export class GameController {
       ok: true,
       market: nextMarket,
       meta: nextMeta,
-      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
-        nextMarket,
-        userSnapshots,
-        liveState,
-      ),
       pendingRealEstateDeals: nextDeals,
       logEntry,
     };
@@ -430,11 +397,6 @@ export class GameController {
       investmentProperties: nextProperties,
       market: nextMarket,
       meta,
-      listingResidentImpact: this.realEstateService.buildListingResidentImpact(
-        nextMarket,
-        userSnapshots,
-        liveState,
-      ),
       logEntry,
     };
   }
