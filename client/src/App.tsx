@@ -180,7 +180,8 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   const { state, dispatch, processMonth, openSettlement, acceptJob, gameValues, vehicleDatabase, academyCourses, ledgerEventNotifications, dequeueLedgerEventNotification, jobOpportunityNotifications, dequeueJobOpportunityNotification } = useGame()
   const activeTheme = cosmeticThemes[state.activeTheme || 'default'] || cosmeticThemes.default
   const [careerNavigationRequest, setCareerNavigationRequest] = useState<CareerNavigationRequest | null>(null)
-  const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean } | null>(null)
+  const [pendingPayments, setPendingPayments] = useState<{ savings: number; debt: number; skipped: boolean; extraMortgage: number } | null>(null)
+  const [extraMortgageDraft, setExtraMortgageDraft] = useState(0)
   const [showAutoLoanConfirm, setShowAutoLoanConfirm] = useState(false)
   const [showSkipPaymentConfirm, setShowSkipPaymentConfirm] = useState(false)
   const [showMonthPreview, setShowMonthPreview] = useState(false)
@@ -260,42 +261,72 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
     return () => window.clearTimeout(timeout)
   }, [jobOpportunityToast])
   
+  // Reset the extra mortgage draft each time the settlement dialog opens so the months-saved
+  // preview doesn't carry over from the previous month's input.
+  useEffect(() => {
+    if (state.showSettlement) setExtraMortgageDraft(0)
+  }, [state.showSettlement])
+
   const verifyEnabled = state.ledger && state.ledger.length ? state.ledger.every((t: any) => t.done) : false
 
   const handleCelebrationComplete = () => {
     dispatch({ type: 'CLEAR_CELEBRATION' })
   }
 
+  const mortgagedProperties = (Array.isArray(state.investmentProperties) ? state.investmentProperties : [])
+    .filter((p: any) => Number(p.loanBalance || 0) > 0)
+    .sort((a: any, b: any) => Number(a.loanBalance || 0) - Number(b.loanBalance || 0))
+  const hasMortgagedProperty = mortgagedProperties.length > 0
+  const topMortgageProperty = mortgagedProperties.reduce((best: any, p: any) =>
+    !best || Number(p.loanBalance || 0) > Number(best.loanBalance || 0) ? p : best, null)
+  const totalMortgageBalance = mortgagedProperties.reduce((sum: number, p: any) => sum + Number(p.loanBalance || 0), 0)
+
+  const estimateMortgageMonthsSaved = (loanBalance: number, monthlyPayment: number, annualAPR: number, extraPayment: number): number => {
+    if (loanBalance <= 0 || monthlyPayment <= 0 || extraPayment <= 0) return 0
+    const r = annualAPR / 12
+    const calcMonths = (b: number) => {
+      if (r <= 0) return monthlyPayment > 0 ? Math.ceil(b / monthlyPayment) : 0
+      const arg = 1 - (r * b) / monthlyPayment
+      if (arg <= 0) return 0
+      return Math.max(0, Math.round(-Math.log(arg) / Math.log(1 + r)))
+    }
+    return Math.max(0, calcMonths(loanBalance) - calcMonths(Math.max(0, loanBalance - extraPayment)))
+  }
+
   const handleBeginMonth = () => {
     const savings = parseFloat((document.getElementById('pay-save') as HTMLInputElement).value) || 0
-    const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement).value) || 0
+    const debtPayment = parseFloat((document.getElementById('pay-debt') as HTMLInputElement)?.value) || 0
+    const extraMortgage = parseFloat((document.getElementById('pay-mortgage') as HTMLInputElement)?.value) || 0
     const currentDebt = Math.max(0, Number(state.debt || 0))
-    const totalPayment = savings + debtPayment
+    const totalPayment = savings + debtPayment + extraMortgage
 
     if (debtPayment > currentDebt) {
       setPaymentInputWarning('Debt payment cannot exceed your remaining debt balance.')
       alert(`⚠️ Debt payment exceeds your current debt balance.\n\nCurrent debt: $${currentDebt.toFixed(2)}\nAttempted debt payment: $${debtPayment.toFixed(2)}\n\nPlease enter a debt payment that is less than or equal to your current debt.`)
       return
     }
-    
+    if (extraMortgage > totalMortgageBalance) {
+      setPaymentInputWarning('Extra mortgage payment cannot exceed total outstanding mortgage balance.')
+      return
+    }
+
     // Validate that payments won't cause negative balance
-    if (!validatePaymentInput(savings, debtPayment)) {
-      setPaymentInputWarning('Combined savings + debt payment cannot exceed checking balance.')
+    if (!validatePaymentInput(savings, debtPayment, extraMortgage)) {
+      setPaymentInputWarning('Combined savings + debt payment + extra mortgage cannot exceed checking balance.')
       alert(`⚠️ Your combined payments ($${totalPayment.toFixed(2)}) exceed your checking balance ($${state.check.toFixed(2)}).\n\nPlease adjust your payments or use the Skip Payment option if needed.`)
       return
     }
 
     setPaymentInputWarning(null)
-    
-    // Check if this would result in negative checking balance (should not happen with validation)
+
     if (state.check - totalPayment < 0) {
       const loanNeeded = Math.abs(state.check - totalPayment)
       setAutoLoanAmount(loanNeeded)
-      setPendingPayments({ savings, debt: debtPayment, skipped: false })
+      setPendingPayments({ savings, debt: debtPayment, skipped: false, extraMortgage })
       setMonthPreview(buildMonthPreview(savings, debtPayment, false, loanNeeded))
       setShowMonthPreview(true)
     } else {
-      setPendingPayments({ savings, debt: debtPayment, skipped: false })
+      setPendingPayments({ savings, debt: debtPayment, skipped: false, extraMortgage })
       setMonthPreview(buildMonthPreview(savings, debtPayment, false, 0))
       setShowMonthPreview(true)
     }
@@ -402,13 +433,13 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
       return
     }
 
-    processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped)
+    processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped, pendingPayments.extraMortgage)
     setPendingPayments(null)
   }
 
   const handleConfirmSkipPayment = () => {
     if (pendingPayments) {
-      processMonth(pendingPayments.savings, 0, true)
+      processMonth(pendingPayments.savings, 0, true, 0)
       setShowSkipPaymentConfirm(false)
       setPendingPayments(null)
     }
@@ -416,7 +447,7 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
 
   const handleConfirmAutoLoan = () => {
     if (pendingPayments) {
-      processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped)
+      processMonth(pendingPayments.savings, pendingPayments.debt, pendingPayments.skipped, pendingPayments.extraMortgage)
       setShowAutoLoanConfirm(false)
       setPendingPayments(null)
       setAutoLoanAmount(0)
@@ -432,38 +463,45 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
   }
 
   // Validate payment input to prevent negative checking balance
-  const validatePaymentInput = (savings: number, debt: number) => {
-    if (savings < 0 || debt < 0) return false
+  const validatePaymentInput = (savings: number, debt: number, extraMortgage = 0) => {
+    if (savings < 0 || debt < 0 || extraMortgage < 0) return false
     if (debt > Math.max(0, Number(state.debt || 0))) return false
-    const totalPayment = savings + debt
+    const totalPayment = savings + debt + extraMortgage
     return state.check - totalPayment >= 0
   }
 
   const handlePaymentChange = () => {
     // Real-time validation as user types
     const savingsEl = document.getElementById('pay-save') as HTMLInputElement
-    const debtEl = document.getElementById('pay-debt') as HTMLInputElement
-    
-    if (savingsEl && debtEl) {
-      const savings = parseFloat(savingsEl.value) || 0
-      const debt = parseFloat(debtEl.value) || 0
-      const debtOverpayment = debt > Math.max(0, Number(state.debt || 0))
-      const exceedsChecking = !validatePaymentInput(savings, debt) && !debtOverpayment
+    const debtEl = document.getElementById('pay-debt') as HTMLInputElement | null
+    const mortgageEl = document.getElementById('pay-mortgage') as HTMLInputElement | null
 
-      savingsEl.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
-      debtEl.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
-      
-      if (debtOverpayment) {
-        setPaymentInputWarning('Debt payment cannot exceed your remaining debt balance.')
-        debtEl.classList.add('border-amber-500', 'bg-amber-50')
-      } else if (exceedsChecking) {
-        setPaymentInputWarning('Combined savings + debt payment cannot exceed checking balance.')
-        // Show visual feedback that combined input would overdraw checking
-        savingsEl.classList.add('border-rose-500', 'bg-rose-50')
-        debtEl.classList.add('border-rose-500', 'bg-rose-50')
-      } else {
-        setPaymentInputWarning(null)
-      }
+    const savings = parseFloat(savingsEl?.value) || 0
+    const debt = parseFloat(debtEl?.value || '0') || 0
+    const extraMortgage = parseFloat(mortgageEl?.value || '0') || 0
+    setExtraMortgageDraft(extraMortgage)
+
+    const debtOverpayment = debt > Math.max(0, Number(state.debt || 0))
+    const mortgageOverpayment = extraMortgage > totalMortgageBalance
+    const exceedsChecking = !validatePaymentInput(savings, debt, extraMortgage) && !debtOverpayment && !mortgageOverpayment
+
+    savingsEl?.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
+    debtEl?.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
+    mortgageEl?.classList.remove('border-rose-500', 'bg-rose-50', 'border-amber-500', 'bg-amber-50')
+
+    if (debtOverpayment) {
+      setPaymentInputWarning('Debt payment cannot exceed your remaining debt balance.')
+      debtEl?.classList.add('border-amber-500', 'bg-amber-50')
+    } else if (mortgageOverpayment) {
+      setPaymentInputWarning('Extra mortgage payment cannot exceed total outstanding mortgage balance.')
+      mortgageEl?.classList.add('border-amber-500', 'bg-amber-50')
+    } else if (exceedsChecking) {
+      setPaymentInputWarning('Combined payments cannot exceed checking balance.')
+      savingsEl?.classList.add('border-rose-500', 'bg-rose-50')
+      debtEl?.classList.add('border-rose-500', 'bg-rose-50')
+      mortgageEl?.classList.add('border-rose-500', 'bg-rose-50')
+    } else {
+      setPaymentInputWarning(null)
     }
   }
 
@@ -577,32 +615,70 @@ function InnerApp({ tab, setTab }: { tab: string; setTab: (t: string) => void })
             <div className="space-y-4 mb-8">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Transfer to Savings <span className="text-xs text-slate-400">(HYSA: {(gameValues.hysaAPR * 100).toFixed(2)}% APY)</span></label>
-                <input 
-                  type="number" 
-                  id="pay-save" 
+                <input
+                  type="number"
+                  id="pay-save"
                   min="0"
                   max={state.check}
                   onChange={handlePaymentChange}
-                  className="w-full p-4 border rounded-xl font-bold mt-1" 
-                  placeholder="0.00" 
+                  className="w-full p-4 border rounded-xl font-bold mt-1"
+                  placeholder="0.00"
                 />
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt <span className="text-xs text-slate-400">(Credit: {state.credit} • Dynamic APR: {(dynamicAPR * 100).toFixed(2)}%)</span></label>
-                <input 
-                  type="number" 
-                  id="pay-debt" 
-                  min="0"
-                  max={Math.min(Number(state.check || 0), Math.max(0, Number(state.debt || 0)))}
-                  onChange={handlePaymentChange}
-                  className="w-full p-4 border rounded-xl font-bold mt-1" 
-                  placeholder="0.00" 
-                />
-              </div>
+              {Number(state.debt || 0) > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Pay Toward Debt <span className="text-xs text-slate-400">(Credit: {state.credit} • Dynamic APR: {(dynamicAPR * 100).toFixed(2)}%)</span></label>
+                  <input
+                    type="number"
+                    id="pay-debt"
+                    min="0"
+                    max={Math.min(Number(state.check || 0), Math.max(0, Number(state.debt || 0)))}
+                    onChange={handlePaymentChange}
+                    className="w-full p-4 border rounded-xl font-bold mt-1"
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+              {hasMortgagedProperty && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">
+                    Extra Mortgage Principal{' '}
+                    <span className="text-xs text-slate-400 normal-case">
+                      ({topMortgageProperty?.templateName || 'Property'} · ${Math.round(Number(topMortgageProperty?.loanBalance || 0)).toLocaleString()} remaining)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    id="pay-mortgage"
+                    min="0"
+                    max={Math.min(Number(state.check || 0), totalMortgageBalance)}
+                    onChange={handlePaymentChange}
+                    className="w-full p-4 border rounded-xl font-bold mt-1"
+                    placeholder="0.00"
+                  />
+                  {extraMortgageDraft > 0 && topMortgageProperty && (() => {
+                    const monthsSaved = estimateMortgageMonthsSaved(
+                      Number(topMortgageProperty.loanBalance || 0),
+                      Number(topMortgageProperty.monthlyDebtService || 0),
+                      Number(topMortgageProperty.mortgageAPR || calculateDynamicAPR(Number(state.credit || 600)) + 0.01),
+                      extraMortgageDraft
+                    )
+                    const interestSaved = Math.max(0, monthsSaved * Number(topMortgageProperty.monthlyDebtService || 0) - extraMortgageDraft)
+                    return (
+                      <p className="text-[11px] text-emerald-700 font-medium mt-1">
+                        {monthsSaved > 0
+                          ? `Saves ~${formatMonths(monthsSaved)} off the mortgage term · ~$${Math.round(interestSaved).toLocaleString()} in interest`
+                          : 'Reduces principal but term is already near payoff'}
+                      </p>
+                    )
+                  })()}
+                </div>
+              )}
               <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded">
                 <div>Available Checking: <span className="font-bold">${state.check.toFixed(2)}</span></div>
                 <div className="mt-1">Max Combined Payment: <span className="font-bold">${state.check.toFixed(2)}</span></div>
-                <div className="mt-1">Max Debt Payment: <span className="font-bold">${Math.max(0, Number(state.debt || 0)).toFixed(2)}</span></div>
+                {Number(state.debt || 0) > 0 && <div className="mt-1">Max Debt Payment: <span className="font-bold">${Math.max(0, Number(state.debt || 0)).toFixed(2)}</span></div>}
+                {hasMortgagedProperty && <div className="mt-1">Total Mortgage Balance: <span className="font-bold">${Math.round(totalMortgageBalance).toLocaleString()}</span></div>}
               </div>
               {paymentInputWarning && (
                 <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">

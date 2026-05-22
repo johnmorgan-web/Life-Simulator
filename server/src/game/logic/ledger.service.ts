@@ -317,16 +317,32 @@ export class LedgerService {
       }
     }
 
-    if (realEstateExpenses > 0) {
-      bal = fix(bal - realEstateExpenses);
-      ledger.push({
-        id: id++,
-        desc: 'Rental Operating Costs (Last Month)',
-        amt: realEstateExpenses,
-        type: 'out',
-        bal,
-        done: false,
-      });
+    if (realEstatePropertyBreakdown && realEstatePropertyBreakdown.length > 0) {
+      for (const entry of realEstatePropertyBreakdown) {
+        const opCosts = Math.max(0, Number(entry.operatingCosts || 0));
+        // Only include debt service if loanBalance > 0
+        const loanBalance = Number(entry.loanBalance || 0);
+        const debtSvc = loanBalance > 0 ? Math.max(0, Number(entry.debtService || 0)) : 0;
+        const reno = Math.max(0, Number(entry.renovationSpend || 0));
+        const total = opCosts + debtSvc + reno;
+        if (total > 0) {
+          bal = fix(bal - total);
+          const details = [
+            opCosts > 0 ? `Property taxes, insurance & maintenance: $${opCosts.toLocaleString()}` : null,
+            debtSvc > 0 ? `Mortgage debt service: $${debtSvc.toLocaleString()}` : null,
+            reno > 0 ? `Active renovation spend: $${reno.toLocaleString()}` : null,
+          ].filter(Boolean);
+          ledger.push({
+            id: id++,
+            desc: `Rental Operating Costs: ${entry.propertyName} (${entry.cityName})`,
+            amt: total,
+            type: 'out',
+            bal,
+            done: false,
+            details,
+          });
+        }
+      }
     }
 
     // Housing / Rent

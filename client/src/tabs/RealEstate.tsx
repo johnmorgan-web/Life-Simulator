@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
-import { amenityImpact, realEstateTemplates } from '../constants/realEstate.constants'
+import { amenityImpact, realEstateTemplates } from '@server/data/realEstate.constants'
 
 type LearningLevel = 'elementary' | 'middle-school' | 'high-school' | 'adult'
 
@@ -92,30 +92,6 @@ function listingEducationBlurb(listing: any, learningLevel: LearningLevel, usePl
   return `Acquisition basis ${currency(ask)}; projected gross yield stream approximately ${currency(grossMonthly)}/month pre-opex.`
 }
 
-function propertyConditionTrend(property: any, currentMonth: number, currentYear: number) {
-  const acquiredMonth = Number(property?.acquiredMonth || currentMonth)
-  const acquiredYear = Number(property?.acquiredYear || currentYear)
-  const propertyAgeMonths = Math.max(0, ((currentYear - acquiredYear) * 12) + (currentMonth - acquiredMonth))
-  const maintenanceIntensity = Math.max(0.5, Math.min(1.5, Number(property?.maintenanceIntensity || 1)))
-  const neglectScore = Math.max(0, Number(property?.neglectScore || 0))
-  const ageDecay = 0.18 + Math.min(0.42, propertyAgeMonths * 0.008)
-  const neglectPenalty = neglectScore * 0.035
-  const maintenanceReduction = Math.max(0, (maintenanceIntensity - 0.75) * 0.42)
-  const monthlyConditionDecay = Math.max(0.04, ageDecay + neglectPenalty - maintenanceReduction)
-
-  let renovationLift = 0
-  if (Number(property?.renovationMonthsRemaining || 0) > 0 && Number(property?.renovationBudgetRemaining || 0) > 0) {
-    const monthsRemaining = Math.max(1, Number(property.renovationMonthsRemaining || 1))
-    const monthlySpend = Number(property.renovationBudgetRemaining || 0) / monthsRemaining
-    renovationLift = 0.9 + Math.min(1.15, Math.max(0.35, monthlySpend / 40000))
-  }
-
-  const netDelta = renovationLift - monthlyConditionDecay
-  if (netDelta > 0.25) return { label: 'Improving', tone: 'text-emerald-700' }
-  if (netDelta > -0.15) return { label: 'Nearly Stable', tone: 'text-amber-700' }
-  if (netDelta > -0.55) return { label: 'Slow Decay', tone: 'text-orange-700' }
-  return { label: 'Rapid Decay', tone: 'text-rose-700' }
-}
 
 function percent(value: number) {
   return `${value.toFixed(1)}%`
@@ -339,7 +315,7 @@ function getMaintenanceEducation(learningLevel: LearningLevel, usePlainLanguage:
       modernizeTooltip: 'Core-capex renovation with stronger condition and valuation recapture.',
       signatureTooltip: 'Premium capex repositioning with maximal condition recovery and value accretion.',
       optionsTitle: 'What these options mean',
-      leanLine: 'Lean Maintenance: Reduced upkeep spend (0.8x). Improves short-run cashflow but increases long-run condition drag.',
+      leanLine: 'Lean Maintenance: Reduced upkeep spend (0.8x). Improves short-run cash flow but compounds deferred maintenance risk.',
       balancedLine: 'Balanced Maintenance: Standard upkeep spend (1.0x). Keeps condition relatively stable without overspending.',
       protectiveLine: 'Protective Maintenance: Elevated upkeep spend (1.2x). Slows decay materially and protects future value.',
       refreshLine: 'Refresh Plan: Light renovation at 55% budget. Partial condition recovery and lower value conversion efficiency.',
@@ -361,7 +337,7 @@ function getMaintenanceEducation(learningLevel: LearningLevel, usePlainLanguage:
     leanLine: 'Lean Maintenance: Reduced upkeep spend (0.8x). Enhances near-term free cash flow but compounds deferred maintenance risk.',
     balancedLine: 'Balanced Maintenance: Standard upkeep spend (1.0x). Maintains operational stability without excess cost intensity.',
     protectiveLine: 'Protective Maintenance: Higher upkeep spend (1.2x). Dampens decay trajectory and defends long-term equity value.',
-    refreshLine: 'Refresh Plan: Light-capex renovation at 55% budget. Delivers targeted condition lift with limited value conversion.',
+    refreshLine: 'Refresh Plan: Light-capex renovation at 55% budget. Delivers targeted condition lift with limited value conversion efficiency.',
     modernizeLine: 'Modernize Plan: Core-capex renovation at 95% budget. Improves physical condition and supports stronger valuation recapture.',
     signatureLine: 'Signature Reposition: Premium-capex renovation at 135% budget. Maximizes condition recovery and value accretion.',
     valueRecoveryLine: 'Value Recovery Rate: Ratio of renovation spend that capitalizes into asset value; values above 1.0 indicate positive value arbitrage.',
@@ -369,7 +345,8 @@ function getMaintenanceEducation(learningLevel: LearningLevel, usePlainLanguage:
 }
 
 export default function RealEstate() {
-  const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts } = useGame()
+  const { state, dispatch, cityData, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, calculateDynamicAPR } = useGame()
+  const [confirmSellId, setConfirmSellId] = useState<string | null>(null)
   const initialPanelState = loadRealEstatePanelState()
   const learningLevel: LearningLevel = state.learningLevel || state.realEstateLearningLevel || state.marketLearningLevel || 'adult'
   const usePlainLanguage = Boolean(state.usePlainLanguage ?? state.realEstateUsePlainLanguage ?? state.marketUsePlainLanguage)
@@ -386,6 +363,7 @@ export default function RealEstate() {
   const [isListingsOpen, setIsListingsOpen] = useState(initialPanelState.isListingsOpen)
   const [isPendingApprovalsOpen, setIsPendingApprovalsOpen] = useState(initialPanelState.isPendingApprovalsOpen)
   const [isOwnedPropertiesOpen, setIsOwnedPropertiesOpen] = useState(initialPanelState.isOwnedPropertiesOpen)
+  const [rentDrafts, setRentDrafts] = useState<Record<string, string>>({})
 
   const market = (state.realEstateMarket || {}) as Record<string, any[]>
   const marketMeta = (state.realEstateMarketMeta || {}) as any
@@ -542,6 +520,11 @@ export default function RealEstate() {
 
   const setMaintenance = (propertyId: string, intensity: number) => {
     const next = properties.map((p: any) => p.id === propertyId ? { ...p, maintenanceIntensity: intensity } : p)
+    dispatch({ type: 'SET_STATE', payload: { investmentProperties: next } })
+  }
+
+  const setCustomRent = (propertyId: string, amount: number | null) => {
+    const next = properties.map((p: any) => p.id === propertyId ? { ...p, customRentPerUnit: amount } : p)
     dispatch({ type: 'SET_STATE', payload: { investmentProperties: next } })
   }
 
@@ -814,7 +797,7 @@ export default function RealEstate() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-bold text-slate-800">{listing.templateName}</p>
-                  <p className="text-xs text-slate-500">{listing.assetClass || 'Residential'} • {listing.units} units • DOM {listing.dom} • Condition {listing.condition}%</p>
+                  <p className="text-xs text-slate-500">{listing.assetClass || 'Residential'} • {listing.units} units • Months on Market: {listing.dom} • Condition {listing.condition}%</p>
                   <p className="text-xs text-slate-500">Target renter salary: {String(listing.targetSalaryRangeLabel || '$3,000+/mo')}</p>
                   <p className="text-xs text-slate-500">Owned since inception: {Math.max(0, Number(listing.ownershipCount || 0))} time{Math.max(0, Number(listing.ownershipCount || 0)) === 1 ? '' : 's'}</p>
                 </div>
@@ -963,8 +946,8 @@ export default function RealEstate() {
               const openAmenities = (template?.amenityOptions || [])
                 .filter((a) => !(property.amenities || []).includes(a))
                 .sort((a, b) => Number(amenityImpact[a]?.installCost || 0) - Number(amenityImpact[b]?.installCost || 0))
-              const conditionTrend = propertyConditionTrend(property, Number(state.month || 1), Number(state.year || 2026))
               const lastMonth = lastMonthBreakdownByProperty[String(property.id)]
+              const conditionTrend = lastMonth?.conditionTrend || { label: '', tone: '' }
               const grossIncome = Number(lastMonth?.grossIncome ?? 0)
               const operatingCosts = Number(lastMonth?.operatingCosts ?? 0)
               const debtService = Number(lastMonth?.debtService ?? Number(property.monthlyDebtService || 0))
@@ -977,6 +960,28 @@ export default function RealEstate() {
               const highOccHighCond = scenarioProjection(property, 0.95, 90)
               return (
                 <div key={property.id} className="bg-slate-50 rounded p-3 relative overflow-visible z-0 hover:z-20">
+                  {/* Confirmation Popup for Sell & Relist (glass style) */}
+                  {confirmSellId === property.id && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setConfirmSellId(null)}>
+                      <div className="glass w-full max-w-md rounded-xl p-6 shadow-2xl border border-slate-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <h3 className="text-lg font-bold text-slate-800">Confirm Sell & Relist</h3>
+                          <button type="button" className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700" aria-label="Close" onClick={() => setConfirmSellId(null)}>
+                            ×
+                          </button>
+                        </div>
+                        <p className="mb-4 text-sm text-slate-700">Are you sure you want to sell and relist <span className="font-semibold">{property.templateName} - {property.cityName}</span>? This action cannot be undone.</p>
+                        <div className="flex justify-end gap-2 mt-4">
+                          <button type="button" className="rounded bg-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-300" onClick={() => setConfirmSellId(null)}>
+                            Cancel
+                          </button>
+                          <button type="button" className="rounded bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700" onClick={async () => { setConfirmSellId(null); await sellInvestmentProperty(property.id); }}>
+                            Yes, Sell & Relist
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-semibold">{property.templateName} - {property.cityName}</p>
                     <p className={`font-bold ${Number(property.lastNetCashflow || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -1034,6 +1039,156 @@ export default function RealEstate() {
                     <p className="text-[11px] text-slate-600 mt-2">{vocabulary.breakevenLabel}: <span className="font-semibold">{percent(breakEven)}</span></p>
                   </div>
 
+                  {/* Mortgage summary or payoff stats */}
+                  {property.purchaseMode === 'mortgage' && Number(property.mortgageTermMonths || 0) > 0 && Number(property.loanBalance || 0) > 0 ? (() => {
+                    const currentMonth = Number(state.month || 1)
+                    const currentYear = Number(state.year || 2026)
+                    const acqMonth = Number(property.acquiredMonth || currentMonth)
+                    const acqYear = Number(property.acquiredYear || currentYear)
+                    const monthsElapsed = Math.max(0, (currentYear - acqYear) * 12 + (currentMonth - acqMonth))
+                    const termMonths = Number(property.mortgageTermMonths || 360)
+                    const remainingMonths = Math.max(0, termMonths - monthsElapsed)
+                    const remainingYears = Math.floor(remainingMonths / 12)
+                    const remainingMonthsRem = remainingMonths % 12
+                    const loanBalance = Math.max(0, Number(property.loanBalance || 0))
+                    const apr = Number(property.mortgageAPR || 0) || Math.max(0.035, calculateDynamicAPR(Number(state.credit || 600)) + 0.01)
+                    const monthlyInterest = Math.round(loanBalance * apr / 12)
+                    const monthlyPrincipal = Math.max(0, Math.round(Number(property.monthlyDebtService || 0) - monthlyInterest))
+                    const totalMortgagePaid = Math.round(Number(property.monthlyDebtService || 0) * termMonths)
+                    const remainingTimeLabel = remainingMonths <= 0
+                      ? 'Paid off'
+                      : remainingYears > 0
+                        ? `${remainingYears}y ${remainingMonthsRem}mo remaining`
+                        : `${remainingMonths}mo remaining`
+                    return (
+                      <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-3">
+                        <p className="text-xs font-semibold text-blue-900 mb-2">Mortgage Summary ({(apr * 100).toFixed(2)}% APR · {Math.round(termMonths / 12)}-year term)</p>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px]">
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="uppercase text-[10px] text-slate-500">Time Remaining</p>
+                            <p className="font-semibold text-slate-800">{remainingTimeLabel}</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="uppercase text-[10px] text-slate-500">Principal Remaining</p>
+                            <p className="font-semibold text-slate-800">{currency(loanBalance)}</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="uppercase text-[10px] text-slate-500">Interest This Month</p>
+                            <p className="font-semibold text-rose-700">{currency(monthlyInterest)}</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="uppercase text-[10px] text-slate-500">Principal This Month</p>
+                            <p className="font-semibold text-emerald-700">{currency(monthlyPrincipal)}</p>
+                          </div>
+                          <div className="bg-white rounded p-2 border border-blue-100">
+                            <p className="uppercase text-[10px] text-slate-500">Total Mortgage Cost</p>
+                            <p className="font-semibold text-slate-800">{currency(totalMortgagePaid)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })() : null}
+                  {/* Show payoff stats if mortgage is paid off */}
+                  {property.mortgagePayoffMonth && property.mortgagePayoffYear ? (
+                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-3">
+                      <p className="text-xs font-semibold text-blue-900 mb-2">Mortgage Paid Off</p>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px]">
+                        <div className="bg-white rounded p-2 border border-blue-100">
+                          <p className="uppercase text-[10px] text-slate-500">Interest Paid</p>
+                          <p className="font-semibold text-rose-700">{currency(property.mortgageInterestPaid || 0)}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-blue-100">
+                          <p className="uppercase text-[10px] text-slate-500">Total Paid</p>
+                          <p className="font-semibold text-slate-800">{currency(property.mortgageTotalPaid || 0)}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-blue-100">
+                          <p className="uppercase text-[10px] text-slate-500">Time to Payoff</p>
+                          <p className="font-semibold text-blue-900">{property.mortgageElapsedMonths || 0} months</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-blue-100">
+                          <p className="uppercase text-[10px] text-slate-500">Paid Off</p>
+                          <p className="font-semibold text-emerald-700">{property.mortgagePayoffMonth}/{property.mortgagePayoffYear}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-blue-100">
+                          <p className="uppercase text-[10px] text-slate-500">Start</p>
+                          <p className="font-semibold text-slate-800">{property.mortgageStartMonth}/{property.mortgageStartYear}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 bg-white border border-slate-200 rounded p-3">
+                    <p className="text-xs font-semibold text-slate-800 mb-2">
+                      Rent Pricing {property.customRentPerUnit != null ? <span className="text-amber-600 font-normal">(Custom)</span> : <span className="text-slate-400 font-normal">(Auto)</span>}
+                    </p>
+                    {(() => {
+                      const marketRent = Math.max(1, Number(property.marketRentPerUnit || property.rentPerUnit || 0))
+                      const effectiveRent = property.customRentPerUnit != null ? Number(property.customRentPerUnit) : Number(property.rentPerUnit || marketRent)
+                      const draft = rentDrafts[property.id] ?? String(Math.round(effectiveRent))
+                      const draftNum = Math.max(100, Math.round(Number(draft) || 100))
+                      const previewRent = Number(draft) > 0 ? Math.max(100, Number(draft)) : effectiveRent
+                      const rentRatio = marketRent > 0 ? previewRent / marketRent : 1
+                      const estOccupancy = Math.min(97, Math.max(10, Math.round((0.78 - (rentRatio - 1) * 0.65) * 100)))
+                      const estUnits = Math.max(0, Math.round(Number(property.units || 1) * estOccupancy / 100))
+                      const estGross = estUnits * previewRent
+                      const { label: statusLabel, color: statusColor } = rentRatio < 0.85
+                        ? { label: 'Below market — high occupancy expected', color: 'text-emerald-700' }
+                        : rentRatio < 0.97
+                          ? { label: 'Slightly below market — strong occupancy', color: 'text-emerald-600' }
+                          : rentRatio < 1.04
+                            ? { label: 'At market rate — balanced occupancy', color: 'text-slate-600' }
+                            : rentRatio < 1.18
+                              ? { label: 'Above market — some vacancy risk', color: 'text-amber-700' }
+                              : { label: 'Well above market — high vacancy risk', color: 'text-rose-700' }
+                      const step = 5
+                      const commitRent = (val: number) => {
+                        const clamped = Math.max(100, Math.round(val))
+                        setCustomRent(property.id, clamped)
+                        setRentDrafts(prev => ({ ...prev, [property.id]: String(clamped) }))
+                      }
+                      return (
+                        <>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 text-sm font-bold"
+                              onClick={() => commitRent(draftNum - step)}
+                            >−</button>
+                            <input
+                              type="number"
+                              min={100}
+                              step={step}
+                              value={draft}
+                              onChange={(e) => setRentDrafts(prev => ({ ...prev, [property.id]: e.target.value }))}
+                              onBlur={() => commitRent(draftNum)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') commitRent(draftNum) }}
+                              className="w-28 px-2 py-1 rounded border border-slate-300 text-sm text-center"
+                            />
+                            <button
+                              className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 text-sm font-bold"
+                              onClick={() => commitRent(draftNum + step)}
+                            >+</button>
+                            <span className="text-[11px] text-slate-500">/ unit / mo</span>
+                            {property.customRentPerUnit != null && (
+                              <button
+                                className="ml-auto px-2 py-1 text-[11px] rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300"
+                                onClick={() => {
+                                  setCustomRent(property.id, null)
+                                  setRentDrafts(prev => { const next = { ...prev }; delete next[property.id]; return next })
+                                }}
+                              >
+                                Reset to recommended ({currency(Math.round(marketRent))})
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-2">
+                            Recommended: <strong>{currency(Math.round(marketRent))}</strong>/unit · includes amenity upgrades · Est. ~{estOccupancy}% occupancy ({estUnits}/{property.units || 1} units) → <strong>{currency(estGross)}</strong>/mo gross
+                          </p>
+                          <p className={`text-[11px] font-medium mt-1 ${statusColor}`}>{statusLabel}</p>
+                        </>
+                      )
+                    })()}
+                  </div>
+
                   <div className="mt-3 bg-white border border-slate-200 rounded p-3">
                     <p className="text-xs font-semibold text-slate-800">{vocabulary.scenarioSectionTitle}</p>
                     <p className="text-[11px] text-slate-600 mt-1">Rows are occupancy levels. Columns are condition levels.</p>
@@ -1065,33 +1220,54 @@ export default function RealEstate() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 mt-3 relative overflow-visible z-30">
-                    <span className="tooltip-anchor">
-                      <button
-                        className="px-2 py-1 text-xs rounded bg-slate-200"
-                        onClick={() => setMaintenance(property.id, 0.8)}
-                      >
-                        Lean Maintenance
-                      </button>
-                      <span className="tooltip-bubble tooltip-bubble-left">{maintenanceEducation.leanTooltip}<span className="tooltip-caret" /></span>
-                    </span>
-                    <span className="tooltip-anchor">
-                      <button
-                        className="px-2 py-1 text-xs rounded bg-slate-200"
-                        onClick={() => setMaintenance(property.id, 1)}
-                      >
-                        Balanced Maintenance
-                      </button>
-                      <span className="tooltip-bubble">{maintenanceEducation.balancedTooltip}<span className="tooltip-caret" /></span>
-                    </span>
-                    <span className="tooltip-anchor">
-                      <button
-                        className="px-2 py-1 text-xs rounded bg-slate-200"
-                        onClick={() => setMaintenance(property.id, 1.2)}
-                      >
-                        Protective Maintenance
-                      </button>
-                      <span className="tooltip-bubble">{maintenanceEducation.protectiveTooltip}<span className="tooltip-caret" /></span>
-                    </span>
+                    {/* Sell & Relist button example, update your actual button if needed */}
+                    <button
+                      className="px-2 py-1 text-xs rounded bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200 font-semibold"
+                      onClick={() => setConfirmSellId(property.id)}
+                    >Sell & Relist</button>
+                    {(() => {
+                      const activeMI = Number(property.maintenanceIntensity ?? 1)
+                      return (
+                        <>
+                          <span className="tooltip-anchor">
+                            <button
+                              className={`px-2 py-1 text-xs rounded font-medium transition-colors ${activeMI === 0 ? 'bg-rose-100 ring-1 ring-rose-400 text-rose-700' : 'bg-slate-200 text-slate-700'}`}
+                              onClick={() => setMaintenance(property.id, 0)}
+                            >
+                              {activeMI === 0 ? '✓ ' : ''}No Maintenance
+                            </button>
+                            <span className="tooltip-bubble tooltip-bubble-left">{'No ongoing maintenance. Property will decay at the fastest rate.'}<span className="tooltip-caret" /></span>
+                          </span>
+                          <span className="tooltip-anchor">
+                            <button
+                              className={`px-2 py-1 text-xs rounded font-medium transition-colors ${activeMI === 0.8 ? 'bg-amber-200 ring-1 ring-amber-500 text-amber-900' : 'bg-slate-200 text-slate-700'}`}
+                              onClick={() => setMaintenance(property.id, 0.8)}
+                            >
+                              {activeMI === 0.8 ? '✓ ' : ''}Lean Maintenance
+                            </button>
+                            <span className="tooltip-bubble tooltip-bubble-left">{maintenanceEducation.leanTooltip}<span className="tooltip-caret" /></span>
+                          </span>
+                          <span className="tooltip-anchor">
+                            <button
+                              className={`px-2 py-1 text-xs rounded font-medium transition-colors ${activeMI === 1 ? 'bg-blue-200 ring-1 ring-blue-500 text-blue-900' : 'bg-slate-200 text-slate-700'}`}
+                              onClick={() => setMaintenance(property.id, 1)}
+                            >
+                              {activeMI === 1 ? '✓ ' : ''}Balanced Maintenance
+                            </button>
+                            <span className="tooltip-bubble">{maintenanceEducation.balancedTooltip}<span className="tooltip-caret" /></span>
+                          </span>
+                          <span className="tooltip-anchor">
+                            <button
+                              className={`px-2 py-1 text-xs rounded font-medium transition-colors ${activeMI === 1.2 ? 'bg-emerald-200 ring-1 ring-emerald-500 text-emerald-900' : 'bg-slate-200 text-slate-700'}`}
+                              onClick={() => setMaintenance(property.id, 1.2)}
+                            >
+                              {activeMI === 1.2 ? '✓ ' : ''}Protective Maintenance
+                            </button>
+                            <span className="tooltip-bubble">{maintenanceEducation.protectiveTooltip}<span className="tooltip-caret" /></span>
+                          </span>
+                        </>
+                      )
+                    })()}
                     <span className="tooltip-anchor">
                       <button
                         className="px-2 py-1 text-xs rounded bg-indigo-500 text-white"
@@ -1122,7 +1298,7 @@ export default function RealEstate() {
                       </button>
                       <span className="tooltip-bubble">{maintenanceEducation.signatureTooltip}<span className="tooltip-caret" /></span>
                     </span>
-                    <button className="px-2 py-1 text-xs rounded bg-rose-600 text-white" onClick={() => { void sellInvestmentProperty(property.id) }}>Sell & Relist</button>
+                    {/* Removed duplicate Sell & Relist button */}
                   </div>
                   <details className="mt-3">
                     <summary className="text-[11px] text-slate-500 cursor-pointer select-none hover:text-slate-700">▸ {maintenanceEducation.optionsTitle}</summary>
