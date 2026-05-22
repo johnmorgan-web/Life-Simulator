@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -10,6 +11,11 @@ const appVersion = clientPackage.version || '0.0.0'
 
 // https://vite.dev/config/
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@server': path.resolve(__dirname, '../server/src'),
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },

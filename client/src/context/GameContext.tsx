@@ -6,7 +6,7 @@ import gameValues from '../constants/gameValues.constants'
 import vehicleDatabase from '../constants/vehicleDatabase.constants'
 import { findHistoricalScenarioById } from '../constants/historicalEconomicEvents.constants'
 import { stockMarketAssets, autoInvestProfiles } from '../constants/stockMarket.constants'
-import { realEstateTemplates, amenityImpact, rentControlByCityType } from '../constants/realEstate.constants'
+import { realEstateTemplates, amenityImpact, rentControlByCityType } from '@server/data/realEstate.constants'
 import { achievementRules } from '../constants/achievements.constants'
 import { WEALTH_NET_WORTH_REQUIREMENTS } from '../constants/wealthRequirements.constants.ts'
 import type { AcademyCourse, City, Job, LifeEvent, RewardPrizePools } from '@server/types/models.types'
@@ -2207,7 +2207,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			}
 		}
 		case 'PROCESS_MONTH': {
-			const { paySave = 0, payDebt = 0, skippedPayment = false } = action.payload
+			const { paySave = 0, payDebt = 0, skippedPayment = false, extraMortgagePayment = 0 } = action.payload
 			const requestedDebtPayment = Math.max(0, Number(payDebt || 0))
 			const appliedDebtPayment = Math.min(Math.max(0, Number(state.debt || 0)), requestedDebtPayment)
 			const nextMonth = state.month === 12 ? 1 : state.month + 1
@@ -2897,6 +2897,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					renovationMonthsRemaining: 0,
 					renovationBudgetRemaining: 0,
 					lastNetCashflow: 0,
+					mortgageAPR: purchaseMode === 'mortgage' ? mortgageAPR : 0,
 					acquiredMonth: nextMonth,
 					acquiredYear: nextYear
 				})
@@ -2928,7 +2929,8 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			let realEstateExpenses = 0
 			const realEstatePropertyBreakdown: any[] = []
 			const propertyEvents: string[] = []
-			investmentProperties = investmentProperties.map((property: any) => {
+						investmentProperties = investmentProperties.map((property: any) => {
+							// Mortgage amortization and payoff logic is now server-side. Client uses server values only.
 				const city = cityData.find((c) => c.name === property.cityName) || { p: 1, r: 1, name: property.cityName }
 				const pressure = cityPressureMultiplier(registeredUsers, city)
 				const amenityScore = realEstateAmenityScore(property.amenities || [])
@@ -2938,9 +2940,10 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				let occupiedUnits = Math.max(0, Math.min(units, Number(property.occupiedUnits || 0)))
 				let vacancyMonths = Number(property.vacancyMonths || 0)
 				let condition = Math.max(20, Math.min(100, Number(property.condition || 75)))
-				let maintenanceIntensity = Math.max(0.5, Math.min(1.5, Number(property.maintenanceIntensity || 1)))
+				let rawMaintenanceIntensity = Number(property.maintenanceIntensity ?? 1)
+				let maintenanceIntensity = rawMaintenanceIntensity === 0 ? 0 : Math.max(0.5, Math.min(1.5, rawMaintenanceIntensity))
 				let propertyValue = Math.max(60000, Number(property.propertyValue || 0))
-				let loanBalance = Math.max(0, Number(property.loanBalance || 0))
+				// let loanBalance = Math.max(0, Number(property.loanBalance || 0))
 				const debtService = Math.max(0, Number(property.monthlyDebtService || 0))
 				let rentPerUnit = Math.max(450, Number(property.rentPerUnit || 0))
 				let marketRentPerUnit = Math.max(450, Number(property.marketRentPerUnit || rentPerUnit))
@@ -2959,19 +2962,29 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				const maxRentStep = Math.max(0, Number(property.rentControlCap || 0.045) / 12)
 				const targetRent = Math.min(marketRentPerUnit * 1.1, rentPerUnit * (1 + maxRentStep))
 				rentPerUnit = round2(Math.max(450, targetRent))
+				// If the user has pinned a custom rent, use it for income and occupancy pressure.
+				// The auto-tracked rentPerUnit continues updating so switching back to auto is seamless.
+				const effectiveRentPerUnit = property.customRentPerUnit != null
+					? Math.max(100, Number(property.customRentPerUnit))
+					: rentPerUnit
 
 				// Buildings naturally wear down over time. Maintenance only slows decay; it does not fully renovate by itself.
-				const ageDecay = 0.18 + Math.min(0.42, propertyAgeMonths * 0.008)
-				const neglectPenalty = neglectScore * 0.035
-				const maintenanceReduction = Math.max(0, (maintenanceIntensity - 0.75) * 0.42)
-				const monthlyConditionDecay = Math.max(0.04, ageDecay + neglectPenalty - maintenanceReduction)
-				condition = Math.max(20, condition - monthlyConditionDecay)
+				const ageDecay = 0.06 + Math.min(0.14, propertyAgeMonths * 0.002)
+				const neglectPenalty = neglectScore * 0.025
+								const maintenanceReduction = maintenanceIntensity === 0 ? 0 : Math.max(0, (maintenanceIntensity - 0.75) * 0.32)
+								// If no maintenance, decay is fastest (no reduction)
+								const monthlyConditionDecay = maintenanceIntensity === 0
+									? Math.max(0.02, ageDecay + neglectPenalty)
+									: Math.max(0.02, ageDecay + neglectPenalty - maintenanceReduction)
+								condition = Math.max(20, condition - monthlyConditionDecay)
 
-				if (maintenanceIntensity < 0.95) {
-					neglectScore = Math.min(12, neglectScore + (1.05 - maintenanceIntensity) * 0.9)
-				} else {
-					neglectScore = Math.max(0, neglectScore - Math.min(0.45, (maintenanceIntensity - 0.95) * 0.9))
-				}
+								if (maintenanceIntensity === 0) {
+									neglectScore = Math.min(12, neglectScore + 1.05 * 0.9)
+								} else if (maintenanceIntensity < 0.95) {
+									neglectScore = Math.min(12, neglectScore + (1.05 - maintenanceIntensity) * 0.9)
+								} else {
+									neglectScore = Math.max(0, neglectScore - Math.min(0.45, (maintenanceIntensity - 0.95) * 0.9))
+								}
 
 				if (renovationMonthsRemaining > 0 && renovationBudgetRemaining > 0) {
 					const monthlyRenovationSpend = round2(Math.min(renovationBudgetRemaining, renovationBudgetRemaining / renovationMonthsRemaining))
@@ -2985,7 +2998,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					propertyValue = round2(propertyValue + (monthlyRenovationSpend * renovationValueRecovery))
 				}
 
-				const rentPressure = marketRentPerUnit > 0 ? rentPerUnit / marketRentPerUnit : 1
+				const rentPressure = marketRentPerUnit > 0 ? effectiveRentPerUnit / marketRentPerUnit : 1
 				const churnChance = Math.max(0.02, Math.min(0.4, 0.04 + Math.max(0, rentPressure - 1) * 0.18 + ((70 - condition) * 0.002) - amenityScore * 0.2))
 				if (occupiedUnits > 0) {
 					const churnSeed = hashString(`${property.id}-${nextYear}-${nextMonth}-churn`)
@@ -3009,53 +3022,118 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					vacancyMonths = occupiedUnits < units ? vacancyMonths + 1 : 0
 				}
 
+
+				const templateHoaRate = Number(realEstateTemplates.find((t) => t.id === property.templateId)?.hoaRate || 0)
 				const annualTaxRate = 0.009 + Number(city.p || 1) * 0.003
 				const annualInsuranceRate = 0.0035 + Number(city.r || 1) * 0.001
-				const annualMaintenanceRate = 0.014 + (Math.max(0, 85 - condition) * 0.00025) + amenityUpkeepRate
-				const monthlyOperating = round2(propertyValue * (annualTaxRate + annualInsuranceRate + annualMaintenanceRate) / 12)
-				const grossRent = round2(occupiedUnits * rentPerUnit)
+								const annualMaintenanceRate = maintenanceIntensity === 0
+									? 0
+									: 0.014 + (Math.max(0, 85 - condition) * 0.00025) + amenityUpkeepRate
+								const monthlyTax = round2(propertyValue * annualTaxRate / 12)
+								const monthlyInsurance = round2(propertyValue * annualInsuranceRate / 12)
+								const monthlyMaintenance = maintenanceIntensity === 0
+									? 0
+									: round2(propertyValue * annualMaintenanceRate / 12)
+								const monthlyHOA = round2(propertyValue * templateHoaRate / 12)
+								const monthlyOperating = round2(monthlyTax + monthlyInsurance + monthlyMaintenance + monthlyHOA)
+				const grossRent = round2(occupiedUnits * effectiveRentPerUnit)
 				const netCashflow = round2(grossRent - monthlyOperating - debtService)
 
 				realEstateIncome = round2(realEstateIncome + grossRent)
 				realEstateExpenses = round2(realEstateExpenses + monthlyOperating + debtService)
+				// Compute condition trend (server-authoritative, matches old client logic)
+				const renovationLift = (renovationMonthsRemaining > 0 && renovationBudgetRemaining > 0)
+				  ? 0.9 + Math.min(1.15, Math.max(0.35, (renovationBudgetRemaining / Math.max(1, renovationMonthsRemaining)) / 40000))
+				  : 0
+				const netDelta = renovationLift - monthlyConditionDecay
+				let conditionTrend: { label: string; tone: string } = { label: '', tone: '' }
+				if (netDelta > 0.5) conditionTrend = { label: 'Improving', tone: 'text-emerald-700' }
+				else if (netDelta > -0.03) conditionTrend = { label: 'Nearly Stable', tone: 'text-amber-700' }
+				else if (netDelta > -0.12) conditionTrend = { label: 'Slow Decay', tone: 'text-orange-700' }
+				else conditionTrend = { label: 'Rapid Decay', tone: 'text-rose-700' }
 				realEstatePropertyBreakdown.push({
 					propertyId: String(property.id || ''),
 					propertyName: String(property.templateName || property.incomeLabel || 'Property'),
 					cityName: String(property.cityName || ''),
 					grossIncome: grossRent,
 					operatingCosts: monthlyOperating,
+					tax: monthlyTax,
+					insurance: monthlyInsurance,
+					maintenance: monthlyMaintenance,
+					hoa: monthlyHOA,
 					debtService,
-					netCashflow
+					netCashflow,
+					conditionTrend
 				})
 
-				if (loanBalance > 0 && debtService > 0) {
-					const loanInterest = round2(loanBalance * ((Math.max(0.035, calculateDynamicAPR(credit) + 0.01)) / 12))
-					const principalPaid = Math.max(0, round2(debtService - loanInterest))
-					loanBalance = round2(Math.max(0, loanBalance - principalPaid))
-				}
+				// Loan amortization is now server-side. Client uses server values only.
 
-				return {
-					...property,
-					occupiedUnits,
-					vacancyMonths,
-					condition: round2(condition),
-					maintenanceIntensity,
-					propertyValue,
-					loanBalance,
-					rentPerUnit,
-					marketRentPerUnit,
-					neglectScore: round2(neglectScore),
-					renovationMonthsRemaining,
-					renovationBudgetRemaining,
-					renovationValueRecovery,
-					lastNetCashflow: netCashflow
-				}
+				// If occupancy collapses below 50%, auto-lower rent toward break-even to attract tenants next month.
+				// Break-even is computed targeting 65% occupancy recovery so the property can become self-sustaining.
+				const occupancyRate = units > 0 ? occupiedUnits / units : 1
+				const nextCustomRentPerUnit: number | null = (() => {
+					if (occupancyRate < 0.5) {
+						const breakEvenRent = round2((monthlyOperating + debtService) / Math.max(1, units * 0.65))
+						const rescueRent = Math.max(200, Math.min(marketRentPerUnit, breakEvenRent))
+						if (effectiveRentPerUnit > rescueRent * 1.05) {
+							propertyEvents.push(`Low occupancy at ${String(property.templateName || 'Property')} (${String(property.cityName || '')}) — rent auto-adjusted to break-even rate ($${Math.round(rescueRent).toLocaleString()}/unit)`)
+							return rescueRent
+						}
+					}
+					return property.customRentPerUnit != null ? Number(property.customRentPerUnit) : null
+				})()
+
+								return {
+									...property,
+									occupiedUnits,
+									vacancyMonths,
+									condition: round2(condition),
+									maintenanceIntensity,
+									propertyValue,
+									rentPerUnit,
+									marketRentPerUnit,
+									customRentPerUnit: nextCustomRentPerUnit,
+									neglectScore: round2(neglectScore),
+									renovationMonthsRemaining,
+									renovationBudgetRemaining,
+									renovationValueRecovery,
+									lastNetCashflow: netCashflow
+								}
 			})
 
 			const realEstateNet = round2(realEstateIncome - realEstateExpenses)
+
 			if (investmentProperties.length > 0) {
 				resultingCheck = round2(resultingCheck + realEstateNet)
-				logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏘️ Rental portfolio cashflow: ${realEstateNet >= 0 ? '+' : '-'}$${Math.abs(realEstateNet).toLocaleString()} (income $${realEstateIncome.toLocaleString()} | expenses $${realEstateExpenses.toLocaleString()})` })
+				// Sum up operating cost components across all properties
+				const taxTotal = realEstatePropertyBreakdown.reduce((sum, p) => sum + (Number(p.tax) || 0), 0)
+				const insuranceTotal = realEstatePropertyBreakdown.reduce((sum, p) => sum + (Number(p.insurance) || 0), 0)
+				const maintenanceTotal = realEstatePropertyBreakdown.reduce((sum, p) => sum + (Number(p.maintenance) || 0), 0)
+				const hoaTotal = realEstatePropertyBreakdown.reduce((sum, p) => sum + (Number(p.hoa) || 0), 0)
+				logs.push({
+					date: `${nextMonth}/${nextYear}`,
+					msg: `🏘️ Rental portfolio cashflow: ${realEstateNet >= 0 ? '+' : '-'}$${Math.abs(realEstateNet).toLocaleString()} (income $${realEstateIncome.toLocaleString()} | tax $${Math.round(taxTotal).toLocaleString()}, insurance $${Math.round(insuranceTotal).toLocaleString()}, maintenance $${Math.round(maintenanceTotal).toLocaleString()}, HOA $${Math.round(hoaTotal).toLocaleString()}, total expenses $${realEstateExpenses.toLocaleString()})`
+				})
+			}
+
+			// Apply any voluntary extra principal payment to the property with the highest remaining loan balance.
+			const safeExtraMortgage = Math.max(0, Number(extraMortgagePayment || 0))
+			if (safeExtraMortgage > 0) {
+				let topIdx = -1
+				let topBalance = 0
+				investmentProperties.forEach((p: any, i: number) => {
+					const bal = Number(p.loanBalance || 0)
+					if (bal > topBalance) { topBalance = bal; topIdx = i }
+				})
+				if (topIdx >= 0 && topBalance > 0) {
+					const applied = round2(Math.min(safeExtraMortgage, topBalance))
+					investmentProperties[topIdx] = {
+						...investmentProperties[topIdx],
+						loanBalance: round2(topBalance - applied)
+					}
+					resultingCheck = round2(resultingCheck - applied)
+					logs.push({ date: `${nextMonth}/${nextYear}`, msg: `🏠 Extra mortgage principal of $${applied.toLocaleString()} applied to ${String(investmentProperties[topIdx].templateName || 'property')} (${String(investmentProperties[topIdx].cityName || '')})` })
+				}
 			}
 
 			if (resultingCheck < 0 && investmentProperties.length > 0) {
@@ -3890,9 +3968,10 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		dispatch({ type: 'CHECK_ROW', payload: { id, done, newCheck, expectedCheck } })
 	}
 
-	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false) {
+	function processMonth(paySave = 0, payDebt = 0, skippedPayment = false, payMortgage = 0) {
 		const safePaySave = Math.max(0, Number(paySave || 0))
 		const safePayDebt = Math.min(Math.max(0, Number(state.debt || 0)), Math.max(0, Number(payDebt || 0)))
+		const safePayMortgage = Math.max(0, Number(payMortgage || 0))
 		const priorMonth = state.month
 		const priorYear = state.year
 
@@ -3926,6 +4005,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 					paySave: safePaySave,
 					payDebt: safePayDebt,
 					skippedPayment,
+					extraMortgagePayment: safePayMortgage,
 					stockMarketOverride: serverStock,
 				},
 			})

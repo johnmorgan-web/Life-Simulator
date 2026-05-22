@@ -198,15 +198,19 @@ export class RealEstateService {
     const amenities = [...template.amenityOptions]
       .sort(() => rnd() - 0.5)
       .slice(0, Math.max(1, Math.min(3, Math.floor(rnd() * 4))));
+    // Blend city demand (p) and cost-of-living/risk (r) for a composite COL multiplier.
+    // Prices are primarily demand-driven with a COL premium; rents are primarily cost-driven with a demand boost.
+    const colPriceMultiplier = 0.65 * Number(city.p || 1) + 0.35 * Number(city.r || 1);
+    const colRentMultiplier  = 0.35 * Number(city.p || 1) + 0.65 * Number(city.r || 1);
     const askingPrice = this.utilitiesService.round2(
       template.basePrice *
-        Number(city.p || 1) *
+        colPriceMultiplier *
         quality *
         (0.93 + (pressure - 1) * 0.35),
     );
     const askingRentPerUnit = this.utilitiesService.round2(
       template.baseRentPerUnit *
-        Number(city.r || 1) *
+        colRentMultiplier *
         quality *
         (0.95 + (pressure - 1) * 0.25),
     );
@@ -351,11 +355,19 @@ export class RealEstateService {
       }));
     }
 
-    return {
-      realEstateMarket: normalizedMarket,
-      realEstateMarketMeta: meta,
-      investmentProperties: Array.isArray(data?.investmentProperties)
-        ? data.investmentProperties.map((p: any) => ({
+    // Server-side mortgage payoff and payment logic
+    const investmentProperties = Array.isArray(data?.investmentProperties)
+      ? data.investmentProperties.map((p: any) => {
+          let loanBalance = Math.max(0, Number(p.loanBalance || 0));
+          let mortgageTermMonths = Number(p.mortgageTermMonths || 0);
+          let monthlyDebtService = Math.max(0, Number(p.monthlyDebtService || 0));
+          let purchaseMode = p?.purchaseMode || (loanBalance > 0 ? 'mortgage' : 'cash');
+          // If mortgage is paid off, set monthlyDebtService to 0 and switch to cash
+          if (purchaseMode === 'mortgage' && loanBalance <= 0 && mortgageTermMonths === 0) {
+            monthlyDebtService = 0;
+            purchaseMode = 'cash';
+          }
+          return {
             ...p,
             assetClass:
               p?.assetClass ||
@@ -364,13 +376,19 @@ export class RealEstateService {
               p?.incomeLabel ||
               (realEstateTemplates.find((t) => t.id === p?.templateId)?.incomeLabel || 'Monthly Rent'),
             ownershipCount: Math.max(0, Math.floor(Number(p?.ownershipCount || 0))),
-            mortgageTermMonths: Number(p?.mortgageTermMonths || 0),
-            purchaseMode:
-              p?.purchaseMode || (Number(p?.loanBalance || 0) > 0 ? 'mortgage' : 'cash'),
+            mortgageTermMonths,
+            purchaseMode,
+            monthlyDebtService,
             targetSalaryBracket: this.resolveTargetSalaryBracket(p).key,
             targetSalaryRangeLabel: this.resolveTargetSalaryBracket(p).label,
-          }))
-        : [],
+          };
+        })
+      : [];
+
+    return {
+      realEstateMarket: normalizedMarket,
+      realEstateMarketMeta: meta,
+      investmentProperties,
       pendingRealEstateDeals: Array.isArray(data?.pendingRealEstateDeals)
         ? data.pendingRealEstateDeals
         : [],
