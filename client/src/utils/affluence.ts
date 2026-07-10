@@ -1,7 +1,20 @@
+import { achievementRules } from '../constants/achievements.constants'
+
+export type PeerBadge = {
+  id: string
+  label: string
+  description: string
+  icon: string
+  source: 'achievement' | 'subscription'
+  priority: number
+}
+
 export type PeerAffluence = {
   user: string
   affluence: number
   stats: WealthStats
+  badges: PeerBadge[]
+  featuredBadgeId: string | null
 }
 
 type AffluenceComparisonInput = {
@@ -16,6 +29,12 @@ export type WealthStats = {
   investedStocks: number
   carsOwned: number
   luxuryServicesOwned: number
+  credentialsCount: number
+  tenureMonths: number
+  calculationAccuracy: number
+  achievementsCount: number
+  subscriptionBadgeCount: number
+  relocationCount: number
 }
 
 function toNumber(value: any) {
@@ -59,6 +78,77 @@ function countLuxuryServices(snapshot: any) {
   return Object.values(services).filter(Boolean).length
 }
 
+function countRelocations(snapshot: any) {
+  const logs = Array.isArray(snapshot?.logs) ? snapshot.logs : []
+  return logs.filter((entry: any) => String(entry?.msg || '').includes('Relocated to ')).length
+}
+
+function calculationAccuracy(snapshot: any) {
+  const successes = toNumber(snapshot?.lifetimeCheckSuccesses)
+  const failures = toNumber(snapshot?.lifetimeCheckFailures)
+  const total = successes + failures
+  if (total <= 0) return 0
+  return Math.round((successes / total) * 1000) / 10
+}
+
+function badgesForSnapshot(snapshot: any): PeerBadge[] {
+  const unlockedIds = new Set<string>(Array.isArray(snapshot?.achievementsUnlocked) ? snapshot.achievementsUnlocked : [])
+  const categoryIconMap: Record<string, string> = {
+    vehicles: '🚗',
+    calculation: '🧮',
+    relocation: '🧭',
+    lifestyle: '✨',
+    stocks: '📈',
+    tenure: '💼',
+    education: '🎓',
+    wealth: '💰',
+    household: '🏠',
+    entertainment: '🎭',
+  }
+  const achievementBadges: PeerBadge[] = achievementRules
+    .filter((rule) => unlockedIds.has(rule.id))
+    .map((rule) => ({
+      id: `ach:${rule.id}`,
+      label: rule.title,
+      description: rule.description,
+      icon: categoryIconMap[String(rule.category || '')] || '🏆',
+      source: 'achievement',
+      priority: Number(rule.tokenReward || 1),
+    }))
+
+  const subscriptionRaw = Array.isArray(snapshot?.subscriptionBadges) ? snapshot.subscriptionBadges : []
+  const subscriptionBadges: PeerBadge[] = subscriptionRaw.map((badge: any) => ({
+    id: `sub:${String(badge?.id || badge?.name || 'milestone')}`,
+    label: String(badge?.name || 'Subscription Milestone'),
+    description: `${Math.max(0, Number(badge?.months || 0))} month subscription streak`,
+    icon: (() => {
+      const explicit = String(badge?.icon || '').trim()
+      if (explicit) return explicit
+      const months = Math.max(0, Number(badge?.months || 0))
+      if (months >= 24) return '👑'
+      if (months >= 12) return '🔥'
+      if (months >= 6) return '🌟'
+      return '🔰'
+    })(),
+    source: 'subscription',
+    priority: Math.max(1, Math.round(Number(badge?.months || 0) / 3)),
+  }))
+
+  const seen = new Set<string>()
+  return [...achievementBadges, ...subscriptionBadges]
+    .filter((badge) => {
+      if (seen.has(badge.id)) return false
+      seen.add(badge.id)
+      return true
+    })
+}
+
+function featuredBadgeIdForSnapshot(snapshot: any): string | null {
+  const raw = String(snapshot?.featuredBadgeId || '').trim()
+  if (!raw) return null
+  return raw
+}
+
 export function getWealthStats(snapshot: any): WealthStats {
   return {
     annualIncome: Math.round(estimateAnnualIncome(snapshot) * 100) / 100,
@@ -66,7 +156,13 @@ export function getWealthStats(snapshot: any): WealthStats {
     savings: Math.round(toNumber(snapshot?.savings) * 100) / 100,
     investedStocks: Math.round(estimateInvestedStocks(snapshot) * 100) / 100,
     carsOwned: Array.isArray(snapshot?.garage) ? snapshot.garage.length : 0,
-    luxuryServicesOwned: countLuxuryServices(snapshot)
+    luxuryServicesOwned: countLuxuryServices(snapshot),
+    credentialsCount: Array.isArray(snapshot?.credentials) ? snapshot.credentials.length : 0,
+    tenureMonths: Math.max(0, Math.round(toNumber(snapshot?.tenure))),
+    calculationAccuracy: calculationAccuracy(snapshot),
+    achievementsCount: Array.isArray(snapshot?.achievementsUnlocked) ? snapshot.achievementsUnlocked.length : 0,
+    subscriptionBadgeCount: Array.isArray(snapshot?.subscriptionBadges) ? snapshot.subscriptionBadges.length : 0,
+    relocationCount: countRelocations(snapshot)
   }
 }
 
@@ -78,7 +174,13 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
       savings: 0,
       investedStocks: 0,
       carsOwned: 0,
-      luxuryServicesOwned: 0
+      luxuryServicesOwned: 0,
+      credentialsCount: 0,
+      tenureMonths: 0,
+      calculationAccuracy: 0,
+      achievementsCount: 0,
+      subscriptionBadgeCount: 0,
+      relocationCount: 0
     }
   }
 
@@ -89,6 +191,12 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     acc.investedStocks += peer.stats.investedStocks
     acc.carsOwned += peer.stats.carsOwned
     acc.luxuryServicesOwned += peer.stats.luxuryServicesOwned
+    acc.credentialsCount += peer.stats.credentialsCount
+    acc.tenureMonths += peer.stats.tenureMonths
+    acc.calculationAccuracy += peer.stats.calculationAccuracy
+    acc.achievementsCount += peer.stats.achievementsCount
+    acc.subscriptionBadgeCount += peer.stats.subscriptionBadgeCount
+    acc.relocationCount += peer.stats.relocationCount
     return acc
   }, {
     annualIncome: 0,
@@ -96,7 +204,13 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     savings: 0,
     investedStocks: 0,
     carsOwned: 0,
-    luxuryServicesOwned: 0
+    luxuryServicesOwned: 0,
+    credentialsCount: 0,
+    tenureMonths: 0,
+    calculationAccuracy: 0,
+    achievementsCount: 0,
+    subscriptionBadgeCount: 0,
+    relocationCount: 0
   })
 
   const count = peers.length
@@ -106,7 +220,13 @@ function averageStats(peers: PeerAffluence[]): WealthStats {
     savings: Math.round((totals.savings / count) * 100) / 100,
     investedStocks: Math.round((totals.investedStocks / count) * 100) / 100,
     carsOwned: Math.round((totals.carsOwned / count) * 10) / 10,
-    luxuryServicesOwned: Math.round((totals.luxuryServicesOwned / count) * 10) / 10
+    luxuryServicesOwned: Math.round((totals.luxuryServicesOwned / count) * 10) / 10,
+    credentialsCount: Math.round((totals.credentialsCount / count) * 10) / 10,
+    tenureMonths: Math.round((totals.tenureMonths / count) * 10) / 10,
+    calculationAccuracy: Math.round((totals.calculationAccuracy / count) * 10) / 10,
+    achievementsCount: Math.round((totals.achievementsCount / count) * 10) / 10,
+    subscriptionBadgeCount: Math.round((totals.subscriptionBadgeCount / count) * 10) / 10,
+    relocationCount: Math.round((totals.relocationCount / count) * 10) / 10
   }
 }
 
@@ -141,6 +261,8 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
       user,
       affluence: computeAffluence(snapshot),
       stats: getWealthStats(snapshot),
+      badges: badgesForSnapshot(snapshot),
+      featuredBadgeId: featuredBadgeIdForSnapshot(snapshot),
     })
   }
 
@@ -148,6 +270,8 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
     user: String(currentUser),
     affluence: currentAffluence,
     stats: currentStats,
+    badges: badgesForSnapshot(currentState),
+    featuredBadgeId: featuredBadgeIdForSnapshot(currentState),
   })
 
   const peers = Array.from(peersByUser.values())
@@ -174,6 +298,7 @@ export function getAffluenceComparison({ currentState, peerSnapshots = [] }: Aff
     rank,
     count,
     percentile,
-    topPeers: sorted.slice(0, 10)
+    topPeers: sorted.slice(0, 10),
+    allPeers: sorted
   }
 }

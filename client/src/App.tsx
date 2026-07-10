@@ -22,6 +22,7 @@ const RealEstate = lazy(() => import('./tabs/RealEstate'))
 const Rewards = lazy(() => import('./tabs/Rewards'))
 const Admin = lazy(() => import('./tabs/Admin'))
 const MathLab = lazy(() => import('./tabs/MathLab'))
+const ProfileStudio = lazy(() => import('./tabs/ProfileStudio'))
 
 declare const __APP_VERSION__: string
 
@@ -47,6 +48,7 @@ function TabContent({ tab, careerNavigationRequest }: { tab: string; careerNavig
   if (tab === 'stocks') return <StockMarket />
   if (tab === 'real-estate') return <RealEstate />
   if (tab === 'rewards') return <Rewards />
+  if (tab === 'profile-studio') return <ProfileStudio />
   if (tab === 'admin') return <Admin />
   if (tab === 'math-lab') return <MathLab />
   return <div className="p-6">Unknown tab</div>

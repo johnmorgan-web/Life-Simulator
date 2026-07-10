@@ -18,6 +18,7 @@ export default function Nav({ tab, setTab }: any) {
     { id: 'lifestyle', label: '💎 Lifestyle' },
     { id: 'loans', label: '💳 Loans' },
     { id: 'math-lab', label: '🧮 Math Lab' },
+    { id: 'profile-studio', label: '🪪 Profile Studio' },
     { id: 'real-estate', label: '🏘️ Real Estate' },
     { id: 'relocate', label: '✈️ Relocate' },
     { id: 'resume', label: '📄 Resume' },
