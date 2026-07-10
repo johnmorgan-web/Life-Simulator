@@ -78,6 +78,118 @@ type CareerNavigationRequest = {
   token: number
 }
 
+const TRACK_BY_CATEGORY: Record<string, string> = {
+  Entry: 'Foundations',
+  Trades: 'Skilled Trades',
+  Technology: 'Technology',
+  Healthcare: 'Medical',
+  Finance: 'Business',
+  Sales: 'Business',
+  HR: 'Business',
+  Executive: 'Leadership',
+  Service: 'Hospitality',
+  Education: 'Education & Community',
+  Legal: 'Public Safety & Legal',
+  Military: 'Military',
+  Creative: 'Creative',
+  'Easter Egg': 'Special',
+}
+
+const TRACK_BY_SUBCATEGORY: Record<string, string> = {
+  Counseling: 'Medical',
+  Psychology: 'Medical',
+}
+
+const TRACK_PRIORITY = [
+  'Foundations',
+  'Medical',
+  'Business',
+  'Technology',
+  'Skilled Trades',
+  'Hospitality',
+  'Public Safety & Legal',
+  'Education & Community',
+  'Military',
+  'Creative',
+  'Leadership',
+  'Special',
+]
+
+const FOCUS_ALIASES: Record<string, string> = {
+  // Shared/default
+  General: 'Core',
+  Service: 'Core',
+  Support: 'Core',
+  Management: 'Leadership',
+  Leadership: 'Leadership',
+  Office: 'People & Operations',
+  'HR Support': 'People & Operations',
+  'Legal Support': 'Legal',
+  Law: 'Legal',
+  'Law Enforcement': 'Public Safety',
+  'Personal Services': 'Service Ops',
+  Corrections: 'Public Safety',
+
+  // Medical
+  Dental: 'Patient Care',
+  Doctor: 'Patient Care',
+  Nursing: 'Patient Care',
+  Surgical: 'Patient Care',
+  Therapy: 'Patient Care',
+  Diagnostic: 'Patient Care',
+  Pharmacy: 'Patient Care',
+  'Mental Health': 'Behavioral Health',
+  Psychology: 'Behavioral Health',
+  Counseling: 'Behavioral Health',
+  Veterinary: 'Animal Care',
+
+  // Business
+  Accounting: 'Finance & Accounting',
+  Analysis: 'Finance & Accounting',
+  Advisory: 'Finance & Accounting',
+  Investment: 'Finance & Accounting',
+  Finance: 'Finance & Accounting',
+  Corporate: 'Sales & Growth',
+  Sales: 'Sales & Growth',
+  Consulting: 'Strategy & Advisory',
+
+  // Technology
+  Development: 'Engineering',
+  Cloud: 'Engineering',
+  QA: 'Engineering',
+  Data: 'Data & AI',
+  Security: 'Cybersecurity',
+  Design: 'Product & UX',
+
+  // Trades
+  Electrical: 'Field Trades',
+  HVAC: 'Field Trades',
+  Plumbing: 'Field Trades',
+  Welding: 'Field Trades',
+  Construction: 'Field Trades',
+  Auto: 'Mechanical & Transport',
+  Transport: 'Mechanical & Transport',
+
+  // Military
+  Infantry: 'Military Ops',
+  Naval: 'Military Ops',
+  Aviation: 'Military Ops',
+  Intelligence: 'Military Ops',
+  Medical: 'Military Ops',
+}
+
+function getCareerTrackLabel(job: Job) {
+  const rawSubcategory = String(job?.subcat || 'General')
+  if (TRACK_BY_SUBCATEGORY[rawSubcategory]) return TRACK_BY_SUBCATEGORY[rawSubcategory]
+  const rawCategory = String(job?.cat || 'General')
+  return TRACK_BY_CATEGORY[rawCategory] || rawCategory
+}
+
+function getCareerFocusLabel(job: Job) {
+  const rawSubcategory = String(job?.subcat || 'General')
+  return FOCUS_ALIASES[rawSubcategory] || rawSubcategory
+}
+
 export default function Careers({ navigationRequest }: { navigationRequest?: CareerNavigationRequest | null }) {
   const { state, applyForJob, unapplyForJob, jobBoard, calculatePayNegotiationModifier, dispatch, getJobEligibility, academyCourses } = useGame()
   const [sort, setSort] = useState<SortKey>('best-match')
@@ -316,21 +428,29 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
   }, [getJobEligibility, jobBoard, netWorth, state])
 
   const categoryOptions = useMemo(() => {
-    return Array.from(new Set<string>(jobBoard.map((j: Job) => j.cat || 'General'))).sort((a, b) => a.localeCompare(b))
+    return Array.from(new Set<string>(jobBoard.map((j: Job) => getCareerTrackLabel(j)))).sort((a, b) => {
+      const aIndex = TRACK_PRIORITY.indexOf(a)
+      const bIndex = TRACK_PRIORITY.indexOf(b)
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b)
+      if (aIndex === -1) return 1
+      if (bIndex === -1) return -1
+      return aIndex - bIndex
+    })
   }, [jobBoard])
 
   const subcategoryOptions = useMemo(() => {
     const byCategory = selectedCategory === 'all'
-      ? jobBoard
-      : jobBoard.filter((j: Job) => (j.cat || 'General') === selectedCategory)
-    return Array.from(new Set<string>(byCategory.map((j: Job) => j.subcat || 'General'))).sort((a, b) => a.localeCompare(b))
+      ? []
+      : jobBoard.filter((j: Job) => getCareerTrackLabel(j) === selectedCategory)
+    return Array.from(new Set<string>(byCategory.map((j: Job) => getCareerFocusLabel(j)))).sort((a, b) => a.localeCompare(b))
   }, [jobBoard, selectedCategory])
 
   const filteredSortedJobs = useMemo(() => {
     return sortedJobs.filter((j: Job) => {
-      const category = j.cat || 'General'
-      const subcategory = j.subcat || 'General'
+      const category = getCareerTrackLabel(j)
+      const subcategory = getCareerFocusLabel(j)
       if (selectedCategory !== 'all' && category !== selectedCategory) return false
+      if (selectedCategory === 'all') return true
       if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return false
       return true
     })
@@ -339,7 +459,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
   const groupedJobs = useMemo(() => {
     const grouped: Record<string, Job[]> = {}
     filteredSortedJobs.forEach((j: Job) => {
-      const key = `${j.cat || 'General'} / ${j.subcat || 'General'}`
+      const key = `${getCareerTrackLabel(j)} / ${getCareerFocusLabel(j)}`
       grouped[key] = grouped[key] || []
       grouped[key].push(j)
     })
@@ -348,9 +468,10 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
 
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter(({ job: j }) => {
-      const category = j.cat || 'General'
-      const subcategory = j.subcat || 'General'
+      const category = getCareerTrackLabel(j)
+      const subcategory = getCareerFocusLabel(j)
       if (selectedCategory !== 'all' && category !== selectedCategory) return false
+      if (selectedCategory === 'all') return true
       if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return false
       return true
     })
@@ -362,9 +483,15 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
   const progressionTracks = useMemo(() => {
     const tracks = new Map<string, Job[]>()
     ;(jobBoard as Job[]).forEach((job: Job) => {
-      const category = job.cat || 'General'
-      const subcategory = job.subcat || 'General'
+      const category = getCareerTrackLabel(job)
+      const subcategory = getCareerFocusLabel(job)
       if (selectedCategory !== 'all' && category !== selectedCategory) return
+      if (selectedCategory === 'all') {
+        const key = `${category} / ${subcategory}`
+        if (!tracks.has(key)) tracks.set(key, [])
+        tracks.get(key)!.push(job)
+        return
+      }
       if (selectedSubcategory !== 'all' && subcategory !== selectedSubcategory) return
       const key = `${category} / ${subcategory}`
       if (!tracks.has(key)) tracks.set(key, [])
@@ -494,7 +621,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
       {view === 'recommended' && (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-            <label className="text-sm font-bold text-slate-500 ml-2">Category:</label>
+            <label className="text-sm font-bold text-slate-500 ml-2">Track:</label>
             <select
               value={selectedCategory}
               onChange={e => {
@@ -503,31 +630,33 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
               }}
               className="p-2 border rounded"
             >
-              <option value="all">All Categories</option>
+              <option value="all">All Tracks</option>
               {categoryOptions.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
 
-            <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+            <label className="text-sm font-bold text-slate-500">Focus:</label>
             <select
               value={selectedSubcategory}
               onChange={e => setSelectedSubcategory(e.target.value)}
+              disabled={selectedCategory === 'all'}
               className="p-2 border rounded"
             >
-              <option value="all">All Subcategories</option>
+              <option value="all">All Focus Areas</option>
               {subcategoryOptions.map(sub => (
                 <option key={sub} value={sub}>{sub}</option>
               ))}
             </select>
           </div>
 
+          {selectedCategory !== 'all' ? (
           <div className="mb-4 flex flex-wrap gap-2 mobile-sticky-strip sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
             <button
               onClick={() => setSelectedSubcategory('all')}
               className={`req-tag ${selectedSubcategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
             >
-              All Tracks
+              All Focus
             </button>
             {subcategoryOptions.map(sub => (
               <button
@@ -539,6 +668,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
               </button>
             ))}
           </div>
+          ) : null}
 
           <div className="glass p-4 sm:p-5 mb-4 border-l-4 border-amber-500 bg-amber-50/60">
             <p className="text-xs font-bold uppercase text-amber-700">Wealth Track Recommendations</p>
@@ -606,8 +736,8 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
                               </div>
                             ) : null}
                             <div className="subcat-banner">
-                              <span className="category-pill" style={domainBadgeStyle(domain)}>{j.cat || 'General'}</span>
-                              <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
+                              <span className="category-pill" style={domainBadgeStyle(domain)}>{getCareerTrackLabel(j)}</span>
+                              <span className="subcat-pill" style={domainBadgeStyle(domain)}>{getCareerFocusLabel(j)}</span>
                             </div>
                           </td>
                           <td className="text-center py-2 sm:py-3 px-2 sm:px-3">
@@ -777,7 +907,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
               <option value="lowest-edu">Lowest Education Req</option>
             </select>
 
-            <label className="text-sm font-bold text-slate-500 ml-2">Category:</label>
+            <label className="text-sm font-bold text-slate-500 ml-2">Track:</label>
             <select
               value={selectedCategory}
               onChange={e => {
@@ -786,31 +916,33 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
               }}
               className="p-2 border rounded"
             >
-              <option value="all">All Categories</option>
+              <option value="all">All Tracks</option>
               {categoryOptions.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
 
-            <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+            <label className="text-sm font-bold text-slate-500">Focus:</label>
             <select
               value={selectedSubcategory}
               onChange={e => setSelectedSubcategory(e.target.value)}
+              disabled={selectedCategory === 'all'}
               className="p-2 border rounded"
             >
-              <option value="all">All Subcategories</option>
+              <option value="all">All Focus Areas</option>
               {subcategoryOptions.map(sub => (
                 <option key={sub} value={sub}>{sub}</option>
               ))}
             </select>
           </div>
 
+          {selectedCategory !== 'all' ? (
           <div className="mb-4 flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedSubcategory('all')}
               className={`req-tag ${selectedSubcategory === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
             >
-              All Tracks
+              All Focus
             </button>
             {subcategoryOptions.map(sub => (
               <button
@@ -822,6 +954,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
               </button>
             ))}
           </div>
+          ) : null}
 
           <div className="space-y-5">
             {groupedJobs.map(([groupName, jobs]) => (
@@ -850,8 +983,8 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
                   <h4 className="font-bold text-sm">{j.title}</h4>
                   <p className="text-emerald-600 font-bold">${Math.round(j.base * state.city.p * 0.8)}/mo</p>
                   <div className="subcat-banner mt-1">
-                    <span className="category-pill" style={domainBadgeStyle(domain)}>{j.cat || 'General'}</span>
-                    <span className="subcat-pill" style={domainBadgeStyle(domain)}>{j.subcat || 'General'}</span>
+                    <span className="category-pill" style={domainBadgeStyle(domain)}>{getCareerTrackLabel(j)}</span>
+                    <span className="subcat-pill" style={domainBadgeStyle(domain)}>{getCareerFocusLabel(j)}</span>
                     <span className="req-tag bg-sky-100 text-sky-700">{eligibility.openings} openings</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -892,7 +1025,7 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
 
             {groupedJobs.length === 0 && (
               <div className="glass p-6 text-center text-slate-600">
-                No jobs match this category/subcategory filter.
+                No jobs match this track/focus filter.
               </div>
             )}
           </div>
@@ -903,11 +1036,26 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
       {view === 'tree' && (
         <div className="space-y-6">
           <div className="glass p-6">
-            <h3 className="font-bold text-xl mb-2">🌳 Category Progression Tree</h3>
-            <p className="text-sm text-slate-600 mb-4">Use filters to inspect progression within each category and subcategory at a glance.</p>
+            <h3 className="font-bold text-xl mb-2">🗺️ Career Path Planner</h3>
+            <p className="text-sm text-slate-600 mb-4">Select any job to see the full roadmap — education prerequisites, certification chains, transit level, and experience requirements.</p>
+            <select
+              value={goalJobTitle}
+              onChange={e => setGoalJobTitle(e.target.value)}
+              className="w-full p-3 border rounded-xl font-bold text-slate-800 bg-white"
+            >
+              <option value="">— Select a target job —</option>
+              {[...jobBoard].sort((a: Job, b: Job) => a.title.localeCompare(b.title)).map((j: Job) => (
+                <option key={j.title} value={j.title}>{j.title} · ${Math.round(j.base * state.city.p * 0.8).toLocaleString()}/mo</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="glass p-6">
+            <h3 className="font-bold text-xl mb-2">🌳 Career Track Progression Tree</h3>
+            <p className="text-sm text-slate-600 mb-4">Use filters to inspect progression within each track and focus area at a glance.</p>
 
             <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
-              <label className="text-sm font-bold text-slate-500">Category:</label>
+              <label className="text-sm font-bold text-slate-500">Track:</label>
               <select
                 value={selectedCategory}
                 onChange={e => {
@@ -916,19 +1064,20 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
                 }}
                 className="p-2 border rounded"
               >
-                <option value="all">All Categories</option>
+                <option value="all">All Tracks</option>
                 {categoryOptions.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
 
-              <label className="text-sm font-bold text-slate-500">Subcategory:</label>
+              <label className="text-sm font-bold text-slate-500">Focus:</label>
               <select
                 value={selectedSubcategory}
                 onChange={e => setSelectedSubcategory(e.target.value)}
+                disabled={selectedCategory === 'all'}
                 className="p-2 border rounded"
               >
-                <option value="all">All Subcategories</option>
+                <option value="all">All Focus Areas</option>
                 {subcategoryOptions.map(sub => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
@@ -983,21 +1132,6 @@ export default function Careers({ navigationRequest }: { navigationRequest?: Car
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="glass p-6">
-            <h3 className="font-bold text-xl mb-2">🗺️ Career Path Planner</h3>
-            <p className="text-sm text-slate-600 mb-4">Select any job to see the full roadmap — education prerequisites, certification chains, transit level, and experience requirements.</p>
-            <select
-              value={goalJobTitle}
-              onChange={e => setGoalJobTitle(e.target.value)}
-              className="w-full p-3 border rounded-xl font-bold text-slate-800 bg-white"
-            >
-              <option value="">— Select a target job —</option>
-              {[...jobBoard].sort((a: Job, b: Job) => a.title.localeCompare(b.title)).map((j: Job) => (
-                <option key={j.title} value={j.title}>{j.title} · ${Math.round(j.base * state.city.p * 0.8).toLocaleString()}/mo</option>
-              ))}
-            </select>
           </div>
 
           {!goalJob && (

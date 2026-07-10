@@ -43,19 +43,6 @@ const HANDLE_NOUNS = [
   'Beacon', 'Glider', 'Juniper', 'Kestrel', 'Lynx', 'Nova', 'Quest', 'Turtle',
 ];
 
-const ADMIN_GIFT_TEMPLATES: Record<string, string> = {
-  job: 'Congratulations on the new job!',
-  graduation: 'Congratulations on your graduation!',
-  car: 'Congrats on your new car purchase!',
-  promotion: 'Congratulations on your promotion!',
-  certification: 'Congrats on earning your new certification!',
-  streak: 'Great consistency this month. Keep the streak alive!',
-  'recovery-grant': 'Recovery support grant: keep rebuilding momentum.',
-  'hardship-relief': 'Hardship relief support has been approved this month.',
-  'transition-support': 'Workforce transition support granted for your next step.',
-  milestone: 'Great progress this month. Keep going!',
-};
-
 @Injectable()
 export class UserService implements OnModuleInit {
   private readonly authSessions = new Map<string, { userId: string; expiresAt: number }>();
@@ -144,6 +131,39 @@ export class UserService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureAdminUserOnStartup();
     await this.backfillDisplayHandles();
+    await this.scrubLegacyAdminGiftState();
+  }
+
+  private async scrubLegacyAdminGiftState() {
+    const users = await this.userStateRepository.find();
+    for (const user of users) {
+      const currentState = { ...(user.state || {}) } as Record<string, any>;
+      let changed = false;
+
+      if ('pendingAdminGifts' in currentState) {
+        delete currentState.pendingAdminGifts;
+        changed = true;
+      }
+
+      if (Array.isArray(currentState.logs)) {
+        const filteredLogs = currentState.logs.filter((entry: any) => {
+          const message = String(entry?.msg || '');
+          if (message.includes('Admin support gift queued for next month')) return false;
+          if (/^🎁 You sent \$/.test(message)) return false;
+          return true;
+        });
+
+        if (filteredLogs.length !== currentState.logs.length) {
+          currentState.logs = filteredLogs;
+          changed = true;
+        }
+      }
+
+      if (!changed) continue;
+      user.state = this.buildPersistedState(currentState);
+      user.updatedAt = new Date();
+      await this.userStateRepository.save(user);
+    }
   }
 
   private normalizeDisplayHandle(raw: string): string {
@@ -894,90 +914,4 @@ export class UserService implements OnModuleInit {
     return Number(result.affected || 0) > 0;
   }
 
-  async adminGiftUser(
-    authorization: string | undefined,
-    targetUserId: string,
-    payload: { amount?: number; templateId?: string },
-  ) {
-    const actingUser = await this.assertAdminSession(authorization);
-
-    const normalizedTargetId = String(targetUserId || '').trim();
-    if (!normalizedTargetId) throw new BadRequestException('Target user id is required');
-    if (normalizedTargetId === actingUser.id) throw new BadRequestException('Cannot gift yourself');
-
-    const amount = Number(payload?.amount || 0);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('Gift amount must be a positive number');
-    }
-
-    const targetUser = await this.userStateRepository.findOne({ where: { id: normalizedTargetId } });
-    if (!targetUser) throw new BadRequestException('Target user not found');
-
-    const senderState = { ...(actingUser.state || {}) } as Record<string, any>;
-    const recipientState = { ...(targetUser.state || {}) } as Record<string, any>;
-
-    const senderLedger = Array.isArray(senderState.ledger) ? senderState.ledger : [];
-    const allChecksComplete = senderLedger.length > 0 && senderLedger.every((entry: any) => Boolean(entry?.done));
-    if (!allChecksComplete) {
-      throw new ForbiddenException('Complete all ledger checks before gifting players money');
-    }
-
-    const senderChecking = Number(senderState.check || 0);
-    if (!Number.isFinite(senderChecking) || senderChecking - amount < 0) {
-      throw new BadRequestException('Insufficient checking balance to send this gift');
-    }
-
-    const month = Math.max(1, Math.min(12, Number(senderState.month || recipientState.month || 1)));
-    const year = Math.max(1, Number(senderState.year || recipientState.year || 2026));
-    const templateId = String(payload?.templateId || '').trim();
-    const templateMessage = ADMIN_GIFT_TEMPLATES[templateId];
-    if (!templateMessage) {
-      throw new BadRequestException('Invalid gift message template');
-    }
-
-    senderState.check = Math.round((senderChecking - amount) * 100) / 100;
-    const senderLogs = Array.isArray(senderState.logs) ? [...senderState.logs] : [];
-    senderLogs.push({
-      date: `${month}/${year}`,
-      msg: `🎁 You sent $${amount.toFixed(2)} to ${targetUser.username} (${templateMessage}).`,
-    });
-    senderState.logs = senderLogs;
-
-    const pendingGifts = Array.isArray(recipientState.pendingAdminGifts) ? [...recipientState.pendingAdminGifts] : [];
-    pendingGifts.push({
-      amount: Math.round(amount * 100) / 100,
-      fromAdminId: actingUser.id,
-      fromAdminUsername: actingUser.username,
-      message: templateMessage,
-      templateId,
-      queuedMonth: month,
-      queuedYear: year,
-      queuedAt: new Date().toISOString(),
-    });
-    recipientState.pendingAdminGifts = pendingGifts;
-
-    const recipientLogs = Array.isArray(recipientState.logs) ? [...recipientState.logs] : [];
-    recipientLogs.push({
-      date: `${month}/${year}`,
-      msg: `📨 Admin support gift queued for next month from ${actingUser.username}: +$${amount.toFixed(2)} (${templateMessage}).`,
-    });
-    recipientState.logs = recipientLogs;
-
-    actingUser.state = this.buildPersistedState(senderState);
-    actingUser.updatedAt = new Date();
-    targetUser.state = this.buildPersistedState(recipientState);
-    targetUser.updatedAt = new Date();
-
-    await this.userStateRepository.save(actingUser);
-    await this.userStateRepository.save(targetUser);
-
-    return {
-      ok: true,
-      targetUserId: targetUser.id,
-      targetUsername: targetUser.username,
-      amount: Math.round(amount * 100) / 100,
-      templateId,
-      message: templateMessage,
-    };
-  }
 }
