@@ -5,7 +5,7 @@ COPY client/package*.json ./
 RUN npm ci
 
 COPY client/ ./
-COPY server/src/types ../server/src/types
+COPY server/src ../server/src
 RUN npm run build
 
 FROM node:22-bookworm-slim AS server-build
