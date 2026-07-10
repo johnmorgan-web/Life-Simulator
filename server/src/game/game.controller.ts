@@ -58,11 +58,14 @@ export class GameController {
     const users = await this.userStateRepository.find();
     return users.map((user) => {
       const state = user.state || {};
+      const publicHandle = String(user.displayHandle || state?.displayHandle || state?.currentUser || user.username || '');
       return {
         ...state,
         id: user.id,
-        username: user.username,
-        currentUser: String(state?.currentUser || user.username || ''),
+        username: null,
+        displayHandle: publicHandle,
+        currentUser: publicHandle,
+        name: publicHandle,
         city: state?.city,
       };
     });

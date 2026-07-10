@@ -28,7 +28,20 @@ const APPEND_ONLY_STATE_KEYS = new Set<string>([
 const PASSWORD_SALT_ROUNDS = 12;
 const PASSWORD_COMPLEXITY_REGEX = /^(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const USERNAME_CREATE_REGEX = /^[A-Za-z0-9]+$/;
+const DISPLAY_HANDLE_REGEX = /^[A-Za-z0-9_]{3,24}$/;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
+
+const HANDLE_ADJECTIVES = [
+  'Brisk', 'Clever', 'Curious', 'Daring', 'Eager', 'Fierce', 'Focused', 'Gentle',
+  'Happy', 'Jolly', 'Kind', 'Merry', 'Nimble', 'Rapid', 'Sharp', 'Sunny',
+  'Swift', 'Wise', 'Zesty', 'Bright', 'Bold', 'Calm', 'Lucky', 'Spry',
+];
+
+const HANDLE_NOUNS = [
+  'Falcon', 'Otter', 'Panda', 'Comet', 'River', 'Maple', 'Cedar', 'Sparrow',
+  'Robin', 'Rocket', 'Harbor', 'Aurora', 'Meadow', 'Pebble', 'Ranger', 'Summit',
+  'Beacon', 'Glider', 'Juniper', 'Kestrel', 'Lynx', 'Nova', 'Quest', 'Turtle',
+];
 
 const ADMIN_GIFT_TEMPLATES: Record<string, string> = {
   job: 'Congratulations on the new job!',
@@ -130,6 +143,46 @@ export class UserService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureAdminUserOnStartup();
+    await this.backfillDisplayHandles();
+  }
+
+  private normalizeDisplayHandle(raw: string): string {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    const safe = trimmed.replace(/[^A-Za-z0-9_]/g, '');
+    return safe.slice(0, 24);
+  }
+
+  private randomDisplayHandle(): string {
+    const adjective = HANDLE_ADJECTIVES[Math.floor(Math.random() * HANDLE_ADJECTIVES.length)];
+    const noun = HANDLE_NOUNS[Math.floor(Math.random() * HANDLE_NOUNS.length)];
+    const suffix = `${Math.floor(Math.random() * 9000) + 1000}`;
+    return `${adjective}${noun}${suffix}`;
+  }
+
+  private async resolveUniqueDisplayHandle(preferred?: string, excludeUserId?: string): Promise<string> {
+    const candidateBase = this.normalizeDisplayHandle(preferred || '');
+    const initial = candidateBase && DISPLAY_HANDLE_REGEX.test(candidateBase)
+      ? candidateBase
+      : this.randomDisplayHandle();
+
+    let candidate = initial;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const existing = await this.userStateRepository.findOne({ where: { displayHandle: candidate } });
+      if (!existing || existing.id === excludeUserId) return candidate;
+      candidate = this.randomDisplayHandle();
+    }
+
+    return `${initial.slice(0, 16)}${Date.now().toString().slice(-6)}`;
+  }
+
+  private async backfillDisplayHandles() {
+    const users = await this.userStateRepository.find();
+    for (const user of users) {
+      if (user.displayHandle && DISPLAY_HANDLE_REGEX.test(user.displayHandle)) continue;
+      user.displayHandle = await this.resolveUniqueDisplayHandle(user.displayHandle || user.username || undefined, user.id);
+      await this.userStateRepository.save(user);
+    }
   }
 
   private async ensureAdminUserOnStartup() {
@@ -195,8 +248,9 @@ export class UserService implements OnModuleInit {
   ): Partial<GameState> {
     const { name: _legacyName, ...stateWithoutName } = state;
     const resolvedName = String(
-      stateWithoutName.username
+      stateWithoutName.displayHandle
       || stateWithoutName.currentUser
+      || stateWithoutName.username
       || usernameFallback
       || 'Player',
     );
@@ -225,11 +279,13 @@ export class UserService implements OnModuleInit {
   }
 
   private toGameSnapshot(entity: UserStateEntity, authToken?: string): Partial<GameState> & { id: string } {
-    const resolvedName = String(entity.username || (entity.state as any)?.currentUser || 'Player');
+    const resolvedDisplayHandle = String(entity.displayHandle || entity.username || (entity.state as any)?.currentUser || 'Player');
     const snapshot: Partial<GameState> & { id: string } = {
       ...(entity.state || {}),
       username: entity.username,
-      name: resolvedName,
+      displayHandle: resolvedDisplayHandle,
+      currentUser: resolvedDisplayHandle,
+      name: resolvedDisplayHandle,
       id: entity.id,
       isAdmin: Boolean(entity.isAdmin),
     };
@@ -243,10 +299,13 @@ export class UserService implements OnModuleInit {
 
   private toHydratedGameSnapshot(entity: UserStateEntity): Partial<GameState> & { id: string } {
     const hydratedState = this.buildHydratedState(entity.state || {}, entity.username);
+    const resolvedDisplayHandle = String(entity.displayHandle || (hydratedState as any).displayHandle || entity.username || 'Player');
     return {
       ...hydratedState,
       username: entity.username,
-      name: String((hydratedState as any).name || entity.username || 'Player'),
+      displayHandle: resolvedDisplayHandle,
+      currentUser: resolvedDisplayHandle,
+      name: resolvedDisplayHandle,
       id: entity.id,
       isAdmin: Boolean(entity.isAdmin),
     };
@@ -343,10 +402,13 @@ export class UserService implements OnModuleInit {
     const activeMonthsRemaining = Math.max(0, Number(activeHistoricalEvent?.monthsRemaining || 0));
     const isPandemicHistoricalEvent = activeMonthsRemaining > 0 || this.isPandemicHistoricalEvent(activeHistoricalEvent);
 
+    const publicHandle = String(entity.displayHandle || entity.username || (state as any).currentUser || 'Player');
+
     return {
       id: entity.id,
       username: entity.username,
-      name: String(entity.username || (state as any).currentUser || 'Player'),
+      displayHandle: publicHandle,
+      name: publicHandle,
       isAdmin: Boolean(entity.isAdmin),
       isPrimaryAdminLocked,
       createdAt: entity.createdAt,
@@ -387,6 +449,7 @@ export class UserService implements OnModuleInit {
   async createUser(
     username: string,
     password: string,
+    preferredDisplayHandle?: string,
   ): Promise<(Partial<GameState> & { id: string }) | null> {
     const trimmedUsername = String(username || '').trim();
     if (!trimmedUsername) throw new BadRequestException('Username is required');
@@ -404,12 +467,15 @@ export class UserService implements OnModuleInit {
     const id = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
     const initialState = this.gameService.getInitialState();
+    // FERPA/privacy-safe default: always assign an anonymized display handle at signup.
+    const displayHandle = await this.resolveUniqueDisplayHandle(undefined, id);
     const createdUser = this.userStateRepository.create({
       id,
       username: trimmedUsername,
+      displayHandle,
       passwordHash,
       isAdmin: existingUsersCount === 0,
-      state: this.buildPersistedState(initialState),
+      state: this.buildPersistedState({ ...initialState, currentUser: displayHandle, displayHandle }),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -435,6 +501,9 @@ export class UserService implements OnModuleInit {
     if (!user.passwordHash) {
       user.passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
       user.username = user.username || trimmedUsername;
+      user.displayHandle = user.displayHandle && DISPLAY_HANDLE_REGEX.test(user.displayHandle)
+        ? user.displayHandle
+        : await this.resolveUniqueDisplayHandle(user.displayHandle || user.username || undefined, user.id);
       const upgraded = await this.userStateRepository.save(user);
       return this.toGameSnapshot(upgraded);
     }
@@ -442,6 +511,11 @@ export class UserService implements OnModuleInit {
     const validPassword = await bcrypt.compare(password, user.passwordHash);
     if (!validPassword) {
       throw new UnauthorizedException('Invalid username or password');
+    }
+
+    if (!user.displayHandle || !DISPLAY_HANDLE_REGEX.test(user.displayHandle)) {
+      user.displayHandle = await this.resolveUniqueDisplayHandle(user.displayHandle || user.username || undefined, user.id);
+      await this.userStateRepository.save(user);
     }
 
     const normalizedUser = await this.normalizeLegacyFinancialState(user);
@@ -530,7 +604,15 @@ export class UserService implements OnModuleInit {
   async listAllUsers(): Promise<Array<Partial<GameState> & { id: string }>> {
     const users = await this.userStateRepository.find({ order: { updatedAt: 'DESC' } });
     const normalizedUsers = await Promise.all(users.map((user) => this.normalizeLegacyFinancialState(user)));
-    return normalizedUsers.map((user) => this.toGameSnapshot(user));
+    return normalizedUsers.map((user) => {
+      const snapshot = this.toGameSnapshot(user);
+      return {
+        ...snapshot,
+        username: null,
+        currentUser: snapshot.displayHandle || snapshot.currentUser || 'Player',
+        name: snapshot.displayHandle || snapshot.name || 'Player',
+      };
+    });
   }
 
   async listUsersForAdmin(authorization?: string): Promise<Array<ReturnType<UserService['toAdminUserSummary']>>> {
@@ -554,6 +636,7 @@ export class UserService implements OnModuleInit {
       debt?: number;
       isAdmin?: boolean;
       username?: string;
+      displayHandle?: string;
       password?: string;
       jobTitle?: string;
       economyOverrides?: {
@@ -642,6 +725,22 @@ export class UserService implements OnModuleInit {
       }
 
       user.username = username;
+    }
+
+    if (changes.displayHandle !== undefined) {
+      const requestedHandle = this.normalizeDisplayHandle(String(changes.displayHandle || ''));
+      if (!requestedHandle || !DISPLAY_HANDLE_REGEX.test(requestedHandle)) {
+        throw new BadRequestException('Display handle must be 3-24 characters and use letters, numbers, or underscores only');
+      }
+
+      const displayOwner = await this.userStateRepository.findOne({ where: { displayHandle: requestedHandle } });
+      if (displayOwner && displayOwner.id !== user.id) {
+        throw new ConflictException('Display handle is already taken');
+      }
+
+      user.displayHandle = requestedHandle;
+      nextState.displayHandle = requestedHandle;
+      nextState.currentUser = requestedHandle;
     }
 
     if (changes.password !== undefined) {
