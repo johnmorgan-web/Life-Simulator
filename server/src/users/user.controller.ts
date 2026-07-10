@@ -85,18 +85,6 @@ export class UserController {
     });
   }
 
-  @Post('admin/:targetUserId/gift')
-  async adminGiftUser(
-    @Param('targetUserId') targetUserId: string,
-    @Headers('authorization') authorization: string | undefined,
-    @Body() body: { amount?: number; templateId?: string },
-  ) {
-    return this.userService.adminGiftUser(authorization, targetUserId, {
-      amount: body.amount,
-      templateId: body.templateId,
-    });
-  }
-
   @Get(':id')
   async getUser(@Param('id') id: string) {
     return this.userService.getUserById(id);

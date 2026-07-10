@@ -467,26 +467,6 @@ async function adminDeleteUserById(targetUserId: string, authToken: string) {
 	})
 	return response.ok
 }
-async function adminGiftUserById(
-	targetUserId: string,
-	authToken: string,
-	payload: { amount: number; templateId: string },
-) {
-	const response = await fetch(`${API_BASE_URL}/users/admin/${targetUserId}/gift`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${authToken}`,
-		},
-		body: JSON.stringify(payload),
-	})
-	if (!response.ok) {
-		const error = await extractErrorMessage(response, 'Unable to send admin gift.')
-		return { ok: false, error }
-	}
-	const data = await response.json()
-	return { ok: true, data }
-}
 
 async function persistUserState(id: string, state: any) {
 	const response = await fetch(`${API_BASE_URL}/users/${id}`, {
@@ -1645,7 +1625,6 @@ function createInitialState(): State {
 	economyOverrideMonthsRemaining: 0,
 	historicalEconomicEvent: null as HistoricalEconomicEventState | null,
 	historicalEventResetNextMonth: false,
-	pendingAdminGifts: [] as any[],
 	realEstateLearningLevel: 'adult',
 	realEstateUsePlainLanguage: false,
 	autoInvest: {
@@ -2004,7 +1983,6 @@ async function normalizeLoadedUserState(data: any, fallbackState: any, currentUs
 		economyOverrideMonthsRemaining: normalizeEconomyApplyMonths(data.economyOverrideMonthsRemaining),
 		historicalEconomicEvent: normalizeHistoricalEconomicEvent(data.historicalEconomicEvent),
 		historicalEventResetNextMonth: Boolean(data.historicalEventResetNextMonth),
-		pendingAdminGifts: Array.isArray(data.pendingAdminGifts) ? data.pendingAdminGifts : [],
 		autoInvest: normalizeAutoInvestConfig(data.autoInvest),
 		stockInvestedThisMonth: Number(data.stockInvestedThisMonth ?? 0),
 		stockInvestedLastMonth: Number(data.stockInvestedLastMonth ?? 0),
@@ -2302,21 +2280,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			const maxMonthlyLuxuryEventSpend = Math.max(Number(state.maxMonthlyLuxuryEventSpend || 0), Number(monthlyLuxuryEventSpend || 0))
 
 			let resultingCheck = check
-			const pendingAdminGifts = Array.isArray(state.pendingAdminGifts) ? state.pendingAdminGifts : []
-			if (pendingAdminGifts.length > 0) {
-				for (const gift of pendingAdminGifts) {
-					const amount = round2(Math.max(0, Number(gift?.amount || 0)))
-					if (amount <= 0) continue
-					const sender = String(gift?.fromAdminUsername || 'Admin')
-					const msg = String(gift?.message || '').trim()
-					resultingCheck = round2(resultingCheck + amount)
-					logs.push({
-						date: `${nextMonth}/${nextYear}`,
-						msg: `🎁 Admin gift received from ${sender}: +$${amount.toFixed(2)}${msg ? ` (${msg})` : ''}`,
-					})
-				}
-			}
-
 			const eduProgress = { ...state.eduProgress }
 			let activeEdu = state.activeEdu
 			const credentials = [...state.credentials]
@@ -3502,7 +3465,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 				rewardCategoryQueue,
 				lastAchievementCategory,
 				celebration,
-				pendingAdminGifts: [],
 				monthlyCheckSuccesses: 0,
 				monthlyCheckFailures: 0,
 				skippedPaymentThisMonth: false
@@ -4247,7 +4209,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			economyOverrideMonthsRemaining: 0,
 			historicalEconomicEvent: null,
 			historicalEventResetNextMonth: false,
-			pendingAdminGifts: [],
 			autoInvest: {
 				enabled: false,
 				monthlyAmount: 0,
@@ -4416,26 +4377,6 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 	async function deleteUserAsAdmin(targetUserId: string) {
 		if (!state.id || !state.isAdmin || !state.authToken) return false
 		return adminDeleteUserById(targetUserId, String(state.authToken))
-	}
-
-	async function sendAdminGift(targetUserId: string, amount: number, templateId: string) {
-		if (!state.id || !state.isAdmin || !state.authToken) {
-			return { ok: false, error: 'Admin authentication required.' }
-		}
-		const result = await adminGiftUserById(targetUserId, String(state.authToken), {
-			amount: Math.max(0, Number(amount || 0)),
-			templateId: String(templateId || '').trim(),
-		})
-		if (!result.ok) return result
-
-		const updatedSelf = await fetchUserById(state.id)
-		if (updatedSelf) {
-			const normalized = await normalizeLoadedUserState(updatedSelf, stateRef.current, state.currentUser || state.username || 'Player')
-			resetDirtyTracking(normalized)
-			dispatch({ type: 'SET_STATE', payload: normalized })
-		}
-		await refreshPeerSnapshots()
-		return { ok: true }
 	}
 
 	useEffect(() => {
@@ -4655,7 +4596,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 	}
 
 	return (
-		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, unapplyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, rewardPrizePools, reloadCatalogs, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, sendAdminGift, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility: getJobEligibilityForSnapshot, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, jobOpportunityNotifications, dequeueJobOpportunityNotification, saveStatus, lastSavedAt }}>
+		<GameContext.Provider value={{ state, dispatch, buildLedger, checkRow, processMonth, applyForJob, unapplyForJob, openSettlement, evaluateApplications, acceptJob, triggerCelebration, jobBoard, cityData, lifeEvents, transitOptions, academyCourses, rewardPrizePools, reloadCatalogs, gameValues, calculateDynamicAPR, calculateCreditBonus, calculatePayNegotiationModifier, calculateRelocationCost, saveGame, loadGame, spinRewardWheel, newGame, login, createUser, logout, listUsersForAdmin, saveUserAsAdmin, deleteUserAsAdmin, vehicleDatabase, calculateVehicleValue, calculateMonthlyPayment, calculateMonthlyGasCost, calculateMonthlyMaintenanceCost, getJobEligibility: getJobEligibilityForSnapshot, getLuxuryServiceMonthlyPay, refreshRealEstateMarket, submitRealEstateOffer, sellInvestmentProperty, cityUserCounts, affluenceComparison, refreshPeerSnapshots, ledgerEventNotifications, dequeueLedgerEventNotification, jobOpportunityNotifications, dequeueJobOpportunityNotification, saveStatus, lastSavedAt }}>
 			{children}
 		</GameContext.Provider>
 	)
