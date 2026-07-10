@@ -1,48 +1,87 @@
 
+import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
+import { achievementRules } from '../constants/achievements.constants'
 
-function formatHeaderCurrency(value: number) {
+function formatHeaderCurrency(value: number, viewportWidth: number) {
   const abs = Math.abs(Number(value || 0))
-  if (abs >= 1000000000) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      maximumFractionDigits: 2
-    }).format(value)
-  }
-  return Number(value || 0).toLocaleString('en-US', {
+  const full = Number(value || 0).toLocaleString('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
+
+  const compactThreshold = viewportWidth < 480
+    ? 1000
+    : viewportWidth < 768
+      ? 10000
+      : viewportWidth < 1024
+        ? 100000
+        : viewportWidth < 1400
+          ? 250000
+          : 1000000000
+  const maxChars = viewportWidth < 480 ? 9 : viewportWidth < 768 ? 10 : viewportWidth < 1024 ? 12 : 14
+
+  if (abs >= compactThreshold || full.length > maxChars) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 2
+    }).format(value)
+  }
+
+  return full
 }
 
 export default function Header({ state, onVerify, verifyEnabled }: any) {
-  const { logout, affluenceComparison: affluence, saveStatus } = useGame()
+  const { logout, saveStatus } = useGame()
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const activeHistoricalEvent = state?.historicalEconomicEvent && Number(state.historicalEconomicEvent?.monthsRemaining || 0) > 0
     ? state.historicalEconomicEvent
     : null
   const logoutDisabled = saveStatus === 'saving'
-  const meterMax = Math.max(1, affluence.top.affluence, affluence.average, affluence.currentAffluence)
-  const currentWidth = Math.max(0, Math.min(100, (affluence.currentAffluence / meterMax) * 100))
-  const averageWidth = Math.max(0, Math.min(100, (affluence.average / meterMax) * 100))
+  const amountTextClass = 'font-bold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis text-[clamp(0.72rem,1.9vw,1.3rem)]'
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const profileStudioSnapshot = useMemo(() => {
+    const unlocked = new Set(Array.isArray(state.achievementsUnlocked) ? state.achievementsUnlocked : [])
+    const totalAchievements = achievementRules.length
+    const unlockedAchievements = achievementRules.reduce((sum, rule) => sum + (unlocked.has(rule.id) ? 1 : 0), 0)
+    const completionPct = Math.max(0, Math.min(100, Math.round((unlockedAchievements / Math.max(1, totalAchievements)) * 100)))
+    const credentialsCount = Array.isArray(state.credentials) ? state.credentials.length : 0
+    const vehiclesCount = Array.isArray(state.garage) ? state.garage.length : 0
+    const badgesCount = Array.isArray(state.subscriptionBadges) ? state.subscriptionBadges.length : 0
+    return {
+      completionPct,
+      credentialsCount,
+      vehiclesCount,
+      badgesCount,
+    }
+  }, [state.achievementsUnlocked, state.credentials, state.garage, state.subscriptionBadges])
+
   return (
     <header className="p-3 sm:p-5 bg-white border-b border-slate-200 sticky top-0 z-40">
       <div className="max-w-[98vw] mx-auto flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-8 w-full lg:w-auto">
           <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Checking</span>
-            <p title={Number(state.check || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-slate-800 leading-tight truncate">{formatHeaderCurrency(state.check)}</p>
+            <p title={Number(state.check || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className={`${amountTextClass} text-slate-800`}>{formatHeaderCurrency(state.check, viewportWidth)}</p>
           </div>
           <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Savings</span>
-            <p title={Number(state.savings || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-blue-600 leading-tight truncate">{formatHeaderCurrency(state.savings)}</p>
+            <p title={Number(state.savings || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className={`${amountTextClass} text-blue-600`}>{formatHeaderCurrency(state.savings, viewportWidth)}</p>
           </div>
           <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Debt</span>
-            <p title={Number(state.debt || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="text-base sm:text-lg xl:text-2xl font-bold text-rose-600 leading-tight truncate">{formatHeaderCurrency(state.debt)}</p>
+            <p title={Number(state.debt || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })} className={`${amountTextClass} text-rose-600`}>{formatHeaderCurrency(state.debt, viewportWidth)}</p>
           </div>
           <div className="min-w-0">
             <span className="text-[11px] text-slate-400 font-bold uppercase block">Credit</span>
@@ -50,33 +89,19 @@ export default function Header({ state, onVerify, verifyEnabled }: any) {
           </div>
         </div>
         <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:items-start lg:items-center gap-3 sm:gap-4">
-          <div className="hidden xl:block min-w-[250px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <p className="text-[10px] font-bold uppercase text-slate-500">Affluence Rank</p>
-            <p className="text-xs font-bold text-slate-700 mb-1">
-              #{affluence.rank}/{affluence.count} | {affluence.percentile}th percentile
-            </p>
-            <div className="space-y-1">
-              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-1.5 bg-emerald-500 rounded-full" style={{ width: `${currentWidth}%` }} />
-              </div>
-              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-1.5 bg-sky-500 rounded-full" style={{ width: `${averageWidth}%` }} />
-              </div>
+          <div className="hidden lg:block min-w-[220px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+            <p className="text-[10px] font-bold uppercase text-slate-500">Profile Studio</p>
+            <p className="text-xs font-bold text-slate-700">{profileStudioSnapshot.completionPct}% achievement completion</p>
+            <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1.5">
+              <div className="h-1.5 bg-amber-500 rounded-full" style={{ width: `${profileStudioSnapshot.completionPct}%` }} />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">Green: you | Blue: average</p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              🎓 {profileStudioSnapshot.credentialsCount} • 🚗 {profileStudioSnapshot.vehiclesCount} • 🔰 {profileStudioSnapshot.badgesCount}
+            </p>
           </div>
           <div className="text-left sm:text-right mr-0 sm:mr-2">
             <span className="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold uppercase">{state.city.name}</span>
             <p className="text-base font-bold text-slate-500">{new Date(state.year, state.month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-            <div className="xl:hidden mt-2 w-[170px] sm:ml-auto bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
-              <p className="text-[10px] font-bold text-slate-600">Affluence #{affluence.rank}/{affluence.count}</p>
-              <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
-                <div className="h-1 bg-emerald-500 rounded-full" style={{ width: `${currentWidth}%` }} />
-              </div>
-              <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
-                <div className="h-1 bg-sky-500 rounded-full" style={{ width: `${averageWidth}%` }} />
-              </div>
-            </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button

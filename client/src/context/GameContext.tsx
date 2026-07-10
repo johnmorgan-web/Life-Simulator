@@ -1642,6 +1642,7 @@ function createInitialState(): State {
 	rewardTokens: 0,
 	rewardCategoryQueue: [] as string[],
 	lastAchievementCategory: null as string | null,
+	featuredBadgeId: null as string | null,
 	unlockedThemes: ['default'],
 	activeTheme: 'default',
 	rewardHistory: [] as any[]
@@ -1994,6 +1995,7 @@ async function normalizeLoadedUserState(data: any, fallbackState: any, currentUs
 		rewardTokens: Number(data.rewardTokens ?? 0),
 		rewardCategoryQueue: Array.isArray(data.rewardCategoryQueue) ? data.rewardCategoryQueue : [],
 		lastAchievementCategory: data.lastAchievementCategory ?? null,
+		featuredBadgeId: data.featuredBadgeId ?? null,
 		unlockedThemes: Array.isArray(data.unlockedThemes) && data.unlockedThemes.length ? Array.from(new Set(['default', ...data.unlockedThemes])) : ['default'],
 		activeTheme: data.activeTheme ?? 'default',
 		rewardHistory: Array.isArray(data.rewardHistory) ? data.rewardHistory : [],
@@ -4232,6 +4234,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			rewardTokens: 0,
 			rewardCategoryQueue: [],
 			lastAchievementCategory: null,
+			featuredBadgeId: null,
 			unlockedThemes: ['default'],
 			activeTheme: 'default',
 			rewardHistory: [],
