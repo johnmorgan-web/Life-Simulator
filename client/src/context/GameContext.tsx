@@ -182,8 +182,8 @@ async function authenticateUser(username: string, password: string) {
 	return { ok: true, data } as AuthResult
 }
 
-async function registerUser(username: string, password: string) {
-	const payload = JSON.stringify({ username, password })
+async function registerUser(username: string, password: string, preferredDisplayHandle?: string) {
+	const payload = JSON.stringify({ username, password, preferredDisplayHandle })
 	const headers = { 'Content-Type': 'application/json' }
 
 	const registerResponse = await fetch(`${API_BASE_URL}/users`, {
@@ -252,11 +252,16 @@ async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
 	}
 }
 
+function wait(ms: number) {
+	return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function toRealEstateSyncSnapshot(stateSnapshot: any) {
 	const snapshot = stateSnapshot || {}
 	return {
-		currentUser: snapshot.currentUser || snapshot.username || null,
-		username: snapshot.username || snapshot.currentUser || null,
+		currentUser: snapshot.currentUser || snapshot.displayHandle || snapshot.username || null,
+		username: snapshot.username || snapshot.displayHandle || snapshot.currentUser || null,
+		displayHandle: snapshot.displayHandle || snapshot.currentUser || snapshot.username || null,
 		city: snapshot.city || null,
 	}
 }
@@ -264,8 +269,9 @@ function toRealEstateSyncSnapshot(stateSnapshot: any) {
 function toRealEstateNormalizeSnapshot(stateSnapshot: any) {
 	const snapshot = stateSnapshot || {}
 	return {
-		currentUser: snapshot.currentUser || snapshot.username || null,
-		username: snapshot.username || snapshot.currentUser || null,
+		currentUser: snapshot.currentUser || snapshot.displayHandle || snapshot.username || null,
+		username: snapshot.username || snapshot.displayHandle || snapshot.currentUser || null,
+		displayHandle: snapshot.displayHandle || snapshot.currentUser || snapshot.username || null,
 		city: snapshot.city || null,
 		investmentProperties: Array.isArray(snapshot.investmentProperties) ? snapshot.investmentProperties : [],
 		pendingRealEstateDeals: Array.isArray(snapshot.pendingRealEstateDeals) ? snapshot.pendingRealEstateDeals : [],
@@ -365,8 +371,9 @@ async function submitRealEstateOfferToServer(
 	const cityName = String(listing?.cityName || '').trim()
 	if (!listingId || !cityName) return { ok: false, reason: 'invalid-listing' }
 	const compactState = {
-		currentUser: snapshot.currentUser || snapshot.username || null,
-		username: snapshot.username || snapshot.currentUser || null,
+		currentUser: snapshot.currentUser || snapshot.displayHandle || snapshot.username || null,
+		username: snapshot.username || snapshot.displayHandle || snapshot.currentUser || null,
+		displayHandle: snapshot.displayHandle || snapshot.currentUser || snapshot.username || null,
 		credit: Number(snapshot.credit || 0),
 		month: Number(snapshot.month || 1),
 		year: Number(snapshot.year || 2026),
@@ -395,8 +402,9 @@ async function submitRealEstateOfferToServer(
 async function sellInvestmentPropertyOnServer(stateSnapshot: any, propertyId: string) {
 	const snapshot = stateSnapshot || {}
 	const compactState = {
-		currentUser: snapshot.currentUser || snapshot.username || null,
-		username: snapshot.username || snapshot.currentUser || null,
+		currentUser: snapshot.currentUser || snapshot.displayHandle || snapshot.username || null,
+		username: snapshot.username || snapshot.displayHandle || snapshot.currentUser || null,
+		displayHandle: snapshot.displayHandle || snapshot.currentUser || snapshot.username || null,
 		month: Number(snapshot.month || 1),
 		year: Number(snapshot.year || 2026),
 		check: Number(snapshot.check || 0),
@@ -1082,12 +1090,13 @@ function cityPressureMultiplier(registeredUsers: number, city: any) {
 function getUserCityCounts(liveSnapshot?: any) {
 	const userCityMap = new Map<string, string>()
 	for (const snapshot of cachedUserSnapshots) {
-		const username = String(snapshot?.username || snapshot?.currentUser || '').trim()
+		const userKey = String(snapshot?.id || snapshot?.displayHandle || snapshot?.currentUser || snapshot?.username || '').trim()
 		const cityName = snapshot?.city?.name
-		if (username && cityName) userCityMap.set(username, cityName)
+		if (userKey && cityName) userCityMap.set(userKey, cityName)
 	}
-	if (liveSnapshot?.currentUser && liveSnapshot?.city?.name) {
-		userCityMap.set(String(liveSnapshot.currentUser), String(liveSnapshot.city.name))
+	if (liveSnapshot?.city?.name) {
+		const liveKey = String(liveSnapshot?.id || liveSnapshot?.displayHandle || liveSnapshot?.currentUser || liveSnapshot?.username || '').trim()
+		if (liveKey) userCityMap.set(liveKey, String(liveSnapshot.city.name))
 	}
 	const counts: Record<string, number> = {}
 	for (const cityName of userCityMap.values()) {
@@ -1599,6 +1608,7 @@ function createInitialState(): State {
 	lastAutoBumpYear: 2026,
 	// Authentication / save
 	currentUser: null as string | null,
+	displayHandle: null as string | null,
 	isAdmin: false,
 	// Vehicle state - comprehensive ownership and financing tracking
 	ownsVehicle: null as any, // primary vehicle (for UI/backcompat)
@@ -1930,8 +1940,11 @@ async function normalizeLoadedUserState(data: any, fallbackState: any, currentUs
 		realEstateLastMonthPropertyBreakdown: Array.isArray(data?.realEstateLastMonthPropertyBreakdown) ? data.realEstateLastMonthPropertyBreakdown : [],
 	}
 	const normalizedName = String(
-		data.username
+		data.displayHandle
+		?? data.currentUser
+		?? data.username
 		?? currentUser
+		?? fallbackState?.displayHandle
 		?? fallbackState?.username
 		?? fallbackState?.currentUser
 		?? 'Player'
@@ -4067,6 +4080,9 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			if (!('currentUser' in payload) && snapshot.currentUser) {
 				payload.currentUser = snapshot.currentUser
 			}
+			if (!('displayHandle' in payload) && snapshot.displayHandle) {
+				payload.displayHandle = snapshot.displayHandle
+			}
 			setSaveStatus('saving')
 			const saved = await persistUserState(snapshot.id, payload)
 			if (!saved) {
@@ -4096,7 +4112,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		const normalized = await normalizeLoadedUserState(
 			result.user,
 			state,
-			result.user.username || state.currentUser || state.username || 'player',
+			result.user.displayHandle || result.user.currentUser || result.user.username || state.currentUser || state.username || 'player',
 		)
 
 		resetDirtyTracking(normalized)
@@ -4126,6 +4142,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		const freshState = {
 			id: state.id,
 			username: state.username || state.currentUser,
+			displayHandle: state.displayHandle || state.currentUser || state.username,
 			check: 1200.0,
 			savings: 0,
 			debt: 0,
@@ -4138,7 +4155,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			activeEdu: null,
 			eduProgress: initializeEduProgress(),
 			ledger: [],
-			name: state.username || state.currentUser || 'Player',
+			name: state.displayHandle || state.currentUser || state.username || 'Player',
 			tenure: 0,
 			logs: [],
 			careerHistory: [],
@@ -4283,7 +4300,11 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (!result.ok) return result
 
 		const data = result.data
-		const normalized = await normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+		const normalized = await normalizeLoadedUserState(
+			data,
+			state,
+			data.displayHandle || data.currentUser || data.username || normalizedUsername,
+		)
 
 		dispatch({
 			type: 'SET_STATE',
@@ -4297,7 +4318,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		return { ok: true }
 	}
 
-	async function createUser(username: string, password?: string) {
+	async function createUser(username: string, password?: string, preferredDisplayHandle?: string) {
 		const normalizedUsername = String(username || '').trim()
 		const normalizedPassword = String(password || '')
 		if (!normalizedUsername || !normalizedPassword) {
@@ -4306,7 +4327,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 
 		let result: AuthResult
 		try {
-			result = await registerUser(normalizedUsername, normalizedPassword)
+			result = await registerUser(normalizedUsername, normalizedPassword, preferredDisplayHandle)
 		} catch (e) {
 			console.error('Registration request failed', e)
 			return { ok: false, error: 'Unable to reach server.' }
@@ -4315,7 +4336,11 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 		if (!result.ok) return result
 
 		const data = result.data
-		const normalized = await normalizeLoadedUserState(data, state, data.username || normalizedUsername)
+		const normalized = await normalizeLoadedUserState(
+			data,
+			state,
+			data.displayHandle || data.currentUser || data.username || normalizedUsername,
+		)
 
 		dispatch({
 			type: 'SET_STATE',
@@ -4342,7 +4367,7 @@ function LoadedGameProvider({ children, initialGameState, reloadCatalogs }: { ch
 			}
 		}
 		resetDirtyTracking({})
-		dispatch({ type: 'SET_STATE', payload: { currentUser: null, isAdmin: false, authToken: null } })
+		dispatch({ type: 'SET_STATE', payload: { currentUser: null, displayHandle: null, isAdmin: false, authToken: null } })
 	}
 
 	async function listUsersForAdmin() {
@@ -4612,14 +4637,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 	const reloadCatalogs = useCallback(async () => {
 		try {
 			setCatalogError(null)
-			const payload = await fetchGameCatalog()
-			if (!payload || payload.cities.length === 0 || payload.jobs.length === 0) {
-				setCatalogError('Unable to load game data from server.')
-				return false
+
+			for (let attempt = 0; attempt < 4; attempt += 1) {
+				const payload = await fetchGameCatalog()
+				if (payload && payload.cities.length > 0 && payload.jobs.length > 0) {
+					setCatalogData(payload)
+					setCatalogsReady(true)
+					return true
+				}
+
+				if (attempt < 3) {
+					await wait(400 * (attempt + 1))
+				}
 			}
-			setCatalogData(payload)
-			setCatalogsReady(true)
-			return true
+
+			setCatalogError('Unable to load game data from server.')
+			return false
 		} catch (error) {
 			console.error('Failed to load game catalogs', error)
 			setCatalogError('Unable to load game data from server.')

@@ -129,6 +129,9 @@ export default function Login() {
         {isCreateMode ? (
           <>
             <div className="mb-3">
+              <p className="mt-1 text-xs text-slate-500">For FERPA/privacy, your public leaderboard handle is auto-generated at signup.</p>
+            </div>
+            <div className="mb-3">
               <label className="block text-sm font-bold text-slate-600 mb-1">Retype Password</label>
               <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type="password" className="w-full p-3 border rounded" placeholder="Retype password" />
             </div>

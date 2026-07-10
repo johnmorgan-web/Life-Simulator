@@ -237,6 +237,7 @@ export interface GameState {
   celebration: Celebration;
   showSettlement: boolean;
   username?: string | null;
+  displayHandle?: string | null;
   currentUser?: string | null;
   isAdmin?: boolean;
   authToken?: string;

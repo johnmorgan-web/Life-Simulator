@@ -2,12 +2,16 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Unique, Updat
 
 @Entity({ name: 'user_states' })
 @Unique(['username'])
+@Unique(['displayHandle'])
 export class UserStateEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ type: 'varchar', length: 80, nullable: true })
   username!: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  displayHandle!: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   passwordHash!: string | null;
