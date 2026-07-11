@@ -13,7 +13,8 @@ import type { AcademyCourse, City, Job, LifeEvent, RewardPrizePools } from '@ser
 import { getAffluenceComparison } from '../utils/affluence'
 
 type State = any
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')
+let API_BASE_URL = String(import.meta.env.VITE_API_URL || '').trim() || (import.meta.env.DEV ? 'http://localhost:3000' : '')
+const DEV_API_BASE_CANDIDATES = ['http://localhost:3000', 'http://localhost:3001']
 const NON_PERSISTED_STATE_KEYS = new Set(['jobMarket', 'realEstateMarket', 'realEstateMarketMeta', 'realEstateMarketImpact'])
 const CLIENT_ONLY_STATE_KEYS = new Set(['id', 'username', 'isAdmin', 'authToken'])
 const APPEND_ONLY_STATE_KEYS = new Set([
@@ -237,7 +238,35 @@ async function fetchAllUsers() {
 	return Array.isArray(data) ? data : []
 }
 
+async function probeCatalog(baseUrl: string) {
+	try {
+		const response = await fetch(`${baseUrl}/game/catalog`)
+		if (!response.ok) return null
+		const data = await response.json()
+		return {
+			baseUrl,
+			jobs: Array.isArray(data?.jobs) ? data.jobs.length : 0,
+			academyCourses: Array.isArray(data?.academyCourses) ? data.academyCourses.length : 0,
+		}
+	} catch {
+		return null
+	}
+}
+
 async function fetchGameCatalog(): Promise<GameCatalogPayload | null> {
+	if (!String(import.meta.env.VITE_API_URL || '').trim() && import.meta.env.DEV) {
+		const probes = await Promise.all(DEV_API_BASE_CANDIDATES.map((baseUrl) => probeCatalog(baseUrl)))
+		const candidates = probes.filter((entry): entry is { baseUrl: string; jobs: number; academyCourses: number } => Boolean(entry))
+		if (candidates.length > 0) {
+			candidates.sort((left, right) => {
+				const leftScore = left.jobs * 100 + left.academyCourses
+				const rightScore = right.jobs * 100 + right.academyCourses
+				return rightScore - leftScore
+			})
+			API_BASE_URL = candidates[0].baseUrl
+		}
+	}
+
 	const response = await fetch(`${API_BASE_URL}/game/catalog`)
 	if (!response.ok) return null
 	const data = await response.json()
