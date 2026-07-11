@@ -484,9 +484,14 @@ export class LedgerService {
 
     // Food
     if (!state.luxuryServices?.chef) {
+      const foodPercentOfNetSalary = 0.14;
+      const salaryBasedFoodBase = fix(netSalary * foodPercentOfNetSalary);
+      const minimumFoodBase = Number(gameValues.FoodCostPercentOfSalary || 120);
+      const maximumFoodBase = fix(netSalary * 0.32);
+      const foodBase = Math.max(minimumFoodBase, Math.min(maximumFoodBase, salaryBasedFoodBase));
       const foodCost = applyLedgerDecimalVariance(
         this.utils.variableCost(
-          gameValues.FoodCostPercentOfSalary * 0.8,
+          foodBase,
           state.month,
           state.year,
           state.city?.p || 1,
@@ -498,7 +503,7 @@ export class LedgerService {
       bal = fix(bal - foodCost);
       ledger.push({
         id: id++,
-        desc: 'Food & Groceries',
+        desc: `Food & Groceries (~${Math.round(foodPercentOfNetSalary * 100)}% net salary)`,
         amt: foodCost,
         type: 'out',
         bal,
