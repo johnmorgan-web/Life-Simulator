@@ -176,6 +176,56 @@ export class JobService {
     return months;
   }
 
+  private getTotalCareerMonths(state: any): number {
+    const currentTenure = Math.max(0, Number(state?.tenure || 0));
+    const history = Array.isArray(state?.careerHistory) ? state.careerHistory : [];
+    const priorMonths = history.reduce((sum: number, role: any) => {
+      return sum + Math.max(0, Number(role?.months || 0));
+    }, 0);
+    return currentTenure + priorMonths;
+  }
+
+  private minimumCareerMonthsForJob(job: any, resolvedReq: string | null): number {
+    const salary = Number(job?.base || 0);
+    const category = String(job?.cat || '').trim();
+    const title = String(job?.title || '').trim();
+    const requirement = String(resolvedReq || '').trim();
+
+    const explicitFloorByTitle: Record<string, number> = {
+      'Operations Manager': 12,
+      'General Manager': 16,
+      'Restaurant Manager': 12,
+      'District Manager': 18,
+      'Hotel Manager': 12,
+      'Hospitality General Manager': 18,
+      'Social Services Director': 16,
+      'Event Director': 14,
+      'Marketing Manager': 14,
+      'HR Manager': 14,
+      'Senior Project Manager': 16,
+      'VP of Sales': 18,
+      'CHRO': 18,
+      'CFO': 18,
+      'CTO': 18,
+      'CEO': 24,
+    };
+
+    const explicitFloor = explicitFloorByTitle[title];
+    if (Number.isFinite(explicitFloor)) return explicitFloor;
+
+    if (category === 'Entry') return 0;
+    if (salary >= 14000) return 42;
+    if (salary >= 11000) return 30;
+    if (salary >= 9000) return 24;
+    if (salary >= 7000) return 16;
+
+    if (requirement === 'PhD') return 30;
+    if (requirement === 'Masters Degree') return 20;
+    if (requirement === 'Medical School' || requirement === 'Law School') return 24;
+    if (category === 'Healthcare' || category === 'Technology' || category === 'Finance' || category === 'Legal') return 12;
+    return 6;
+  }
+
   private titleSeed(title: string): number {
     let h = 0;
     for (let i = 0; i < title.length; i += 1) h = (h * 31 + title.charCodeAt(i)) >>> 0;
@@ -340,6 +390,15 @@ export class JobService {
       const actualMonths = this.getRoleExperienceMonths(state, roleReqFromReq);
       experienceMet = actualMonths >= reqMonths;
       experienceDetail = `${actualMonths}/${reqMonths} months in ${roleReqFromReq}`;
+    }
+
+    if (experienceMet) {
+      const totalCareerMonths = this.getTotalCareerMonths(state);
+      const minimumCareerMonths = this.minimumCareerMonthsForJob(job, resolvedReq);
+      if (minimumCareerMonths > 0 && totalCareerMonths < minimumCareerMonths) {
+        experienceMet = false;
+        experienceDetail = `${totalCareerMonths}/${minimumCareerMonths} total career months`;
+      }
     }
 
     return {
