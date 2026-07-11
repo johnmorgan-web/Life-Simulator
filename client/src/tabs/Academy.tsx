@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { domainBadgeStyle, resolveDomainKey } from '../constants/domainColors.constants'
 
@@ -36,31 +36,9 @@ function filterCareerLinkedCourses(courses: any[], jobs: any[]) {
 
 export default function Academy() {
   const { state, dispatch, academyCourses, jobBoard } = useGame()
-  const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '')
-  const [serverAcademyCourses, setServerAcademyCourses] = useState<any[] | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const loadAcademyCourses = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/game/academy-courses`)
-        if (!response.ok) return
-        const data = await response.json()
-        if (cancelled || !Array.isArray(data)) return
-        setServerAcademyCourses(data)
-      } catch {
-        // Fall back to context academy courses when server catalog is unavailable.
-      }
-    }
-    void loadAcademyCourses()
-    return () => {
-      cancelled = true
-    }
-  }, [API_BASE_URL])
 
   const uniqueAcademyCourses = useMemo(() => {
-    const source = Array.isArray(serverAcademyCourses) ? serverAcademyCourses : academyCourses
-    const filteredSource = filterCareerLinkedCourses(source, jobBoard as any[])
+    const filteredSource = filterCareerLinkedCourses(academyCourses, jobBoard as any[])
     const seen = new Set<string>()
     return filteredSource.filter((course: any) => {
       const name = String(course?.n || '').trim()
@@ -68,10 +46,56 @@ export default function Academy() {
       seen.add(name)
       return true
     })
-  }, [academyCourses, jobBoard, serverAcademyCourses])
+  }, [academyCourses, jobBoard])
 
   const jobsByCourse = (courseName: string) => {
-    return (jobBoard as any[]).filter((j: any) => j.certReq === courseName || j.req === courseName).slice(0, 3)
+    return (jobBoard as any[])
+      .filter((j: any) => j.certReq === courseName || j.req === courseName)
+      .sort((a: any, b: any) => {
+        const aTier = Number(a?.tReq || 0)
+        const bTier = Number(b?.tReq || 0)
+        if (aTier !== bTier) return aTier - bTier
+
+        const aOdds = Number(a?.odds || 0)
+        const bOdds = Number(b?.odds || 0)
+        if (aOdds !== bOdds) return bOdds - aOdds
+
+        return Number(a?.base || 0) - Number(b?.base || 0)
+      })
+  }
+
+  const getUnlockPreview = (courseName: string, maxItems = 3) => {
+    const all = jobsByCourse(courseName)
+    let visible = all.slice(0, maxItems)
+
+    if (courseName === 'Masters Degree' && all.length > 0) {
+      const targetCategories = ['Healthcare', 'Technology', 'Finance']
+      const selected: any[] = []
+      const selectedTitles = new Set<string>()
+
+      for (const category of targetCategories) {
+          const match = all.find((job: any) => String(job?.cat || '').trim() === category && !selectedTitles.has(String(job?.title || '')))
+        if (!match) continue
+        selected.push(match)
+        selectedTitles.add(String(match?.title || ''))
+      }
+
+      for (const job of all) {
+        if (selected.length >= maxItems) break
+        const title = String(job?.title || '')
+        if (selectedTitles.has(title)) continue
+        selected.push(job)
+        selectedTitles.add(title)
+      }
+
+      visible = selected.slice(0, maxItems)
+    }
+
+    return {
+      all,
+      visible,
+      remaining: Math.max(0, all.length - visible.length),
+    }
   }
   const [academyView, setAcademyView] = useState<'courses' | 'tree'>('courses')
   const [treeSubcat, setTreeSubcat] = useState<string>('all')
@@ -151,18 +175,23 @@ export default function Academy() {
               <div className="progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
             {(() => {
-              const relatedJobs = jobsByCourse(e.n)
-              return relatedJobs.length > 0 ? (
+              const previewSize = e.n === 'Masters Degree' ? 6 : 3
+              const unlockPreview = getUnlockPreview(e.n, previewSize)
+              return unlockPreview.visible.length > 0 ? (
                 <div className="mb-3">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Unlocks Jobs</p>
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Early Career Unlocks On Completion</p>
                   <div className="space-y-1">
-                    {relatedJobs.map((j: any) => (
+                    {unlockPreview.visible.map((j: any) => (
                       <div key={j.title} className="flex items-center justify-between gap-1">
                         <span className="text-[11px] font-semibold text-slate-700 truncate">{j.title}</span>
                         <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">{toCurrency(j.base)}/mo</span>
                       </div>
                     ))}
                   </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Higher-paying roles may still require additional experience and time in role.</p>
+                  {unlockPreview.remaining > 0 && (
+                    <p className="text-[10px] text-slate-500 mt-1">+{unlockPreview.remaining} more career unlocks</p>
+                  )}
                 </div>
               ) : null
             })()}
@@ -229,12 +258,17 @@ export default function Academy() {
                   {owned && <div className="text-[10px] font-bold text-emerald-600">✓ Graduated</div>}
                   {inProgress && <div className="text-[10px] font-bold text-amber-600">⏳ {Math.round(progress)}% done</div>}
                   {(() => {
-                    const relatedJobs = jobsByCourse(node.n)
-                    return relatedJobs.length > 0 ? (
+                    const previewSize = node.n === 'Masters Degree' ? 6 : 3
+                    const unlockPreview = getUnlockPreview(node.n, previewSize)
+                    return unlockPreview.visible.length > 0 ? (
                       <div className="mt-1 space-y-0.5">
-                        {relatedJobs.map((j: any) => (
+                        {unlockPreview.visible.map((j: any) => (
                           <div key={j.title} className="text-[10px] text-slate-600">💼 {j.title} <span className="text-emerald-700 font-bold">{toCurrency(j.base)}/mo</span></div>
                         ))}
+                        <div className="text-[10px] text-slate-500">Higher-paying roles may still require additional experience and time in role.</div>
+                        {unlockPreview.remaining > 0 && (
+                          <div className="text-[10px] text-slate-500">+{unlockPreview.remaining} more career unlocks</div>
+                        )}
                       </div>
                     ) : null
                   })()}
